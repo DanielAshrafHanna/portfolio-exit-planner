@@ -11,12 +11,12 @@ import { PortfolioInput } from "@/components/PortfolioInput";
 import { PortfolioSummary } from "@/components/PortfolioSummary";
 import { SettingsPanel } from "@/components/SettingsPanel";
 import { defaultSellTargets } from "@/lib/calculations";
-import { sampleHoldings } from "@/lib/sampleData";
 import { createSupabaseBrowserClient } from "@/lib/supabaseClient";
 import type { AiAnalysis, EnrichedHolding, FeeSettings, HoldingInput, MarketQuote, NewsItem } from "@/lib/types";
 
 const STORAGE_KEY = "portfolio-exit-planner:v1";
 const SETTINGS_KEY = "portfolio-exit-planner:settings:v1";
+const DEMO_IDS = new Set(["tsm", "ibm", "dram", "nasa"]);
 
 function enrich(holding: HoldingInput): EnrichedHolding {
   return { ...holding, news: [], selectedStopStyle: "balanced", sellPercent: 100 };
@@ -44,6 +44,41 @@ function normalizeWarning(warning: string) {
   return warning;
 }
 
+function removeLegacyDemoRows(rows: EnrichedHolding[]) {
+  return rows.filter((holding) => {
+    const note = (holding.notes || "").toLowerCase();
+    const isLegacyDemo = DEMO_IDS.has(holding.id) && note.includes("sample");
+    return !isLegacyDemo;
+  });
+}
+
+function mergeExtractedRows(existingRows: EnrichedHolding[], extractedRows: HoldingInput[]) {
+  const bySymbol = new Map(existingRows.map((holding) => [holding.symbol.trim().toUpperCase(), holding]));
+  const merged = [...existingRows];
+
+  extractedRows.forEach((row) => {
+    const symbol = row.symbol.trim().toUpperCase();
+    if (!symbol) return;
+    const existing = bySymbol.get(symbol);
+    if (existing) {
+      const next = { ...existing, ...row, id: existing.id, symbol };
+      const index = merged.findIndex((holding) => holding.id === existing.id);
+      merged[index] = {
+        ...enrich(next),
+        quote: undefined,
+        news: [],
+        analysis: undefined,
+        selectedStopStyle: existing.selectedStopStyle || "balanced",
+        sellPercent: existing.sellPercent || 100
+      };
+      return;
+    }
+    merged.push(enrich({ ...row, symbol }));
+  });
+
+  return merged;
+}
+
 export default function Home() {
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
   const [holdings, setHoldings] = useState<EnrichedHolding[]>([]);
@@ -57,12 +92,19 @@ export default function Home() {
   useEffect(() => {
     const stored = localStorage.getItem(STORAGE_KEY);
     const storedSettings = localStorage.getItem(SETTINGS_KEY);
-    setHoldings(stored ? JSON.parse(stored) : sampleHoldings.map(enrich));
+    const parsedRows = stored ? JSON.parse(stored) as EnrichedHolding[] : [];
+    const storedRows = removeLegacyDemoRows(parsedRows);
+    if (stored && storedRows.length !== parsedRows.length) {
+      if (storedRows.length) localStorage.setItem(STORAGE_KEY, JSON.stringify(storedRows));
+      else localStorage.removeItem(STORAGE_KEY);
+      setWarnings((existing) => [...existing, "Old demo tickers were removed from local storage."]);
+    }
+    setHoldings(storedRows);
     if (storedSettings) setSettings(JSON.parse(storedSettings));
   }, []);
 
   useEffect(() => {
-    if (holdings.length) localStorage.setItem(STORAGE_KEY, JSON.stringify(holdings));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(holdings));
   }, [holdings]);
 
   useEffect(() => {
@@ -248,7 +290,13 @@ export default function Home() {
           </div>
         </section>
       ) : null}
-      <ImageImport onExtracted={(rows) => setInputRows(rows)} setWarning={(warning) => setWarnings((existing) => [...existing, warning])} />
+      <ImageImport
+        onExtracted={(rows) => {
+          setHoldings((existing) => mergeExtractedRows(existing, rows));
+          setWarnings((existing) => [...existing, `${rows.length} image row${rows.length === 1 ? "" : "s"} added or updated. Confirm every field before analysis.`]);
+        }}
+        setWarning={(warning) => setWarnings((existing) => [...existing, warning])}
+      />
       <PortfolioInput holdings={inputRows} onChange={setInputRows} onAnalyze={analyze} isAnalyzing={isAnalyzing} />
       {isAnalyzing ? (
         <section className="mx-auto grid max-w-7xl gap-3 px-4 pb-8 sm:grid-cols-3">

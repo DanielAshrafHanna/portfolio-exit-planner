@@ -87,7 +87,7 @@ export function PortfolioInput({ holdings, onChange, onAnalyze, isAnalyzing }: P
           <button className="inline-flex items-center gap-2 rounded-md bg-marine px-3 py-2 text-sm font-semibold text-white" type="button" onClick={() => onChange([...holdings, emptyHolding()])}>
             <Plus className="h-4 w-4" aria-hidden /> Add row
           </button>
-          <button className="rounded-md border border-ink/15 px-3 py-2 text-sm font-semibold" type="button" onClick={() => onChange(sampleHoldings)}>Load sample</button>
+          <button className="rounded-md border border-ink/15 px-3 py-2 text-sm font-semibold" type="button" onClick={() => onChange(sampleHoldings)}>Replace with demo</button>
           <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-ink/15 px-3 py-2 text-sm font-semibold">
             <FileUp className="h-4 w-4" aria-hidden /> Import CSV
             <input className="sr-only" type="file" accept=".csv" onChange={(event) => importCsv(event.target.files?.[0])} />

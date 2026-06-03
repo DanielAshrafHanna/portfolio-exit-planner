@@ -58,7 +58,7 @@ export function AuthPanel({ user, isLoading, isSaving, onSignIn, onSignOut, onSa
               <Save className="h-4 w-4" aria-hidden /> {isSaving ? "Saving..." : "Save cloud portfolio"}
             </button>
             <button className="rounded-md border border-ink/15 px-4 py-2 text-sm font-semibold disabled:opacity-50" type="button" disabled={isLoading} onClick={onLoad}>
-              Load cloud portfolio
+              Load saved portfolio
             </button>
             <button className="inline-flex items-center gap-2 rounded-md border border-coral px-4 py-2 text-sm font-semibold text-coral" type="button" onClick={onSignOut}>
               <LogOut className="h-4 w-4" aria-hidden /> Sign out
