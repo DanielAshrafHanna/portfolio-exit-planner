@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calculatePartialSale, calculateProfitLoss, calculateStopLosses, defaultSellTargets, totalCostFor } from "./calculations";
+import { calculatePartialSale, calculateProfitLoss, calculateSellPriceForProfitLoss, calculateStopLosses, defaultSellTargets, totalCostFor } from "./calculations";
 
 const holding = {
   id: "1",
@@ -63,4 +63,18 @@ it("calculates partial sale and remaining position", () => {
   expect(result.realizedProfitLoss).toBe(100);
   expect(result.remainingShares).toBe(5);
   expect(result.remainingUnrealizedProfitLoss).toBe(100);
+});
+
+describe("target price from desired profit/loss", () => {
+  it("calculates the sell price needed for a desired gross P/L", () => {
+    const price = calculateSellPriceForProfitLoss(10, 100, 250, { fixedTradingFee: 0, percentTradingFee: 0, fxFeePercent: 0 });
+    expect(price).toBe(125);
+  });
+
+  it("accounts for fixed and percentage fees", () => {
+    const settings = { fixedTradingFee: 2, percentTradingFee: 1, fxFeePercent: 0.5 };
+    const price = calculateSellPriceForProfitLoss(10, 100, 180, settings);
+    const result = calculateProfitLoss(10, 100, price, settings);
+    expect(result.profitLoss).toBeCloseTo(180, 1);
+  });
 });

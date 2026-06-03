@@ -33,6 +33,17 @@ export function calculateProfitLoss(shares: number, averageCost: number, price: 
   };
 }
 
+export function calculateSellPriceForProfitLoss(shares: number, averageCost: number, desiredProfitLoss: number, settings?: FeeSettings) {
+  const safeShares = Math.max(0, shares);
+  if (safeShares === 0) return 0;
+  const cost = totalCostFor(safeShares, averageCost);
+  const feeSettings = settings || { fixedTradingFee: 0, percentTradingFee: 0, fxFeePercent: 0 };
+  const variableFeeRate = Math.max(0, (feeSettings.percentTradingFee + feeSettings.fxFeePercent) / 100);
+  const netProceedsNeeded = cost + desiredProfitLoss + Math.max(0, feeSettings.fixedTradingFee);
+  const denominator = safeShares * Math.max(0.000001, 1 - variableFeeRate);
+  return roundMoney(Math.max(0.01, netProceedsNeeded / denominator));
+}
+
 export function calculateStopLosses(holding: HoldingInput, quote: MarketQuote) {
   const current = quote.currentPrice;
   const currentPl = calculateProfitLoss(holding.shares, holding.averageCost, current).profitLoss;
@@ -98,4 +109,3 @@ export function calculatePartialSale(holding: HoldingInput, sellPrice: number, s
     remainingUnrealizedProfitLoss: roundMoney(remainingValue - remainingCost)
   };
 }
-
