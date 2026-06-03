@@ -5,6 +5,7 @@ export async function POST(request: Request) {
   if (!process.env.OPENAI_API_KEY) {
     return NextResponse.json({
       rows: [],
+      unavailable: true,
       warning: "OPENAI_API_KEY is missing, so OCR extraction is unavailable. Please enter holdings manually or import CSV."
     });
   }

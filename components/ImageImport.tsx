@@ -23,6 +23,7 @@ export function ImageImport({ onExtracted, setWarning }: Props) {
       const response = await fetch("/api/extractImage", { method: "POST", body: form });
       const data = await response.json();
       if (data.warning) setWarning(data.warning);
+      if (data.unavailable) return;
       if (Array.isArray(data.warnings)) data.warnings.forEach((warning: string) => setWarning(warning));
       const rows = (data.rows || []).map((row: any) => {
         const shares = Number(row.shares || 0);
