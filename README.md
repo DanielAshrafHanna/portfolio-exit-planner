@@ -17,6 +17,8 @@ Open `http://localhost:3000`.
 
 Add these secrets in your deployment environment:
 
+- `NEXT_PUBLIC_SUPABASE_URL`: Supabase project URL for user accounts and cloud portfolios.
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`: Supabase anon/publishable key. Safe for browser use when RLS is enabled.
 - `OPENAI_API_KEY`: enables AI decision analysis and image OCR.
 - `OPENAI_MODEL`: optional, defaults to `gpt-4o-mini`.
 - `OPENAI_VISION_MODEL`: optional, defaults to `gpt-4o-mini`.
@@ -58,6 +60,7 @@ Profit/loss calculations:
 ## Privacy
 
 - Holdings and settings are stored locally with `localStorage`.
+- If Supabase is configured, signed-in users can save/load a private cloud portfolio row protected by Row Level Security.
 - Screenshots are not sent anywhere until the user clicks `Extract from image`.
 - The UI warns when tickers or images are sent to external APIs.
 - `Clear stored portfolio` removes local holdings and fee settings.
@@ -69,6 +72,17 @@ npm test
 ```
 
 The calculation tests cover cost basis, fee-aware P/L, ATR and percentage stop-loss rules, default targets, and partial-sale math.
+
+## Supabase Auth And User Portfolios
+
+Run the SQL in `supabase/schema.sql` in your Supabase project SQL editor. It creates `public.user_portfolios` with Row Level Security so each signed-in user can only read, insert, update, or delete their own portfolio.
+
+Recommended Supabase Auth setup:
+
+- Enable email/password auth or magic links.
+- For a small friend group, restrict signups by invite or manually create users in the Supabase dashboard.
+- Do not hardcode shared credentials in the app.
+- Add `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` to Vercel project environment variables.
 
 ## Deployment
 

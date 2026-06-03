@@ -2,6 +2,8 @@
 
 import { AlertCircle, DatabaseZap } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import type { User } from "@supabase/supabase-js";
+import { AuthPanel } from "@/components/AuthPanel";
 import { Disclaimer } from "@/components/Disclaimer";
 import { HoldingsTable } from "@/components/HoldingsTable";
 import { ImageImport } from "@/components/ImageImport";
@@ -10,6 +12,7 @@ import { PortfolioSummary } from "@/components/PortfolioSummary";
 import { SettingsPanel } from "@/components/SettingsPanel";
 import { defaultSellTargets } from "@/lib/calculations";
 import { sampleHoldings } from "@/lib/sampleData";
+import { createSupabaseBrowserClient } from "@/lib/supabaseClient";
 import type { AiAnalysis, EnrichedHolding, FeeSettings, HoldingInput, MarketQuote, NewsItem } from "@/lib/types";
 
 const STORAGE_KEY = "portfolio-exit-planner:v1";
@@ -42,10 +45,14 @@ function normalizeWarning(warning: string) {
 }
 
 export default function Home() {
+  const supabase = useMemo(() => createSupabaseBrowserClient(), []);
   const [holdings, setHoldings] = useState<EnrichedHolding[]>([]);
   const [settings, setSettings] = useState<FeeSettings>({ fixedTradingFee: 0, percentTradingFee: 0, fxFeePercent: 0 });
   const [warnings, setWarnings] = useState<string[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
+  const [isAuthLoading, setIsAuthLoading] = useState(false);
+  const [isSavingCloud, setIsSavingCloud] = useState(false);
 
   useEffect(() => {
     const stored = localStorage.getItem(STORAGE_KEY);
@@ -61,6 +68,19 @@ export default function Home() {
   useEffect(() => {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
   }, [settings]);
+
+  useEffect(() => {
+    if (!supabase) return;
+    setIsAuthLoading(true);
+    supabase.auth.getUser().then(({ data }) => {
+      setUser(data.user);
+      setIsAuthLoading(false);
+    });
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+    return () => listener.subscription.unsubscribe();
+  }, [supabase]);
 
   const inputRows = useMemo(() => holdings.map(({ quote, news, analysis, selectedStopStyle, selectedTargetPrice, targetPriceEdited, sellPercent, ...holding }) => holding), [holdings]);
 
@@ -138,6 +158,62 @@ export default function Home() {
     setWarnings(["Stored portfolio data cleared."]);
   };
 
+  const signIn = async (email: string, password: string, mode: "signin" | "signup") => {
+    if (!supabase) return;
+    setIsAuthLoading(true);
+    const result = mode === "signin"
+      ? await supabase.auth.signInWithPassword({ email, password })
+      : await supabase.auth.signUp({ email, password });
+    setIsAuthLoading(false);
+    if (result.error) {
+      setWarnings((existing) => [...existing, result.error.message]);
+      return;
+    }
+    if (mode === "signup" && !result.data.session) {
+      setWarnings((existing) => [...existing, "Account created. Check your email to confirm before signing in."]);
+    } else {
+      setWarnings((existing) => [...existing, "Signed in. You can now save or load your private cloud portfolio."]);
+    }
+  };
+
+  const signOut = async () => {
+    if (!supabase) return;
+    await supabase.auth.signOut();
+    setUser(null);
+    setWarnings((existing) => [...existing, "Signed out. Local portfolio data remains on this device."]);
+  };
+
+  const saveCloudPortfolio = async () => {
+    if (!supabase || !user) return;
+    setIsSavingCloud(true);
+    const { error } = await supabase.from("user_portfolios").upsert({
+      user_id: user.id,
+      holdings,
+      settings,
+      updated_at: new Date().toISOString()
+    });
+    setIsSavingCloud(false);
+    setWarnings((existing) => [...existing, error ? `Cloud save failed: ${error.message}` : "Cloud portfolio saved for your account."]);
+  };
+
+  const loadCloudPortfolio = async () => {
+    if (!supabase || !user) return;
+    setIsAuthLoading(true);
+    const { data, error } = await supabase.from("user_portfolios").select("holdings, settings").eq("user_id", user.id).maybeSingle();
+    setIsAuthLoading(false);
+    if (error) {
+      setWarnings((existing) => [...existing, `Cloud load failed: ${error.message}`]);
+      return;
+    }
+    if (!data) {
+      setWarnings((existing) => [...existing, "No cloud portfolio saved yet for this account."]);
+      return;
+    }
+    setHoldings(Array.isArray(data.holdings) ? data.holdings as EnrichedHolding[] : []);
+    setSettings({ ...settings, ...(data.settings as Partial<FeeSettings>) });
+    setWarnings((existing) => [...existing, "Cloud portfolio loaded."]);
+  };
+
   return (
     <main>
       <header className="bg-white px-4 py-8">
@@ -152,6 +228,15 @@ export default function Home() {
         </div>
       </header>
       <Disclaimer />
+      <AuthPanel
+        user={user}
+        isLoading={isAuthLoading}
+        isSaving={isSavingCloud}
+        onSignIn={signIn}
+        onSignOut={signOut}
+        onSave={saveCloudPortfolio}
+        onLoad={loadCloudPortfolio}
+      />
       <SettingsPanel settings={settings} onChange={setSettings} onClear={clearStored} />
       {warnings.length ? (
         <section className="mx-auto max-w-7xl px-4 pt-5">
