@@ -17,6 +17,11 @@ function badge(value?: string) {
   return <span className={`rounded px-2 py-1 text-xs font-semibold ${color}`}>{value || "N/A"}</span>;
 }
 
+function valueClass(value?: number) {
+  if (value === undefined) return "";
+  return value < 0 ? "text-coral" : "text-marine";
+}
+
 export function HoldingsTable({ holdings, settings, onChange }: Props) {
   const [open, setOpen] = useState<Record<string, boolean>>({});
 
@@ -48,15 +53,15 @@ export function HoldingsTable({ holdings, settings, onChange }: Props) {
                     <td className="px-3 py-3 font-bold">{holding.symbol}<span className="block text-xs font-normal text-ink/55">{holding.name}</span></td>
                     <td className="px-3 py-3">{holding.shares}</td>
                     <td className="px-3 py-3">${holding.averageCost.toLocaleString()}</td>
-                    <td className="px-3 py-3">{quote ? `$${quote.currentPrice.toLocaleString()}` : "Loading"}</td>
+                    <td className="bg-marine/5 px-3 py-3 font-semibold text-marine">{quote ? `$${quote.currentPrice.toLocaleString()}` : "Loading"}</td>
                     <td className="px-3 py-3">{current ? `$${current.grossValue.toLocaleString()}` : "N/A"}</td>
-                    <td className={`px-3 py-3 font-semibold ${current && current.profitLoss < 0 ? "text-coral" : "text-marine"}`}>{current ? `$${current.profitLoss.toLocaleString()} (${current.profitLossPercent}%)` : "N/A"}</td>
+                    <td className={`bg-marine/5 px-3 py-3 font-semibold ${valueClass(current?.profitLoss)}`}>{current ? `$${current.profitLoss.toLocaleString()} (${current.profitLossPercent}%)` : "N/A"}</td>
                     <td className="px-3 py-3">{badge(holding.analysis?.action)}</td>
                     <td className="px-3 py-3">{badge(holding.analysis?.confidence)}</td>
-                    <td className="px-3 py-3">{stopPrice ? `$${stopPrice.toLocaleString()}` : "N/A"}</td>
+                    <td className="bg-amber/10 px-3 py-3 font-semibold">{stopPrice ? `$${stopPrice.toLocaleString()}` : "N/A"}</td>
                     <td className="px-3 py-3">{stopPl ? `$${stopPl.profitLoss.toLocaleString()} (${stopPl.profitLossPercent}%)` : "N/A"}</td>
-                    <td className="px-3 py-3">{targetPrice ? `$${targetPrice.toLocaleString()}` : "N/A"}</td>
-                    <td className="px-3 py-3">{targetPl ? `$${targetPl.profitLoss.toLocaleString()} (${targetPl.profitLossPercent}%)` : "N/A"}</td>
+                    <td className="bg-mint/70 px-3 py-3 font-bold text-marine">{targetPrice ? `$${targetPrice.toLocaleString()}` : "N/A"}</td>
+                    <td className={`bg-mint/70 px-3 py-3 font-bold ${valueClass(targetPl?.profitLoss)}`}>{targetPl ? `$${targetPl.profitLoss.toLocaleString()} (${targetPl.profitLossPercent}%)` : "N/A"}</td>
                     <td className="px-3 py-3">{badge(holding.analysis?.riskLevel)}</td>
                   </tr>,
                   open[holding.id] ? (

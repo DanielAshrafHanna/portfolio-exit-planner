@@ -33,6 +33,9 @@ export function HoldingDetails({ holding, settings, onChange }: Props) {
   return (
     <div className="grid gap-5 bg-paper p-4 lg:grid-cols-[1fr_420px]">
       <div className="space-y-5">
+        <div className="bg-white p-3 text-sm text-ink/70">
+          Compare your exit choices here: choose how much downside you can tolerate, then set a target sell price or desired profit/loss. Nothing is traded automatically.
+        </div>
         <StopLossSelector stops={stops} selected={holding.selectedStopStyle} onChange={(style) => onChange({ ...holding, selectedStopStyle: style })} />
         <div className="grid gap-4 md:grid-cols-2">
           <section className="bg-white p-4">

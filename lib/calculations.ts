@@ -66,20 +66,20 @@ export function calculateStopLosses(holding: HoldingInput, quote: MarketQuote) {
     tight: {
       price: roundMoney(Math.max(0.01, currentPl > 0 ? Math.max(atrStops.tight, profitFloor) : atrStops.tight)),
       explanation: quote.atr
-        ? "Uses 1.5x ATR below current price, adjusted to protect part of an open gain when reasonable."
-        : "Uses roughly 6% below current price because ATR is unavailable, adjusted for profit protection when reasonable."
+        ? "Calculated close to the current price using recent volatility."
+        : "Calculated around 6% below the current price."
     },
     balanced: {
       price: roundMoney(Math.max(0.01, protectiveBalanced)),
       explanation: quote.atr
-        ? "Uses 2.5x ATR below current price as the default risk-control level, with profit protection when reasonable."
-        : "Uses roughly 10% below current price because ATR is unavailable, with profit protection when reasonable."
+        ? "Calculated as the default middle stop using recent volatility."
+        : "Calculated around 10% below the current price."
     },
     loose: {
       price: roundMoney(Math.max(0.01, currentPl > 0 ? Math.max(atrStops.loose, holding.averageCost * 0.98) : atrStops.loose)),
       explanation: quote.atr
-        ? "Uses 3.5x ATR below current price to allow longer-term volatility while limiting further downside."
-        : "Uses roughly 18% below current price because ATR is unavailable to allow wider long-term movement."
+        ? "Calculated wider from the current price using recent volatility."
+        : "Calculated around 18% below the current price."
     }
   };
 }
