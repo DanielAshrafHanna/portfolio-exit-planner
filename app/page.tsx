@@ -1,0 +1,176 @@
+"use client";
+
+import { AlertCircle, DatabaseZap } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Disclaimer } from "@/components/Disclaimer";
+import { HoldingsTable } from "@/components/HoldingsTable";
+import { ImageImport } from "@/components/ImageImport";
+import { PortfolioInput } from "@/components/PortfolioInput";
+import { PortfolioSummary } from "@/components/PortfolioSummary";
+import { SettingsPanel } from "@/components/SettingsPanel";
+import { defaultSellTargets } from "@/lib/calculations";
+import { sampleHoldings } from "@/lib/sampleData";
+import type { AiAnalysis, EnrichedHolding, FeeSettings, HoldingInput, MarketQuote, NewsItem } from "@/lib/types";
+
+const STORAGE_KEY = "portfolio-exit-planner:v1";
+const SETTINGS_KEY = "portfolio-exit-planner:settings:v1";
+
+function enrich(holding: HoldingInput): EnrichedHolding {
+  return { ...holding, news: [], selectedStopStyle: "balanced", sellPercent: 100 };
+}
+
+function sameSymbol(a?: string, b?: string) {
+  return (a || "").trim().toUpperCase() === (b || "").trim().toUpperCase();
+}
+
+function portfolioFieldsChanged(existing: EnrichedHolding | undefined, row: HoldingInput) {
+  if (!existing) return false;
+  return existing.shares !== row.shares || existing.averageCost !== row.averageCost || existing.totalCost !== row.totalCost;
+}
+
+function normalizeWarning(warning: string) {
+  if (warning.includes("OPENAI_API_KEY")) {
+    return "OPENAI_API_KEY is missing. AI/OCR features are using deterministic fallback analysis until the secret is added.";
+  }
+  if (warning.includes("Yahoo Finance's public chart feed")) {
+    return "Market API key is missing. Quotes are currently fetched from Yahoo Finance's public chart feed.";
+  }
+  if (warning.includes("Yahoo Finance RSS")) {
+    return "Recent news is currently fetched from Yahoo Finance RSS.";
+  }
+  return warning;
+}
+
+export default function Home() {
+  const [holdings, setHoldings] = useState<EnrichedHolding[]>([]);
+  const [settings, setSettings] = useState<FeeSettings>({ fixedTradingFee: 0, percentTradingFee: 0, fxFeePercent: 0 });
+  const [warnings, setWarnings] = useState<string[]>([]);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+
+  useEffect(() => {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    const storedSettings = localStorage.getItem(SETTINGS_KEY);
+    setHoldings(stored ? JSON.parse(stored) : sampleHoldings.map(enrich));
+    if (storedSettings) setSettings(JSON.parse(storedSettings));
+  }, []);
+
+  useEffect(() => {
+    if (holdings.length) localStorage.setItem(STORAGE_KEY, JSON.stringify(holdings));
+  }, [holdings]);
+
+  useEffect(() => {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+  }, [settings]);
+
+  const inputRows = useMemo(() => holdings.map(({ quote, news, analysis, selectedStopStyle, selectedTargetPrice, targetPriceEdited, sellPercent, ...holding }) => holding), [holdings]);
+
+  const setInputRows = (rows: HoldingInput[]) => {
+    setHoldings(rows.map((row) => {
+      const existing = holdings.find((holding) => holding.id === row.id);
+      const symbolUnchanged = sameSymbol(existing?.symbol, row.symbol);
+      const costOrShareChanged = portfolioFieldsChanged(existing, row);
+      const quote = symbolUnchanged ? existing?.quote : undefined;
+      const selectedTargetPrice = existing?.targetPriceEdited
+        ? existing.selectedTargetPrice
+        : quote ? defaultSellTargets(quote.currentPrice)[1].price : undefined;
+      return {
+        ...enrich(row),
+        quote,
+        news: symbolUnchanged ? existing?.news || [] : [],
+        analysis: symbolUnchanged && !costOrShareChanged ? existing?.analysis : undefined,
+        selectedStopStyle: existing?.selectedStopStyle || "balanced",
+        selectedTargetPrice,
+        targetPriceEdited: symbolUnchanged ? existing?.targetPriceEdited : false,
+        sellPercent: existing?.sellPercent || 100
+      };
+    }));
+  };
+
+  const updateHolding = (next: EnrichedHolding) => {
+    setHoldings((items) => items.map((item) => item.id === next.id ? next : item));
+  };
+
+  const analyze = async () => {
+    setIsAnalyzing(true);
+    setWarnings(["Your tickers are being sent to market/news providers. Uploaded screenshots are not sent unless you use image extraction."]);
+    try {
+      const symbols = holdings.map((holding) => holding.symbol).filter(Boolean);
+      const marketResponse = await fetch("/api/market", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ symbols })
+      });
+      const marketData = await marketResponse.json();
+      if (marketData.error) throw new Error(marketData.error);
+      const bySymbol = new Map<string, { quote: MarketQuote; news: NewsItem[]; warnings: string[] }>();
+      marketData.rows.forEach((row: any) => bySymbol.set(row.symbol, row));
+      const withMarket = holdings.map((holding) => {
+        const row = bySymbol.get(holding.symbol.toUpperCase());
+        const quote = row?.quote;
+        const selectedTargetPrice = quote && !holding.targetPriceEdited ? defaultSellTargets(quote.currentPrice)[1].price : holding.selectedTargetPrice;
+        return { ...holding, quote, news: row?.news || [], selectedTargetPrice };
+      });
+      setWarnings((existing) => [...existing, ...marketData.rows.flatMap((row: any) => row.warnings || []).map(normalizeWarning)]);
+
+      const analyzed = await Promise.all(withMarket.map(async (holding) => {
+        if (!holding.quote) return holding;
+        const response = await fetch("/api/analyzeHolding", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ holding, quote: holding.quote, news: holding.news })
+        });
+        const data = await response.json();
+        if (data.warning) setWarnings((existing) => [...existing, normalizeWarning(data.warning)]);
+        return { ...holding, analysis: data.analysis as AiAnalysis };
+      }));
+      setHoldings(analyzed);
+    } catch (error) {
+      setWarnings((existing) => [...existing, error instanceof Error ? error.message : "Analysis failed"]);
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  const clearStored = () => {
+    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(SETTINGS_KEY);
+    setHoldings([]);
+    setWarnings(["Stored portfolio data cleared."]);
+  };
+
+  return (
+    <main>
+      <header className="bg-white px-4 py-8">
+        <div className="mx-auto max-w-7xl">
+          <div className="mb-4 inline-flex items-center gap-2 rounded bg-mint px-3 py-1 text-xs font-semibold uppercase text-marine">
+            <DatabaseZap className="h-4 w-4" aria-hidden /> Local-first educational planner
+          </div>
+          <h1 className="max-w-3xl text-4xl font-bold tracking-normal text-ink md:text-5xl">Portfolio Exit Planner</h1>
+          <p className="mt-3 max-w-3xl text-base text-ink/70">
+            Upload, import, or enter holdings, then compare stop-losses, target exits, fees, partial sales, market data, news, and a cautious AI Hold / Watch / Trim / Sell decision.
+          </p>
+        </div>
+      </header>
+      <Disclaimer />
+      <SettingsPanel settings={settings} onChange={setSettings} onClear={clearStored} />
+      {warnings.length ? (
+        <section className="mx-auto max-w-7xl px-4 pt-5">
+          <div className="space-y-2 border border-amber/40 bg-amber/10 p-3 text-sm">
+            {[...new Set(warnings)].map((warning) => (
+              <p className="flex gap-2" key={warning}><AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber" aria-hidden />{warning}</p>
+            ))}
+          </div>
+        </section>
+      ) : null}
+      <ImageImport onExtracted={(rows) => setInputRows(rows)} setWarning={(warning) => setWarnings((existing) => [...existing, warning])} />
+      <PortfolioInput holdings={inputRows} onChange={setInputRows} onAnalyze={analyze} isAnalyzing={isAnalyzing} />
+      {isAnalyzing ? (
+        <section className="mx-auto grid max-w-7xl gap-3 px-4 pb-8 sm:grid-cols-3">
+          {[0, 1, 2].map((item) => <div className="h-24 animate-pulse bg-white" key={item} />)}
+        </section>
+      ) : null}
+      <PortfolioSummary holdings={holdings} settings={settings} />
+      <HoldingsTable holdings={holdings} settings={settings} onChange={updateHolding} />
+    </main>
+  );
+}

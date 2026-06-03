@@ -1,0 +1,250 @@
+import type { MarketQuote, NewsItem } from "./types";
+import { mockNews, mockQuote } from "./sampleData";
+
+const ALPHA_URL = "https://www.alphavantage.co/query";
+const YAHOO_NEWS_RSS = "https://feeds.finance.yahoo.com/rss/2.0/headline";
+const YAHOO_CHART_URL = "https://query1.finance.yahoo.com/v8/finance/chart";
+
+type ProviderResult<T> = {
+  data: T;
+  warning?: string;
+};
+
+function providerName() {
+  return process.env.MARKET_DATA_PROVIDER || "mock";
+}
+
+function apiKey() {
+  return process.env.MARKET_DATA_API_KEY || process.env.ALPHA_VANTAGE_API_KEY;
+}
+
+async function fetchAlpha(params: Record<string, string>) {
+  const key = apiKey();
+  if (!key) throw new Error("Missing MARKET_DATA_API_KEY");
+  const url = new URL(ALPHA_URL);
+  Object.entries({ ...params, apikey: key }).forEach(([name, value]) => url.searchParams.set(name, value));
+  const response = await fetch(url, { next: { revalidate: 300 } });
+  if (!response.ok) throw new Error(`Alpha Vantage failed with ${response.status}`);
+  const data = await response.json();
+  if (data.Note || data.Information) throw new Error(data.Note || data.Information);
+  return data;
+}
+
+function movingAverage(values: number[], length: number) {
+  const slice = values.slice(0, length);
+  if (slice.length < length) return undefined;
+  return Math.round((slice.reduce((sum, value) => sum + value, 0) / length) * 100) / 100;
+}
+
+function calculateAtr(rows: Array<{ high: number; low: number; close: number }>, length = 14) {
+  if (rows.length <= length) return undefined;
+  const trueRanges = rows.slice(0, length).map((row, index) => {
+    const previousClose = rows[index + 1]?.close ?? row.close;
+    return Math.max(row.high - row.low, Math.abs(row.high - previousClose), Math.abs(row.low - previousClose));
+  });
+  return Math.round((trueRanges.reduce((sum, value) => sum + value, 0) / trueRanges.length) * 100) / 100;
+}
+
+function calculateRsi(closes: number[], length = 14) {
+  if (closes.length <= length) return undefined;
+  let gains = 0;
+  let losses = 0;
+  for (let index = 0; index < length; index += 1) {
+    const change = closes[index] - closes[index + 1];
+    if (change >= 0) gains += change;
+    else losses += Math.abs(change);
+  }
+  if (losses === 0) return 100;
+  const rs = gains / length / (losses / length);
+  return Math.round((100 - 100 / (1 + rs)) * 10) / 10;
+}
+
+async function alphaQuote(symbol: string): Promise<MarketQuote> {
+  const [quoteData, dailyData] = await Promise.all([
+    fetchAlpha({ function: "GLOBAL_QUOTE", symbol }),
+    fetchAlpha({ function: "TIME_SERIES_DAILY_ADJUSTED", symbol, outputsize: "full" })
+  ]);
+  const quote = quoteData["Global Quote"];
+  const series = dailyData["Time Series (Daily)"];
+  if (!quote?.["05. price"] || !series) throw new Error(`Invalid ticker or unavailable quote for ${symbol}`);
+  const rows = Object.values(series).map((row: any) => ({
+    high: Number(row["2. high"]),
+    low: Number(row["3. low"]),
+    close: Number(row["4. close"]),
+    volume: Number(row["6. volume"])
+  }));
+  const closes = rows.map((row) => row.close);
+  return {
+    symbol,
+    currentPrice: Number(Number(quote["05. price"]).toFixed(2)),
+    dailyChangePercent: Number(String(quote["10. change percent"]).replace("%", "")),
+    previousClose: Number(Number(quote["08. previous close"]).toFixed(2)),
+    week52High: Math.max(...closes.slice(0, 252)),
+    week52Low: Math.min(...closes.slice(0, 252)),
+    volume: Number(quote["06. volume"]),
+    ma20: movingAverage(closes, 20),
+    ma50: movingAverage(closes, 50),
+    ma200: movingAverage(closes, 200),
+    atr: calculateAtr(rows),
+    rsi: calculateRsi(closes),
+    provider: "alpha_vantage"
+  };
+}
+
+export async function getQuote(symbol: string): Promise<ProviderResult<MarketQuote>> {
+  const cleanSymbol = symbol.trim().toUpperCase();
+  if (!cleanSymbol) throw new Error("Ticker is required");
+  if (providerName() !== "alpha_vantage" || !apiKey()) {
+    const yahooQuote = await getYahooQuote(cleanSymbol);
+    if (yahooQuote) {
+      return {
+        data: yahooQuote,
+        warning: "Market API key is missing, so quotes are fetched from Yahoo Finance's public chart feed."
+      };
+    }
+    return {
+      data: mockQuote(cleanSymbol),
+      warning: `Market API key is missing and no public quote was found for ${cleanSymbol}. Showing sample market data.`
+    };
+  }
+  try {
+    return { data: await alphaQuote(cleanSymbol) };
+  } catch (error) {
+    return {
+      data: { ...mockQuote(cleanSymbol), error: error instanceof Error ? error.message : "Failed quote fetch" },
+      warning: `Quote fetch failed for ${cleanSymbol}; showing sample data.`
+    };
+  }
+}
+
+export async function getNews(symbol: string): Promise<ProviderResult<NewsItem[]>> {
+  const cleanSymbol = symbol.trim().toUpperCase();
+  if (providerName() !== "alpha_vantage" || !apiKey()) {
+    const yahooNews = await yahooRssNews(cleanSymbol);
+    if (yahooNews.length) {
+      return {
+        data: yahooNews,
+        warning: "News is fetched from Yahoo Finance RSS."
+      };
+    }
+    return {
+      data: mockNews(cleanSymbol),
+      warning: "News API key is missing or provider is set to mock. Showing sample news."
+    };
+  }
+  try {
+    const data = await fetchAlpha({ function: "NEWS_SENTIMENT", tickers: cleanSymbol, sort: "LATEST", limit: "8" });
+    const cutoff = Date.now() - 14 * 24 * 60 * 60 * 1000;
+    const items = (data.feed || []).map((item: any) => ({
+      headline: item.title,
+      source: item.source,
+      date: item.time_published,
+      url: item.url,
+      summary: item.summary || "No summary provided."
+    })).filter((item: NewsItem) => {
+      const parsed = Date.parse(item.date);
+      return Number.isNaN(parsed) || parsed >= cutoff;
+    });
+    return { data: items.length ? items : [] };
+  } catch (error) {
+    return {
+      data: [],
+      warning: `News fetch failed for ${cleanSymbol}: ${error instanceof Error ? error.message : "Unknown error"}`
+    };
+  }
+}
+
+async function getYahooQuote(symbol: string): Promise<MarketQuote | undefined> {
+  try {
+    const url = new URL(`${YAHOO_CHART_URL}/${encodeURIComponent(symbol)}`);
+    url.searchParams.set("range", "1y");
+    url.searchParams.set("interval", "1d");
+    const response = await fetch(url, { next: { revalidate: 300 } });
+    if (!response.ok) return undefined;
+    const data = await response.json();
+    const result = data.chart?.result?.[0];
+    const meta = result?.meta;
+    const quoteRows = result?.indicators?.quote?.[0];
+    if (!meta?.regularMarketPrice || !quoteRows?.close?.length) return undefined;
+
+    const rows = quoteRows.close.map((close: number | null, index: number) => ({
+      close,
+      high: quoteRows.high?.[index] ?? null,
+      low: quoteRows.low?.[index] ?? null,
+      volume: quoteRows.volume?.[index] ?? null
+    })).filter((row: { close: number | null; high: number | null; low: number | null }) => (
+      typeof row.close === "number" && typeof row.high === "number" && typeof row.low === "number"
+    )).reverse() as Array<{ close: number; high: number; low: number; volume: number | null }>;
+
+    const closes = rows.map((row) => row.close);
+    const currentPrice = Number(Number(meta.regularMarketPrice).toFixed(2));
+    const previousClose = Number(Number(meta.previousClose || meta.chartPreviousClose || closes[1] || currentPrice).toFixed(2));
+    const dailyChangePercent = previousClose > 0 ? Number((((currentPrice - previousClose) / previousClose) * 100).toFixed(2)) : 0;
+
+    return {
+      symbol,
+      currentPrice,
+      dailyChangePercent,
+      previousClose,
+      week52High: typeof meta.fiftyTwoWeekHigh === "number" ? Number(meta.fiftyTwoWeekHigh.toFixed(2)) : Math.round(Math.max(...closes.slice(0, 252)) * 100) / 100,
+      week52Low: typeof meta.fiftyTwoWeekLow === "number" ? Number(meta.fiftyTwoWeekLow.toFixed(2)) : Math.round(Math.min(...closes.slice(0, 252)) * 100) / 100,
+      volume: typeof meta.regularMarketVolume === "number" ? meta.regularMarketVolume : rows[0]?.volume ?? undefined,
+      ma20: movingAverage(closes, 20),
+      ma50: movingAverage(closes, 50),
+      ma200: movingAverage(closes, 200),
+      atr: calculateAtr(rows),
+      rsi: calculateRsi(closes),
+      provider: "yahoo_finance"
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+function decodeXml(value: string) {
+  return value
+    .replaceAll("<![CDATA[", "")
+    .replaceAll("]]>", "")
+    .replaceAll("&amp;", "&")
+    .replaceAll("&quot;", "\"")
+    .replaceAll("&#39;", "'")
+    .replaceAll("&lt;", "<")
+    .replaceAll("&gt;", ">")
+    .trim();
+}
+
+function tagValue(item: string, tag: string) {
+  const match = item.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, "i"));
+  return match ? decodeXml(match[1]) : "";
+}
+
+async function yahooRssNews(symbol: string): Promise<NewsItem[]> {
+  try {
+    const url = new URL(YAHOO_NEWS_RSS);
+    url.searchParams.set("s", symbol);
+    url.searchParams.set("region", "US");
+    url.searchParams.set("lang", "en-US");
+    const response = await fetch(url, { next: { revalidate: 900 } });
+    if (!response.ok) return [];
+    const xml = await response.text();
+    const cutoff = Date.now() - 14 * 24 * 60 * 60 * 1000;
+    return [...xml.matchAll(/<item>([\s\S]*?)<\/item>/gi)].slice(0, 8).map((match) => {
+      const item = match[1];
+      const date = tagValue(item, "pubDate");
+      const parsedDate = Date.parse(date);
+      return {
+        headline: tagValue(item, "title"),
+        source: "Yahoo Finance RSS",
+        date: Number.isNaN(parsedDate) ? date : new Date(parsedDate).toISOString(),
+        url: tagValue(item, "link"),
+        summary: tagValue(item, "description") || "No summary provided."
+      };
+    }).filter((item) => {
+      if (!item.headline || !item.url) return false;
+      const parsed = Date.parse(item.date);
+      return Number.isNaN(parsed) || parsed >= cutoff;
+    });
+  } catch {
+    return [];
+  }
+}

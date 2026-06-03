@@ -1,0 +1,22 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  background: #f7f8f5;
+}
+
+body {
+  min-height: 100vh;
+  background: #f7f8f5;
+  color: #17212b;
+}
+
+button, input, textarea, select {
+  font: inherit;
+}
+
+.table-scroll {
+  scrollbar-width: thin;
+}
