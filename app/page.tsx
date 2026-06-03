@@ -161,9 +161,10 @@ export default function Home() {
   const signIn = async (email: string, password: string, mode: "signin" | "signup") => {
     if (!supabase) return;
     setIsAuthLoading(true);
+    const emailRedirectTo = typeof window !== "undefined" ? window.location.origin : "https://portfolio-exit-planner.vercel.app";
     const result = mode === "signin"
       ? await supabase.auth.signInWithPassword({ email, password })
-      : await supabase.auth.signUp({ email, password });
+      : await supabase.auth.signUp({ email, password, options: { emailRedirectTo } });
     setIsAuthLoading(false);
     if (result.error) {
       setWarnings((existing) => [...existing, result.error.message]);
