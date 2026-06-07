@@ -32,29 +32,29 @@ export function HoldingsTable({ holdings, settings, currency, onChange }: Props)
       <div className="table-scroll overflow-x-auto border-y border-ink/10 bg-white shadow-soft">
         <table className="min-w-[1320px] w-full border-collapse text-left text-sm">
           <thead className="bg-ink text-xs uppercase text-white">
-            <tr>
-              <th className="px-3 py-2" colSpan={4}>Position</th>
-              <th className="border-l-2 border-white/25 px-3 py-2" colSpan={3}>Market</th>
-              <th className="border-l-2 border-white/25 px-3 py-2" colSpan={2}>Analysis</th>
-              <th className="border-l-2 border-white/25 px-3 py-2" colSpan={2}>Stop</th>
-              <th className="border-l-2 border-white/25 px-3 py-2" colSpan={2}>Target</th>
-              <th className="border-l-2 border-white/25 px-3 py-2">Risk</th>
+            <tr className="border-b border-white/15">
+              <th className="px-3 py-2 text-center" colSpan={4}>Position</th>
+              <th className="border-l-2 border-white/30 px-3 py-2 text-center" colSpan={3}>Market</th>
+              <th className="border-l-2 border-white/30 px-3 py-2 text-center" colSpan={2}>Analysis</th>
+              <th className="border-l-2 border-white/30 px-3 py-2 text-center" colSpan={2}>Stop</th>
+              <th className="border-l-2 border-white/30 px-3 py-2 text-center" colSpan={2}>Target</th>
+              <th className="border-l-2 border-white/30 px-3 py-2 text-center">Risk</th>
             </tr>
             <tr className="bg-ink/95">
               <th className="px-3 py-3" aria-label="Expand row" />
               <th className="px-3 py-3">Symbol</th>
               <th className="px-3 py-3">Shares</th>
               <th className="px-3 py-3">Avg cost</th>
-              <th className="border-l-2 border-ink/25 px-3 py-3">Current price</th>
+              <th className="border-l-2 border-white/30 px-3 py-3">Current price</th>
               <th className="px-3 py-3">Current value</th>
               <th className="px-3 py-3">Current P/L</th>
-              <th className="border-l-2 border-ink/25 px-3 py-3">AI action</th>
+              <th className="border-l-2 border-white/30 px-3 py-3">AI action</th>
               <th className="px-3 py-3">Confidence</th>
-              <th className="border-l-2 border-ink/25 px-3 py-3">Suggested stop-loss</th>
+              <th className="border-l-2 border-white/30 px-3 py-3">Suggested stop-loss</th>
               <th className="px-3 py-3">P/L if stop hits</th>
-              <th className="border-l-2 border-ink/25 px-3 py-3">Target sell price</th>
+              <th className="border-l-2 border-white/30 px-3 py-3">Target sell price</th>
               <th className="px-3 py-3">P/L at target</th>
-              <th className="border-l-2 border-ink/25 px-3 py-3">Risk</th>
+              <th className="border-l-2 border-white/30 px-3 py-3">Risk</th>
             </tr>
           </thead>
           <tbody>
