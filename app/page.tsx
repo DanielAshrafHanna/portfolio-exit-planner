@@ -113,6 +113,7 @@ export default function Home() {
   const [activeProfileId, setActiveProfileId] = useState("us-portfolio");
   const [warnings, setWarnings] = useState<string[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isRefreshingMarket, setIsRefreshingMarket] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(false);
   const [cloudSyncStatus, setCloudSyncStatus] = useState<CloudSyncStatus>("signed-out");
@@ -181,6 +182,21 @@ export default function Home() {
   const settings = activeProfile?.settings || DEFAULT_SETTINGS;
   const currency = activeProfile?.currency || "USD";
   const region = activeProfile?.region || "US";
+  const marketSymbolKey = useMemo(() => (
+    holdings.map((holding) => `${holding.id}:${displayMarketSymbol(holding.symbol, region)}`).join("|")
+  ), [holdings, region]);
+  const holdingInputKey = useMemo(() => (
+    holdings.map((holding) => [
+      holding.id,
+      holding.symbol,
+      holding.name,
+      holding.shares,
+      holding.averageCost,
+      holding.totalCost,
+      holding.brokerCurrentValue,
+      holding.notes
+    ].join(":")).join("|")
+  ), [holdings]);
 
   const updateActiveProfile = (updater: (profile: PortfolioProfile) => PortfolioProfile) => {
     setProfiles((items) => items.map((profile) => profile.id === activeProfile?.id ? updater(profile) : profile));
@@ -225,9 +241,10 @@ export default function Home() {
     setHoldings((items) => items.map((item) => item.id === next.id ? next : item));
   };
 
-  const analyze = async () => {
-    setIsAnalyzing(true);
-    setWarnings(["Your tickers are being sent to market/news providers. Uploaded screenshots are not sent unless you use image extraction."]);
+  const refreshMarketData = async (options: { showLoading?: boolean; showWarnings?: boolean } = {}) => {
+    const symbols = holdings.map((holding) => displayMarketSymbol(holding.symbol, region)).filter(Boolean);
+    if (!symbols.length) return holdings;
+    if (options.showLoading) setIsRefreshingMarket(true);
     try {
       const analysisHoldings = holdings.map((holding) => ({ symbol: displayMarketSymbol(holding.symbol, region), region })).filter((holding) => holding.symbol);
       const marketResponse = await fetch("/api/market", {
@@ -243,10 +260,44 @@ export default function Home() {
         const row = bySymbol.get(displayMarketSymbol(holding.symbol, region).toUpperCase());
         const quote = row?.quote;
         const selectedTargetPrice = quote && !holding.targetPriceEdited ? defaultSellTargets(quote.currentPrice)[1].price : holding.selectedTargetPrice;
-        return { ...holding, quote, news: row?.news || [], selectedTargetPrice };
+        return { ...holding, quote, news: row?.news || holding.news || [], selectedTargetPrice };
       });
-      setWarnings((existing) => [...existing, ...marketData.rows.flatMap((row: any) => row.warnings || []).map(normalizeWarning)]);
+      if (options.showWarnings) {
+        setWarnings((existing) => [...existing, ...marketData.rows.flatMap((row: any) => row.warnings || []).map(normalizeWarning)]);
+      }
+      setHoldings(withMarket);
+      return withMarket;
+    } catch (error) {
+      if (options.showWarnings) {
+        setWarnings((existing) => [...existing, error instanceof Error ? error.message : "Market refresh failed"]);
+      }
+      return holdings;
+    } finally {
+      if (options.showLoading) setIsRefreshingMarket(false);
+    }
+  };
 
+  useEffect(() => {
+    if (!isHydrated || !holdings.some((holding) => holding.symbol)) return;
+    const timeout = window.setTimeout(() => {
+      void refreshMarketData({ showLoading: true, showWarnings: false });
+    }, 500);
+    return () => window.clearTimeout(timeout);
+  }, [isHydrated, activeProfileId, region, marketSymbolKey]);
+
+  useEffect(() => {
+    if (!isHydrated || !holdings.some((holding) => holding.symbol)) return;
+    const interval = window.setInterval(() => {
+      void refreshMarketData({ showLoading: true, showWarnings: false });
+    }, 60_000);
+    return () => window.clearInterval(interval);
+  }, [isHydrated, activeProfileId, region, marketSymbolKey, holdingInputKey]);
+
+  const analyze = async () => {
+    setIsAnalyzing(true);
+    setWarnings(["Refreshing market data, news, and analysis. Uploaded screenshots are not sent unless you use image extraction."]);
+    try {
+      const withMarket = await refreshMarketData({ showLoading: true, showWarnings: true });
       const analyzed = await Promise.all(withMarket.map(async (holding) => {
         if (!holding.quote) return holding;
         const response = await fetch("/api/analyzeHolding", {
@@ -436,7 +487,7 @@ export default function Home() {
         }}
         setWarning={(warning) => setWarnings((existing) => [...existing, warning])}
       />
-      <PortfolioInput holdings={inputRows} onChange={setInputRows} onAnalyze={analyze} isAnalyzing={isAnalyzing} />
+      <PortfolioInput holdings={inputRows} onChange={setInputRows} onAnalyze={analyze} isAnalyzing={isAnalyzing} isRefreshingMarket={isRefreshingMarket} />
       {isAnalyzing ? (
         <section className="mx-auto grid max-w-7xl gap-3 px-4 pb-8 sm:grid-cols-3">
           {[0, 1, 2].map((item) => <div className="h-24 animate-pulse bg-white" key={item} />)}

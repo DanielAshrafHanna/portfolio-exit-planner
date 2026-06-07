@@ -10,6 +10,7 @@ type Props = {
   onChange: (holdings: HoldingInput[]) => void;
   onAnalyze: () => void;
   isAnalyzing: boolean;
+  isRefreshingMarket: boolean;
 };
 
 const emptyHolding = (): HoldingInput => ({
@@ -22,7 +23,7 @@ const emptyHolding = (): HoldingInput => ({
   notes: ""
 });
 
-export function PortfolioInput({ holdings, onChange, onAnalyze, isAnalyzing }: Props) {
+export function PortfolioInput({ holdings, onChange, onAnalyze, isAnalyzing, isRefreshingMarket }: Props) {
   const update = (id: string, key: keyof HoldingInput, value: string) => {
     onChange(holdings.map((holding) => {
       if (holding.id !== id) return holding;
@@ -80,6 +81,7 @@ export function PortfolioInput({ holdings, onChange, onAnalyze, isAnalyzing }: P
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold">Portfolio input</h2>
+          {isRefreshingMarket ? <p className="text-sm text-ink/55">Refreshing prices...</p> : null}
         </div>
         <div className="flex flex-wrap gap-2">
           <button className="inline-flex items-center gap-2 rounded-md bg-marine px-3 py-2 text-sm font-semibold text-white" type="button" onClick={() => onChange([...holdings, emptyHolding()])}>
@@ -93,7 +95,7 @@ export function PortfolioInput({ holdings, onChange, onAnalyze, isAnalyzing }: P
             <Download className="h-4 w-4" aria-hidden /> Export CSV
           </button>
           <button className="inline-flex items-center gap-2 rounded-md bg-coral px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" type="button" onClick={onAnalyze} disabled={isAnalyzing || holdings.every((h) => !h.symbol)}>
-            <Sparkles className="h-4 w-4" aria-hidden /> {isAnalyzing ? "Analyzing..." : "Analyze"}
+            <Sparkles className="h-4 w-4" aria-hidden /> {isAnalyzing ? "Analyzing..." : "Run analysis"}
           </button>
         </div>
       </div>
