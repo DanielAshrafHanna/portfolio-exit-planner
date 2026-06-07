@@ -2,13 +2,15 @@
 
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { useState } from "react";
-import type { EnrichedHolding, FeeSettings } from "@/lib/types";
+import type { CurrencyCode, EnrichedHolding, FeeSettings } from "@/lib/types";
 import { calculateProfitLoss, calculateStopLosses, defaultSellTargets } from "@/lib/calculations";
+import { formatMoney } from "@/lib/profileUtils";
 import { HoldingDetails } from "./HoldingDetails";
 
 type Props = {
   holdings: EnrichedHolding[];
   settings: FeeSettings;
+  currency: CurrencyCode;
   onChange: (holding: EnrichedHolding) => void;
 };
 
@@ -22,7 +24,7 @@ function valueClass(value?: number) {
   return value < 0 ? "text-coral" : "text-marine";
 }
 
-export function HoldingsTable({ holdings, settings, onChange }: Props) {
+export function HoldingsTable({ holdings, settings, currency, onChange }: Props) {
   const [open, setOpen] = useState<Record<string, boolean>>({});
 
   return (
@@ -52,21 +54,21 @@ export function HoldingsTable({ holdings, settings, onChange }: Props) {
                     </td>
                     <td className="px-3 py-3 font-bold">{holding.symbol}<span className="block text-xs font-normal text-ink/55">{holding.name}</span></td>
                     <td className="px-3 py-3">{holding.shares}</td>
-                    <td className="px-3 py-3">${holding.averageCost.toLocaleString()}</td>
-                    <td className="bg-marine/5 px-3 py-3 font-semibold text-marine">{quote ? `$${quote.currentPrice.toLocaleString()}` : "Loading"}</td>
-                    <td className="px-3 py-3">{current ? `$${current.grossValue.toLocaleString()}` : "N/A"}</td>
-                    <td className={`bg-marine/5 px-3 py-3 font-semibold ${valueClass(current?.profitLoss)}`}>{current ? `$${current.profitLoss.toLocaleString()} (${current.profitLossPercent}%)` : "N/A"}</td>
+                    <td className="px-3 py-3">{formatMoney(holding.averageCost, currency)}</td>
+                    <td className="bg-marine/5 px-3 py-3 font-semibold text-marine">{quote ? formatMoney(quote.currentPrice, currency) : "Loading"}</td>
+                    <td className="px-3 py-3">{current ? formatMoney(current.grossValue, currency) : "N/A"}</td>
+                    <td className={`bg-marine/5 px-3 py-3 font-semibold ${valueClass(current?.profitLoss)}`}>{current ? `${formatMoney(current.profitLoss, currency)} (${current.profitLossPercent}%)` : "N/A"}</td>
                     <td className="px-3 py-3">{badge(holding.analysis?.action)}</td>
                     <td className="px-3 py-3">{badge(holding.analysis?.confidence)}</td>
-                    <td className="bg-amber/10 px-3 py-3 font-semibold">{stopPrice ? `$${stopPrice.toLocaleString()}` : "N/A"}</td>
-                    <td className="px-3 py-3">{stopPl ? `$${stopPl.profitLoss.toLocaleString()} (${stopPl.profitLossPercent}%)` : "N/A"}</td>
-                    <td className="bg-mint/70 px-3 py-3 font-bold text-marine">{targetPrice ? `$${targetPrice.toLocaleString()}` : "N/A"}</td>
-                    <td className={`bg-mint/70 px-3 py-3 font-bold ${valueClass(targetPl?.profitLoss)}`}>{targetPl ? `$${targetPl.profitLoss.toLocaleString()} (${targetPl.profitLossPercent}%)` : "N/A"}</td>
+                    <td className="bg-amber/10 px-3 py-3 font-semibold">{stopPrice ? formatMoney(stopPrice, currency) : "N/A"}</td>
+                    <td className="px-3 py-3">{stopPl ? `${formatMoney(stopPl.profitLoss, currency)} (${stopPl.profitLossPercent}%)` : "N/A"}</td>
+                    <td className="bg-mint/70 px-3 py-3 font-bold text-marine">{targetPrice ? formatMoney(targetPrice, currency) : "N/A"}</td>
+                    <td className={`bg-mint/70 px-3 py-3 font-bold ${valueClass(targetPl?.profitLoss)}`}>{targetPl ? `${formatMoney(targetPl.profitLoss, currency)} (${targetPl.profitLossPercent}%)` : "N/A"}</td>
                     <td className="px-3 py-3">{badge(holding.analysis?.riskLevel)}</td>
                   </tr>,
                   open[holding.id] ? (
                     <tr className="border-t border-ink/10" key={`${holding.id}-details`}>
-                      <td colSpan={14} className="p-0"><HoldingDetails holding={holding} settings={settings} onChange={onChange} /></td>
+                      <td colSpan={14} className="p-0"><HoldingDetails holding={holding} settings={settings} currency={currency} onChange={onChange} /></td>
                     </tr>
                   ) : null
               ];

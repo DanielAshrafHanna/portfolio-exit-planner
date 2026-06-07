@@ -8,14 +8,18 @@ import { Disclaimer } from "@/components/Disclaimer";
 import { HoldingsTable } from "@/components/HoldingsTable";
 import { ImageImport } from "@/components/ImageImport";
 import { PortfolioInput } from "@/components/PortfolioInput";
+import { ProfileSelector } from "@/components/ProfileSelector";
 import { PortfolioSummary } from "@/components/PortfolioSummary";
 import { SettingsPanel } from "@/components/SettingsPanel";
 import { defaultSellTargets } from "@/lib/calculations";
+import { DEFAULT_SETTINGS, defaultProfiles, displayMarketSymbol } from "@/lib/profileUtils";
 import { createSupabaseBrowserClient } from "@/lib/supabaseClient";
-import type { AiAnalysis, EnrichedHolding, FeeSettings, HoldingInput, MarketQuote, NewsItem } from "@/lib/types";
+import type { AiAnalysis, EnrichedHolding, FeeSettings, HoldingInput, MarketQuote, NewsItem, PortfolioProfile } from "@/lib/types";
 
 const STORAGE_KEY = "portfolio-exit-planner:v1";
 const SETTINGS_KEY = "portfolio-exit-planner:settings:v1";
+const PROFILES_KEY = "portfolio-exit-planner:profiles:v1";
+const ACTIVE_PROFILE_KEY = "portfolio-exit-planner:active-profile:v1";
 const DEMO_IDS = new Set(["tsm", "ibm", "dram", "nasa"]);
 
 function enrich(holding: HoldingInput): EnrichedHolding {
@@ -79,37 +83,73 @@ function mergeExtractedRows(existingRows: EnrichedHolding[], extractedRows: Hold
   return merged;
 }
 
+function profileNameForCount(count: number) {
+  return `Portfolio ${count + 1}`;
+}
+
+function coerceProfiles(value: unknown, fallbackSettings: FeeSettings): PortfolioProfile[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is PortfolioProfile => Boolean(item && typeof item === "object" && "holdings" in item)).map((profile: any) => ({
+    id: String(profile.id || crypto.randomUUID()),
+    name: String(profile.name || "Portfolio"),
+    region: profile.region === "EG" ? "EG" : "US",
+    currency: profile.currency === "EGP" || profile.region === "EG" ? "EGP" : "USD",
+    holdings: Array.isArray(profile.holdings) ? removeLegacyDemoRows(profile.holdings) : [],
+    settings: { ...DEFAULT_SETTINGS, ...fallbackSettings, ...(profile.settings || {}) }
+  }));
+}
+
+function migrateSinglePortfolio(holdings: EnrichedHolding[], settings: FeeSettings): PortfolioProfile[] {
+  const [usProfile, egProfile] = defaultProfiles();
+  return [
+    { ...usProfile, holdings: removeLegacyDemoRows(holdings), settings: { ...DEFAULT_SETTINGS, ...settings } },
+    egProfile
+  ];
+}
+
 export default function Home() {
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
-  const [holdings, setHoldings] = useState<EnrichedHolding[]>([]);
-  const [settings, setSettings] = useState<FeeSettings>({ fixedTradingFee: 0, percentTradingFee: 0, fxFeePercent: 0 });
+  const [profiles, setProfiles] = useState<PortfolioProfile[]>(() => defaultProfiles());
+  const [activeProfileId, setActiveProfileId] = useState("us-portfolio");
   const [warnings, setWarnings] = useState<string[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(false);
   const [isSavingCloud, setIsSavingCloud] = useState(false);
+  const [isHydrated, setIsHydrated] = useState(false);
 
   useEffect(() => {
+    const storedProfiles = localStorage.getItem(PROFILES_KEY);
     const stored = localStorage.getItem(STORAGE_KEY);
     const storedSettings = localStorage.getItem(SETTINGS_KEY);
-    const parsedRows = stored ? JSON.parse(stored) as EnrichedHolding[] : [];
-    const storedRows = removeLegacyDemoRows(parsedRows);
-    if (stored && storedRows.length !== parsedRows.length) {
-      if (storedRows.length) localStorage.setItem(STORAGE_KEY, JSON.stringify(storedRows));
-      else localStorage.removeItem(STORAGE_KEY);
-      setWarnings((existing) => [...existing, "Old demo tickers were removed from local storage."]);
+    const parsedSettings = storedSettings ? { ...DEFAULT_SETTINGS, ...(JSON.parse(storedSettings) as Partial<FeeSettings>) } : DEFAULT_SETTINGS;
+    let nextProfiles = storedProfiles ? coerceProfiles(JSON.parse(storedProfiles), parsedSettings) : [];
+
+    if (!nextProfiles.length) {
+      const parsedRows = stored ? JSON.parse(stored) as EnrichedHolding[] : [];
+      const storedRows = removeLegacyDemoRows(parsedRows);
+      nextProfiles = migrateSinglePortfolio(storedRows, parsedSettings);
+      if (stored) setWarnings((existing) => [...existing, "Existing portfolio data was moved into the US Portfolio profile."]);
+      if (stored && storedRows.length !== parsedRows.length) {
+        setWarnings((existing) => [...existing, "Old demo tickers were removed from local storage."]);
+      }
     }
-    setHoldings(storedRows);
-    if (storedSettings) setSettings(JSON.parse(storedSettings));
+
+    setProfiles(nextProfiles.length ? nextProfiles : defaultProfiles());
+    const storedActiveProfileId = localStorage.getItem(ACTIVE_PROFILE_KEY);
+    setActiveProfileId(nextProfiles.some((profile) => profile.id === storedActiveProfileId) ? storedActiveProfileId! : nextProfiles[0]?.id || "us-portfolio");
+    setIsHydrated(true);
   }, []);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(holdings));
-  }, [holdings]);
+    if (!isHydrated) return;
+    localStorage.setItem(PROFILES_KEY, JSON.stringify(profiles));
+  }, [profiles, isHydrated]);
 
   useEffect(() => {
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
-  }, [settings]);
+    if (!isHydrated) return;
+    localStorage.setItem(ACTIVE_PROFILE_KEY, activeProfileId);
+  }, [activeProfileId, isHydrated]);
 
   useEffect(() => {
     if (!supabase) return;
@@ -123,6 +163,27 @@ export default function Home() {
     });
     return () => listener.subscription.unsubscribe();
   }, [supabase]);
+
+  const activeProfile = useMemo(() => profiles.find((profile) => profile.id === activeProfileId) || profiles[0], [profiles, activeProfileId]);
+  const holdings = activeProfile?.holdings || [];
+  const settings = activeProfile?.settings || DEFAULT_SETTINGS;
+  const currency = activeProfile?.currency || "USD";
+  const region = activeProfile?.region || "US";
+
+  const updateActiveProfile = (updater: (profile: PortfolioProfile) => PortfolioProfile) => {
+    setProfiles((items) => items.map((profile) => profile.id === activeProfile?.id ? updater(profile) : profile));
+  };
+
+  const setHoldings = (nextHoldings: EnrichedHolding[] | ((existing: EnrichedHolding[]) => EnrichedHolding[])) => {
+    updateActiveProfile((profile) => ({
+      ...profile,
+      holdings: typeof nextHoldings === "function" ? nextHoldings(profile.holdings) : nextHoldings
+    }));
+  };
+
+  const setSettings = (nextSettings: FeeSettings) => {
+    updateActiveProfile((profile) => ({ ...profile, settings: nextSettings }));
+  };
 
   const inputRows = useMemo(() => holdings.map(({ quote, news, analysis, selectedStopStyle, selectedTargetPrice, targetPriceEdited, sellPercent, ...holding }) => holding), [holdings]);
 
@@ -156,18 +217,18 @@ export default function Home() {
     setIsAnalyzing(true);
     setWarnings(["Your tickers are being sent to market/news providers. Uploaded screenshots are not sent unless you use image extraction."]);
     try {
-      const symbols = holdings.map((holding) => holding.symbol).filter(Boolean);
+      const analysisHoldings = holdings.map((holding) => ({ symbol: displayMarketSymbol(holding.symbol, region), region })).filter((holding) => holding.symbol);
       const marketResponse = await fetch("/api/market", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ symbols })
+        body: JSON.stringify({ holdings: analysisHoldings, region })
       });
       const marketData = await marketResponse.json();
       if (marketData.error) throw new Error(marketData.error);
       const bySymbol = new Map<string, { quote: MarketQuote; news: NewsItem[]; warnings: string[] }>();
       marketData.rows.forEach((row: any) => bySymbol.set(row.symbol, row));
       const withMarket = holdings.map((holding) => {
-        const row = bySymbol.get(holding.symbol.toUpperCase());
+        const row = bySymbol.get(displayMarketSymbol(holding.symbol, region).toUpperCase());
         const quote = row?.quote;
         const selectedTargetPrice = quote && !holding.targetPriceEdited ? defaultSellTargets(quote.currentPrice)[1].price : holding.selectedTargetPrice;
         return { ...holding, quote, news: row?.news || [], selectedTargetPrice };
@@ -196,7 +257,11 @@ export default function Home() {
   const clearStored = () => {
     localStorage.removeItem(STORAGE_KEY);
     localStorage.removeItem(SETTINGS_KEY);
-    setHoldings([]);
+    localStorage.removeItem(PROFILES_KEY);
+    localStorage.removeItem(ACTIVE_PROFILE_KEY);
+    const nextProfiles = defaultProfiles();
+    setProfiles(nextProfiles);
+    setActiveProfileId(nextProfiles[0].id);
     setWarnings(["Stored portfolio data cleared."]);
   };
 
@@ -231,8 +296,8 @@ export default function Home() {
     setIsSavingCloud(true);
     const { error } = await supabase.from("user_portfolios").upsert({
       user_id: user.id,
-      holdings,
-      settings,
+      holdings: profiles,
+      settings: { activeProfileId, profilesVersion: 2 },
       updated_at: new Date().toISOString()
     });
     setIsSavingCloud(false);
@@ -252,9 +317,45 @@ export default function Home() {
       setWarnings((existing) => [...existing, "No cloud portfolio saved yet for this account."]);
       return;
     }
-    setHoldings(Array.isArray(data.holdings) ? data.holdings as EnrichedHolding[] : []);
-    setSettings({ ...settings, ...(data.settings as Partial<FeeSettings>) });
+    const cloudSettings = data.settings as { activeProfileId?: string } & Partial<FeeSettings>;
+    const loadedProfiles = coerceProfiles(data.holdings, DEFAULT_SETTINGS);
+    if (loadedProfiles.length) {
+      setProfiles(loadedProfiles);
+      setActiveProfileId(loadedProfiles.some((profile) => profile.id === cloudSettings?.activeProfileId) ? cloudSettings.activeProfileId! : loadedProfiles[0].id);
+    } else {
+      const legacyHoldings = Array.isArray(data.holdings) ? data.holdings as EnrichedHolding[] : [];
+      const migratedProfiles = migrateSinglePortfolio(legacyHoldings, { ...DEFAULT_SETTINGS, ...cloudSettings });
+      setProfiles(migratedProfiles);
+      setActiveProfileId(migratedProfiles[0].id);
+    }
     setWarnings((existing) => [...existing, "Cloud portfolio loaded."]);
+  };
+
+  const addProfile = () => {
+    const id = crypto.randomUUID();
+    const nextProfile: PortfolioProfile = {
+      id,
+      name: profileNameForCount(profiles.length),
+      region: "US",
+      currency: "USD",
+      holdings: [],
+      settings: DEFAULT_SETTINGS
+    };
+    setProfiles((items) => [...items, nextProfile]);
+    setActiveProfileId(id);
+  };
+
+  const deleteProfile = (id: string) => {
+    setProfiles((items) => {
+      if (items.length <= 1) return items;
+      const nextProfiles = items.filter((profile) => profile.id !== id);
+      if (activeProfileId === id) setActiveProfileId(nextProfiles[0].id);
+      return nextProfiles;
+    });
+  };
+
+  const updateProfile = (nextProfile: PortfolioProfile) => {
+    setProfiles((items) => items.map((profile) => profile.id === nextProfile.id ? nextProfile : profile));
   };
 
   return (
@@ -280,7 +381,8 @@ export default function Home() {
         onSave={saveCloudPortfolio}
         onLoad={loadCloudPortfolio}
       />
-      <SettingsPanel settings={settings} onChange={setSettings} onClear={clearStored} />
+      <ProfileSelector profiles={profiles} activeProfileId={activeProfile?.id || activeProfileId} onActiveChange={setActiveProfileId} onAdd={addProfile} onDelete={deleteProfile} onUpdate={updateProfile} />
+      <SettingsPanel settings={settings} currency={currency} onChange={setSettings} onClear={clearStored} />
       {warnings.length ? (
         <section className="mx-auto max-w-7xl px-4 pt-5">
           <div className="space-y-2 border border-amber/40 bg-amber/10 p-3 text-sm">
@@ -303,8 +405,8 @@ export default function Home() {
           {[0, 1, 2].map((item) => <div className="h-24 animate-pulse bg-white" key={item} />)}
         </section>
       ) : null}
-      <PortfolioSummary holdings={holdings} settings={settings} />
-      <HoldingsTable holdings={holdings} settings={settings} onChange={updateHolding} />
+      <PortfolioSummary holdings={holdings} settings={settings} currency={currency} />
+      <HoldingsTable holdings={holdings} settings={settings} currency={currency} onChange={updateHolding} />
     </main>
   );
 }

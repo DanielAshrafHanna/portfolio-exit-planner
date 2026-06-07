@@ -1,6 +1,8 @@
 export type Action = "Keep" | "Watch" | "Trim" | "Sell";
 export type Confidence = "Low" | "Medium" | "High";
 export type RiskLevel = "Low" | "Medium" | "High" | "Very High";
+export type MarketRegion = "US" | "EG";
+export type CurrencyCode = "USD" | "EGP";
 
 export type HoldingInput = {
   id: string;
@@ -88,4 +90,13 @@ export type EnrichedHolding = HoldingInput & {
   selectedTargetPrice?: number;
   targetPriceEdited?: boolean;
   sellPercent: number;
+};
+
+export type PortfolioProfile = {
+  id: string;
+  name: string;
+  region: MarketRegion;
+  currency: CurrencyCode;
+  holdings: EnrichedHolding[];
+  settings: FeeSettings;
 };

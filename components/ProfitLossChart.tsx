@@ -1,16 +1,18 @@
 "use client";
 
 import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import type { EnrichedHolding, FeeSettings } from "@/lib/types";
+import type { CurrencyCode, EnrichedHolding, FeeSettings } from "@/lib/types";
 import { calculateProfitLoss, calculateStopLosses } from "@/lib/calculations";
+import { formatMoney } from "@/lib/profileUtils";
 
 type Props = {
   holding: EnrichedHolding;
   targetPrice: number;
   settings: FeeSettings;
+  currency: CurrencyCode;
 };
 
-export function ProfitLossChart({ holding, targetPrice, settings }: Props) {
+export function ProfitLossChart({ holding, targetPrice, settings, currency }: Props) {
   if (!holding.quote) return null;
   const current = holding.quote.currentPrice;
   const low = Math.max(0.01, current * 0.55);
@@ -30,9 +32,9 @@ export function ProfitLossChart({ holding, targetPrice, settings }: Props) {
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={data} margin={{ top: 10, right: 20, bottom: 10, left: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#d8ded5" />
-          <XAxis dataKey="price" tickFormatter={(value) => `$${value}`} />
-          <YAxis tickFormatter={(value) => `$${value}`} />
-          <Tooltip formatter={(value) => `$${Number(value).toLocaleString()}`} labelFormatter={(value) => `Sell price $${value}`} />
+          <XAxis dataKey="price" tickFormatter={(value) => formatMoney(Number(value), currency)} />
+          <YAxis tickFormatter={(value) => formatMoney(Number(value), currency)} />
+          <Tooltip formatter={(value) => formatMoney(Number(value), currency)} labelFormatter={(value) => `Sell price ${formatMoney(Number(value), currency)}`} />
           <ReferenceLine x={current} stroke="#145c72" label="Current" />
           <ReferenceLine x={holding.averageCost} stroke="#17212b" label="Cost" />
           <ReferenceLine x={stopPrice} stroke="#ff7a68" label="Stop" />

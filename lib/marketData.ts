@@ -1,4 +1,5 @@
-import type { MarketQuote, NewsItem } from "./types";
+import type { MarketQuote, MarketRegion, NewsItem } from "./types";
+import { normalizeMarketSymbol } from "./profileUtils";
 import { mockNews, mockQuote } from "./sampleData";
 
 const ALPHA_URL = "https://www.alphavantage.co/query";
@@ -91,14 +92,15 @@ async function alphaQuote(symbol: string): Promise<MarketQuote> {
   };
 }
 
-export async function getQuote(symbol: string): Promise<ProviderResult<MarketQuote>> {
+export async function getQuote(symbol: string, region: MarketRegion = "US"): Promise<ProviderResult<MarketQuote>> {
   const cleanSymbol = symbol.trim().toUpperCase();
+  const marketSymbol = normalizeMarketSymbol(cleanSymbol, region);
   if (!cleanSymbol) throw new Error("Ticker is required");
   if (providerName() !== "alpha_vantage" || !apiKey()) {
-    const yahooQuote = await getYahooQuote(cleanSymbol);
+    const yahooQuote = await getYahooQuote(marketSymbol);
     if (yahooQuote) {
       return {
-        data: yahooQuote,
+        data: { ...yahooQuote, symbol: cleanSymbol },
         warning: "Market API key is missing, so quotes are fetched from Yahoo Finance's public chart feed."
       };
     }
@@ -108,7 +110,7 @@ export async function getQuote(symbol: string): Promise<ProviderResult<MarketQuo
     };
   }
   try {
-    return { data: await alphaQuote(cleanSymbol) };
+    return { data: await alphaQuote(marketSymbol) };
   } catch (error) {
     return {
       data: { ...mockQuote(cleanSymbol), error: error instanceof Error ? error.message : "Failed quote fetch" },
@@ -117,10 +119,11 @@ export async function getQuote(symbol: string): Promise<ProviderResult<MarketQuo
   }
 }
 
-export async function getNews(symbol: string): Promise<ProviderResult<NewsItem[]>> {
+export async function getNews(symbol: string, region: MarketRegion = "US"): Promise<ProviderResult<NewsItem[]>> {
   const cleanSymbol = symbol.trim().toUpperCase();
+  const marketSymbol = normalizeMarketSymbol(cleanSymbol, region);
   if (providerName() !== "alpha_vantage" || !apiKey()) {
-    const yahooNews = await yahooRssNews(cleanSymbol);
+    const yahooNews = await yahooRssNews(marketSymbol);
     if (yahooNews.length) {
       return {
         data: yahooNews,
@@ -133,7 +136,7 @@ export async function getNews(symbol: string): Promise<ProviderResult<NewsItem[]
     };
   }
   try {
-    const data = await fetchAlpha({ function: "NEWS_SENTIMENT", tickers: cleanSymbol, sort: "LATEST", limit: "8" });
+    const data = await fetchAlpha({ function: "NEWS_SENTIMENT", tickers: marketSymbol, sort: "LATEST", limit: "8" });
     const cutoff = Date.now() - 14 * 24 * 60 * 60 * 1000;
     const items = (data.feed || []).map((item: any) => ({
       headline: item.title,

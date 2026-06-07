@@ -1,14 +1,17 @@
 "use client";
 
 import type { StopStyle } from "@/lib/calculations";
+import type { CurrencyCode } from "@/lib/types";
+import { formatMoney } from "@/lib/profileUtils";
 
 type Props = {
   stops: Record<StopStyle, { price: number; explanation: string }>;
   selected: StopStyle;
+  currency: CurrencyCode;
   onChange: (style: StopStyle) => void;
 };
 
-export function StopLossSelector({ stops, selected, onChange }: Props) {
+export function StopLossSelector({ stops, selected, currency, onChange }: Props) {
   const copy: Record<StopStyle, { title: string; subtitle: string; when: string }> = {
     tight: {
       title: "Protect Quickly",
@@ -43,7 +46,7 @@ export function StopLossSelector({ stops, selected, onChange }: Props) {
           >
             <span className="block text-xs font-semibold uppercase text-marine">{copy[style].subtitle}</span>
             <span className="mt-1 block font-semibold">{copy[style].title}</span>
-            <span className="block text-xl font-bold">${stops[style].price.toLocaleString()}</span>
+            <span className="block text-xl font-bold">{formatMoney(stops[style].price, currency)}</span>
             <span className="mt-1 block text-xs text-ink/70">{copy[style].when}</span>
             <span className="mt-2 block border-t border-ink/10 pt-2 text-xs text-ink/55">{stops[style].explanation}</span>
           </button>

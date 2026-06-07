@@ -1,15 +1,16 @@
 "use client";
 
 import { SlidersHorizontal, Trash2 } from "lucide-react";
-import type { FeeSettings } from "@/lib/types";
+import type { CurrencyCode, FeeSettings } from "@/lib/types";
 
 type Props = {
   settings: FeeSettings;
+  currency: CurrencyCode;
   onChange: (settings: FeeSettings) => void;
   onClear: () => void;
 };
 
-export function SettingsPanel({ settings, onChange, onClear }: Props) {
+export function SettingsPanel({ settings, currency, onChange, onClear }: Props) {
   const update = (key: keyof FeeSettings, value: string) => {
     onChange({ ...settings, [key]: Number(value) || 0 });
   };
@@ -24,7 +25,7 @@ export function SettingsPanel({ settings, onChange, onClear }: Props) {
           </div>
           <div className="grid gap-3 sm:grid-cols-3">
             <label className="text-xs font-medium text-ink/70">
-              Fixed trading fee
+              Fixed trading fee ({currency})
               <input className="mt-1 w-full rounded-md border border-ink/15 px-3 py-2 text-sm" type="number" min="0" step="0.01" value={settings.fixedTradingFee} onChange={(event) => update("fixedTradingFee", event.target.value)} />
             </label>
             <label className="text-xs font-medium text-ink/70">
