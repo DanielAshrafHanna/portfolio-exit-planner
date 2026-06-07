@@ -30,10 +30,31 @@ export function HoldingsTable({ holdings, settings, currency, onChange }: Props)
   return (
     <section className="mx-auto max-w-7xl px-4 pb-10">
       <div className="table-scroll overflow-x-auto border-y border-ink/10 bg-white shadow-soft">
-        <table className="min-w-[1250px] w-full text-left text-sm">
+        <table className="min-w-[1320px] w-full border-collapse text-left text-sm">
           <thead className="bg-ink text-xs uppercase text-white">
             <tr>
-              {["", "Symbol", "Shares", "Avg cost", "Current price", "Current value", "Current P/L", "AI action", "Confidence", "Suggested stop-loss", "P/L if stop hits", "Target sell price", "P/L at target", "Risk"].map((head) => <th className="px-3 py-3" key={head}>{head}</th>)}
+              <th className="px-3 py-2" colSpan={4}>Position</th>
+              <th className="border-l-2 border-white/25 px-3 py-2" colSpan={3}>Market</th>
+              <th className="border-l-2 border-white/25 px-3 py-2" colSpan={2}>Analysis</th>
+              <th className="border-l-2 border-white/25 px-3 py-2" colSpan={2}>Stop</th>
+              <th className="border-l-2 border-white/25 px-3 py-2" colSpan={2}>Target</th>
+              <th className="border-l-2 border-white/25 px-3 py-2">Risk</th>
+            </tr>
+            <tr className="bg-ink/95">
+              <th className="px-3 py-3" aria-label="Expand row" />
+              <th className="px-3 py-3">Symbol</th>
+              <th className="px-3 py-3">Shares</th>
+              <th className="px-3 py-3">Avg cost</th>
+              <th className="border-l-2 border-ink/25 px-3 py-3">Current price</th>
+              <th className="px-3 py-3">Current value</th>
+              <th className="px-3 py-3">Current P/L</th>
+              <th className="border-l-2 border-ink/25 px-3 py-3">AI action</th>
+              <th className="px-3 py-3">Confidence</th>
+              <th className="border-l-2 border-ink/25 px-3 py-3">Suggested stop-loss</th>
+              <th className="px-3 py-3">P/L if stop hits</th>
+              <th className="border-l-2 border-ink/25 px-3 py-3">Target sell price</th>
+              <th className="px-3 py-3">P/L at target</th>
+              <th className="border-l-2 border-ink/25 px-3 py-3">Risk</th>
             </tr>
           </thead>
           <tbody>
@@ -55,16 +76,16 @@ export function HoldingsTable({ holdings, settings, currency, onChange }: Props)
                     <td className="px-3 py-3 font-bold">{holding.symbol}<span className="block text-xs font-normal text-ink/55">{holding.name}</span></td>
                     <td className="px-3 py-3">{holding.shares}</td>
                     <td className="px-3 py-3">{formatMoney(holding.averageCost, currency)}</td>
-                    <td className="bg-marine/5 px-3 py-3 font-semibold text-marine">{quote ? formatMoney(quote.currentPrice, currency) : "Loading"}</td>
+                    <td className="border-l-2 border-ink/15 bg-marine/5 px-3 py-3 font-semibold text-marine">{quote ? formatMoney(quote.currentPrice, currency) : "Loading"}</td>
                     <td className="px-3 py-3">{current ? formatMoney(current.grossValue, currency) : "N/A"}</td>
                     <td className={`bg-marine/5 px-3 py-3 font-semibold ${valueClass(current?.profitLoss)}`}>{current ? `${formatMoney(current.profitLoss, currency)} (${current.profitLossPercent}%)` : "N/A"}</td>
-                    <td className="px-3 py-3">{badge(holding.analysis?.action)}</td>
+                    <td className="border-l-2 border-ink/15 px-3 py-3">{badge(holding.analysis?.action)}</td>
                     <td className="px-3 py-3">{badge(holding.analysis?.confidence)}</td>
-                    <td className="bg-amber/10 px-3 py-3 font-semibold">{stopPrice ? formatMoney(stopPrice, currency) : "N/A"}</td>
+                    <td className="border-l-2 border-ink/15 bg-amber/10 px-3 py-3 font-semibold">{stopPrice ? formatMoney(stopPrice, currency) : "N/A"}</td>
                     <td className="px-3 py-3">{stopPl ? `${formatMoney(stopPl.profitLoss, currency)} (${stopPl.profitLossPercent}%)` : "N/A"}</td>
-                    <td className="bg-mint/70 px-3 py-3 font-bold text-marine">{targetPrice ? formatMoney(targetPrice, currency) : "N/A"}</td>
+                    <td className="border-l-2 border-ink/15 bg-mint/70 px-3 py-3 font-bold text-marine">{targetPrice ? formatMoney(targetPrice, currency) : "N/A"}</td>
                     <td className={`bg-mint/70 px-3 py-3 font-bold ${valueClass(targetPl?.profitLoss)}`}>{targetPl ? `${formatMoney(targetPl.profitLoss, currency)} (${targetPl.profitLossPercent}%)` : "N/A"}</td>
-                    <td className="px-3 py-3">{badge(holding.analysis?.riskLevel)}</td>
+                    <td className="border-l-2 border-ink/15 px-3 py-3">{badge(holding.analysis?.riskLevel)}</td>
                   </tr>,
                   open[holding.id] ? (
                     <tr className="border-t border-ink/10" key={`${holding.id}-details`}>
