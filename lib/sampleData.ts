@@ -35,8 +35,7 @@ export function mockNews(symbol: string): NewsItem[] {
       source: "Demo provider",
       date: new Date().toISOString(),
       url: "https://example.com/demo-news",
-      summary: "API keys are not configured, so this row is using synthetic educational news."
+      summary: "API keys are not configured, so this row is using sample news."
     }
   ];
 }
-

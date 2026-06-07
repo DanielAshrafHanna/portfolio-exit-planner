@@ -38,7 +38,7 @@ export function fallbackAnalysis(holding: HoldingInput, quote: MarketQuote, news
     ],
     suggestedActionPlan: {
       primaryAction: action,
-      explanation: "Educational fallback plan only. Use the balanced stop as the default comparison point and review before any trade decision.",
+      explanation: "Fallback plan only. Use the balanced stop as the default comparison point and review before making changes.",
       suggestedStopLoss: stops.balanced.price,
       suggestedTakeProfit: targets[1].price,
       reviewAfterCatalyst: false

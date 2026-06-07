@@ -1,11 +1,10 @@
 "use client";
 
-import { AlertCircle, DatabaseZap } from "lucide-react";
+import { AlertCircle } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import type { CloudSyncStatus } from "@/components/AuthPanel";
 import { AuthPanel } from "@/components/AuthPanel";
-import { Disclaimer } from "@/components/Disclaimer";
 import { HoldingsTable } from "@/components/HoldingsTable";
 import { ImageImport } from "@/components/ImageImport";
 import { PortfolioInput } from "@/components/PortfolioInput";
@@ -405,18 +404,12 @@ export default function Home() {
 
   return (
     <main>
-      <header className="bg-white px-4 py-8">
+      <header className="bg-white px-4 py-6">
         <div className="mx-auto max-w-7xl">
-          <div className="mb-4 inline-flex items-center gap-2 rounded bg-mint px-3 py-1 text-xs font-semibold uppercase text-marine">
-            <DatabaseZap className="h-4 w-4" aria-hidden /> Local-first educational planner
-          </div>
           <h1 className="max-w-3xl text-4xl font-bold tracking-normal text-ink md:text-5xl">Portfolio Exit Planner</h1>
-          <p className="mt-3 max-w-3xl text-base text-ink/70">
-            Upload, import, or enter holdings, then compare stop-losses, target exits, fees, partial sales, market data, news, and a cautious AI Hold / Watch / Trim / Sell decision.
-          </p>
+          <p className="mt-2 max-w-3xl text-base text-ink/70">Manage holdings, compare exits, and track US and Egyptian market positions.</p>
         </div>
       </header>
-      <Disclaimer />
       <AuthPanel
         user={user}
         isLoading={isAuthLoading}

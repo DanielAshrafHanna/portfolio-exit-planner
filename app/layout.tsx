@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Portfolio Exit Planner",
-  description: "Educational stop-loss and sell-target planning for portfolio holdings."
+  description: "Portfolio exit planning for US and Egyptian market holdings."
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

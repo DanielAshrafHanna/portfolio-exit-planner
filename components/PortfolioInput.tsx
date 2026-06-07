@@ -80,7 +80,6 @@ export function PortfolioInput({ holdings, onChange, onAnalyze, isAnalyzing }: P
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold">Portfolio input</h2>
-          <p className="text-sm text-ink/65">Stored locally by default. Data is sent to market/news APIs only when you run analysis.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <button className="inline-flex items-center gap-2 rounded-md bg-marine px-3 py-2 text-sm font-semibold text-white" type="button" onClick={() => onChange([...holdings, emptyHolding()])}>
