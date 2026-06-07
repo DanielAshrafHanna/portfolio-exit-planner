@@ -3,6 +3,7 @@ import { normalizeMarketSymbol } from "./profileUtils";
 import { mockNews, mockQuote } from "./sampleData";
 
 const ALPHA_URL = "https://www.alphavantage.co/query";
+const MUBASHER_EGX_URL = "https://english.mubasher.info/markets/EGX/stocks";
 const YAHOO_NEWS_RSS = "https://feeds.finance.yahoo.com/rss/2.0/headline";
 const YAHOO_CHART_URL = "https://query1.finance.yahoo.com/v8/finance/chart";
 
@@ -96,6 +97,15 @@ export async function getQuote(symbol: string, region: MarketRegion = "US"): Pro
   const cleanSymbol = symbol.trim().toUpperCase();
   const marketSymbol = normalizeMarketSymbol(cleanSymbol, region);
   if (!cleanSymbol) throw new Error("Ticker is required");
+  if (region === "EG") {
+    const mubasherQuote = await getMubasherEgxQuote(cleanSymbol);
+    if (mubasherQuote) {
+      return {
+        data: mubasherQuote,
+        warning: "Egypt quotes are fetched from Mubasher EGX pages because Yahoo Finance can return stale EGX prices."
+      };
+    }
+  }
   if (providerName() !== "alpha_vantage" || !apiKey()) {
     const yahooQuote = await getYahooQuote(marketSymbol);
     if (yahooQuote) {
@@ -117,6 +127,48 @@ export async function getQuote(symbol: string, region: MarketRegion = "US"): Pro
       warning: `Quote fetch failed for ${cleanSymbol}; showing sample data.`
     };
   }
+}
+
+async function getMubasherEgxQuote(symbol: string): Promise<MarketQuote | undefined> {
+  try {
+    const response = await fetch(`${MUBASHER_EGX_URL}/${encodeURIComponent(symbol)}`, { next: { revalidate: 300 } });
+    if (!response.ok) return undefined;
+    return parseMubasherEgxQuote(await response.text(), symbol);
+  } catch {
+    return undefined;
+  }
+}
+
+export function parseMubasherEgxQuote(html: string, symbol: string): MarketQuote | undefined {
+  const currentPrice = numberFromClass(html, "market-summary__last-price");
+  const previousClose = numberForLabel(html, "Previous Close");
+  if (!currentPrice || !previousClose) return undefined;
+  const volume = numberForLabel(html, "Volume");
+  return {
+    symbol,
+    currentPrice,
+    dailyChangePercent: previousClose > 0 ? Number((((currentPrice - previousClose) / previousClose) * 100).toFixed(2)) : 0,
+    previousClose,
+    volume,
+    provider: "mubasher_egx"
+  };
+}
+
+function numberFromClass(html: string, className: string) {
+  const escapedClassName = className.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = html.match(new RegExp(`<[^>]+class="[^"]*${escapedClassName}[^"]*"[^>]*>\\s*([\\d,.]+)\\s*<`, "i"));
+  return match ? parseFormattedNumber(match[1]) : undefined;
+}
+
+function numberForLabel(html: string, label: string) {
+  const escapedLabel = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = html.match(new RegExp(`<span class="market-summary__block-text">\\s*${escapedLabel}\\s*<\\/span>\\s*<span class="market-summary__block-number">\\s*([\\d,.]+)\\s*<\\/span>`, "i"));
+  return match ? parseFormattedNumber(match[1]) : undefined;
+}
+
+function parseFormattedNumber(value: string) {
+  const parsed = Number(value.replaceAll(",", "").trim());
+  return Number.isFinite(parsed) ? parsed : undefined;
 }
 
 export async function getNews(symbol: string, region: MarketRegion = "US"): Promise<ProviderResult<NewsItem[]>> {
