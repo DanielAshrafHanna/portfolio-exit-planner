@@ -1,8 +1,9 @@
 "use client";
 
 import { AlertCircle, DatabaseZap } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { User } from "@supabase/supabase-js";
+import type { CloudSyncStatus } from "@/components/AuthPanel";
 import { AuthPanel } from "@/components/AuthPanel";
 import { Disclaimer } from "@/components/Disclaimer";
 import { HoldingsTable } from "@/components/HoldingsTable";
@@ -115,8 +116,11 @@ export default function Home() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(false);
-  const [isSavingCloud, setIsSavingCloud] = useState(false);
+  const [cloudSyncStatus, setCloudSyncStatus] = useState<CloudSyncStatus>("signed-out");
+  const [cloudSyncMessage, setCloudSyncMessage] = useState("Sign in to enable cloud sync.");
+  const [cloudLoadedUserId, setCloudLoadedUserId] = useState<string | null>(null);
   const [isHydrated, setIsHydrated] = useState(false);
+  const latestSyncPayload = useRef("");
 
   useEffect(() => {
     const storedProfiles = localStorage.getItem(PROFILES_KEY);
@@ -163,6 +167,15 @@ export default function Home() {
     });
     return () => listener.subscription.unsubscribe();
   }, [supabase]);
+
+  useEffect(() => {
+    latestSyncPayload.current = "";
+    if (!user) {
+      setCloudLoadedUserId(null);
+      setCloudSyncStatus("signed-out");
+      setCloudSyncMessage("Sign in to enable cloud sync.");
+    }
+  }, [user]);
 
   const activeProfile = useMemo(() => profiles.find((profile) => profile.id === activeProfileId) || profiles[0], [profiles, activeProfileId]);
   const holdings = activeProfile?.holdings || [];
@@ -280,7 +293,7 @@ export default function Home() {
     if (mode === "signup" && !result.data.session) {
       setWarnings((existing) => [...existing, "Account created. Check your email to confirm before signing in."]);
     } else {
-      setWarnings((existing) => [...existing, "Signed in. You can now save or load your private cloud portfolio."]);
+      setWarnings((existing) => [...existing, "Signed in. Cloud sync will load once and then save changes automatically."]);
     }
   };
 
@@ -291,30 +304,44 @@ export default function Home() {
     setWarnings((existing) => [...existing, "Signed out. Local portfolio data remains on this device."]);
   };
 
-  const saveCloudPortfolio = async () => {
-    if (!supabase || !user) return;
-    setIsSavingCloud(true);
+  const saveCloudPortfolio = async (payload: string) => {
+    if (!supabase || !user) return false;
+    setCloudSyncStatus("saving");
+    setCloudSyncMessage("Saving changes to cloud...");
+    const parsedPayload = JSON.parse(payload) as { profiles: PortfolioProfile[]; activeProfileId: string };
     const { error } = await supabase.from("user_portfolios").upsert({
       user_id: user.id,
-      holdings: profiles,
-      settings: { activeProfileId, profilesVersion: 2 },
+      holdings: parsedPayload.profiles,
+      settings: { activeProfileId: parsedPayload.activeProfileId, profilesVersion: 2 },
       updated_at: new Date().toISOString()
     });
-    setIsSavingCloud(false);
-    setWarnings((existing) => [...existing, error ? `Cloud save failed: ${error.message}` : "Cloud portfolio saved for your account."]);
+    if (error) {
+      setCloudSyncStatus("error");
+      setCloudSyncMessage(`Cloud save failed: ${error.message}`);
+      return false;
+    }
+    setCloudSyncStatus("saved");
+    setCloudSyncMessage(`Saved to cloud at ${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}.`);
+    return true;
   };
 
   const loadCloudPortfolio = async () => {
-    if (!supabase || !user) return;
+    if (!supabase || !user || cloudLoadedUserId === user.id) return;
     setIsAuthLoading(true);
+    setCloudSyncStatus("loading");
+    setCloudSyncMessage("Loading cloud portfolio...");
     const { data, error } = await supabase.from("user_portfolios").select("holdings, settings").eq("user_id", user.id).maybeSingle();
     setIsAuthLoading(false);
     if (error) {
-      setWarnings((existing) => [...existing, `Cloud load failed: ${error.message}`]);
+      setCloudLoadedUserId(user.id);
+      setCloudSyncStatus("error");
+      setCloudSyncMessage(`Cloud load failed: ${error.message}`);
       return;
     }
     if (!data) {
-      setWarnings((existing) => [...existing, "No cloud portfolio saved yet for this account."]);
+      setCloudLoadedUserId(user.id);
+      setCloudSyncStatus("saved");
+      setCloudSyncMessage("No cloud portfolio yet. Local changes will save automatically.");
       return;
     }
     const cloudSettings = data.settings as { activeProfileId?: string } & Partial<FeeSettings>;
@@ -328,8 +355,26 @@ export default function Home() {
       setProfiles(migratedProfiles);
       setActiveProfileId(migratedProfiles[0].id);
     }
-    setWarnings((existing) => [...existing, "Cloud portfolio loaded."]);
+    setCloudLoadedUserId(user.id);
+    setCloudSyncStatus("saved");
+    setCloudSyncMessage("Cloud portfolio loaded. Changes save automatically.");
   };
+
+  useEffect(() => {
+    if (!supabase || !user || !isHydrated) return;
+    void loadCloudPortfolio();
+  }, [supabase, user, isHydrated, cloudLoadedUserId]);
+
+  useEffect(() => {
+    if (!supabase || !user || !isHydrated || cloudLoadedUserId !== user.id) return;
+    const payload = JSON.stringify({ profiles, activeProfileId });
+    if (payload === latestSyncPayload.current) return;
+    latestSyncPayload.current = payload;
+    const timeout = window.setTimeout(() => {
+      void saveCloudPortfolio(payload);
+    }, 1200);
+    return () => window.clearTimeout(timeout);
+  }, [supabase, user, isHydrated, cloudLoadedUserId, profiles, activeProfileId]);
 
   const addProfile = () => {
     const id = crypto.randomUUID();
@@ -375,11 +420,10 @@ export default function Home() {
       <AuthPanel
         user={user}
         isLoading={isAuthLoading}
-        isSaving={isSavingCloud}
+        syncStatus={cloudSyncStatus}
+        syncMessage={cloudSyncMessage}
         onSignIn={signIn}
         onSignOut={signOut}
-        onSave={saveCloudPortfolio}
-        onLoad={loadCloudPortfolio}
       />
       <ProfileSelector profiles={profiles} activeProfileId={activeProfile?.id || activeProfileId} onActiveChange={setActiveProfileId} onAdd={addProfile} onDelete={deleteProfile} onUpdate={updateProfile} />
       <SettingsPanel settings={settings} currency={currency} onChange={setSettings} onClear={clearStored} />
