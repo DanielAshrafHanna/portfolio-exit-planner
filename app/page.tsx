@@ -733,7 +733,6 @@ export default function Home() {
       />
       {user ? (
         <>
-          <ProfileSelector profiles={profiles} activeProfileId={activeProfile?.id || activeProfileId} onActiveChange={setActiveProfileId} onAdd={addProfile} onDelete={deleteProfile} onUpdate={updateProfile} />
           <SettingsPanel settings={settings} currency={currency} onChange={setSettings} onClear={clearStored} />
           <SharedHoldingsViewer
             isLoading={isLoadingSharedProfiles}
@@ -773,6 +772,7 @@ export default function Home() {
               {[0, 1, 2].map((item) => <div className="h-24 animate-pulse bg-white" key={item} />)}
             </section>
           ) : null}
+          <ProfileSelector profiles={profiles} activeProfileId={activeProfile?.id || activeProfileId} onActiveChange={setActiveProfileId} onAdd={addProfile} onDelete={deleteProfile} onUpdate={updateProfile} />
           <HoldingsViewSelector options={holdingsViewOptions} selectedId={selectedSharedProfileId} onChange={setSelectedSharedProfileId} />
           <PortfolioSummary holdings={displayedHoldings} settings={displayedSettings} currency={displayedCurrency} />
           <HoldingsTable
