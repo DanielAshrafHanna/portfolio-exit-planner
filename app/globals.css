@@ -30,6 +30,7 @@ label:has(input:focus-visible) {
   scrollbar-width: thin;
   -webkit-overflow-scrolling: touch;
   position: relative;
+  isolation: isolate;
 }
 
 @media (min-width: 768px) {

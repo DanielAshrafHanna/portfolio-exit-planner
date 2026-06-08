@@ -277,6 +277,8 @@ export default function Home() {
   const [quickAddFocusToken, setQuickAddFocusToken] = useState(0);
   const [quickAddExpanded, setQuickAddExpanded] = useState(false);
   const quickAddRef = useRef<QuickAddHoldingHandle>(null);
+  const hydratedPrefsUserId = useRef<string | null>(null);
+  const displayNameSaveTimeout = useRef<number | null>(null);
   const latestSyncKey = useRef("");
   const userEditRevision = useRef(0);
   const profilesRef = useRef(profiles);
@@ -353,23 +355,29 @@ export default function Home() {
   );
 
   useEffect(() => {
-    latestSyncKey.current = "";
     if (!user) {
+      hydratedPrefsUserId.current = null;
+      latestSyncKey.current = "";
       setCloudLoadedUserId(null);
       setCloudSyncStatus("signed-out");
       setCloudSyncMessage("Sign in to enable cloud sync.");
       setSharedProfiles([]);
       setSelectedSharedProfileId(OWN_HOLDINGS_VIEW_ID);
-    } else {
-      const storedPrefs = parseStoredUserPrefs(localStorage.getItem(USER_PREFS_KEY));
-      if (storedPrefs) {
-        setDisplayName(storedPrefs.displayName);
-        setShareHoldings(storedPrefs.shareHoldings);
-      } else {
-        setDisplayName((existing) => existing === "Friend" ? friendlyNameForUser(user) : existing);
-      }
+      return;
     }
-  }, [user]);
+    if (hydratedPrefsUserId.current === user.id) return;
+    hydratedPrefsUserId.current = user.id;
+    latestSyncKey.current = "";
+    const storedPrefs = parseStoredUserPrefs(localStorage.getItem(USER_PREFS_KEY));
+    if (storedPrefs) {
+      setDisplayName(storedPrefs.displayName);
+      setShareHoldings(storedPrefs.shareHoldings);
+    } else if (user) {
+      setDisplayName((existing) => existing === "Friend" ? friendlyNameForUser(user) : existing);
+    }
+    // Hydrate prefs once per signed-in user id; ignore token refresh object updates.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
 
   const activeProfile = useMemo(() => profiles.find((profile) => profile.id === activeProfileId) || profiles[0], [profiles, activeProfileId]);
   const holdings = activeProfile?.holdings ?? EMPTY_HOLDINGS;
@@ -939,9 +947,16 @@ export default function Home() {
   };
 
   const handleDisplayNameChange = (nextDisplayName: string) => {
+    setDisplayName(nextDisplayName);
+  };
+
+  const handleDisplayNameCommit = (nextDisplayName: string) => {
     const normalized = normalizeDisplayName(nextDisplayName);
     setDisplayName(normalized);
-    void pushCloudPortfolioNow({ displayName: normalized });
+    if (displayNameSaveTimeout.current) window.clearTimeout(displayNameSaveTimeout.current);
+    displayNameSaveTimeout.current = window.setTimeout(() => {
+      void pushCloudPortfolioNow({ displayName: normalized });
+    }, 400);
   };
 
   const handleShareHoldingsChange = (nextShareHoldings: boolean) => {
@@ -997,6 +1012,7 @@ export default function Home() {
         displayName={displayName}
         variant="compact"
         onDisplayNameChange={handleDisplayNameChange}
+        onDisplayNameCommit={handleDisplayNameCommit}
         onSignIn={signIn}
         onSignOut={signOut}
       />
@@ -1129,6 +1145,7 @@ export default function Home() {
                   displayName={displayName}
                   variant="compact"
                   onDisplayNameChange={handleDisplayNameChange}
+                  onDisplayNameCommit={handleDisplayNameCommit}
                   onSignIn={signIn}
                   onSignOut={signOut}
                 />

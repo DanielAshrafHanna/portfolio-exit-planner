@@ -2,7 +2,7 @@
 
 import type { User } from "@supabase/supabase-js";
 import { CheckCircle2, Cloud, CloudOff, Loader2, LogIn, LogOut, UserRound } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { hasSupabaseConfig } from "@/lib/supabaseClient";
 
 export type CloudSyncStatus = "disabled" | "signed-out" | "loading" | "saving" | "saved" | "error";
@@ -16,6 +16,7 @@ type Props = {
   displayName: string;
   variant?: "default" | "compact";
   onDisplayNameChange: (value: string) => void;
+  onDisplayNameCommit?: (value: string) => void;
   onSignIn: (email: string, password: string, mode: "signin" | "signup", displayName?: string) => Promise<void>;
   onSignOut: () => Promise<void>;
 };
@@ -44,7 +45,38 @@ function syncMessageForAudience(message: string, status: CloudSyncStatus, isAdmi
   return message;
 }
 
-export function AuthPanel({ user, isAdmin, isLoading, syncStatus, syncMessage, displayName, variant = "default", onDisplayNameChange, onSignIn, onSignOut }: Props) {
+function DisplayNameInput({
+  displayName,
+  onDisplayNameChange,
+  onDisplayNameCommit
+}: Pick<Props, "displayName" | "onDisplayNameChange" | "onDisplayNameCommit">) {
+  const [draft, setDraft] = useState(displayName);
+  const focused = useRef(false);
+
+  useEffect(() => {
+    if (!focused.current) setDraft(displayName);
+  }, [displayName]);
+
+  return (
+    <input
+      className="mt-1 min-h-11 w-full rounded-md border border-ink/15 bg-white px-3 py-2 text-base sm:text-sm"
+      maxLength={60}
+      placeholder="Example: Daniel"
+      value={draft}
+      onFocus={() => { focused.current = true; }}
+      onChange={(event) => {
+        setDraft(event.target.value);
+        onDisplayNameChange(event.target.value);
+      }}
+      onBlur={() => {
+        focused.current = false;
+        onDisplayNameCommit?.(draft);
+      }}
+    />
+  );
+}
+
+export function AuthPanel({ user, isAdmin, isLoading, syncStatus, syncMessage, displayName, variant = "default", onDisplayNameChange, onDisplayNameCommit, onSignIn, onSignOut }: Props) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [signupDisplayName, setSignupDisplayName] = useState("");
@@ -70,13 +102,7 @@ export function AuthPanel({ user, isAdmin, isLoading, syncStatus, syncMessage, d
         <div className="grid gap-3 sm:grid-cols-[minmax(180px,1fr)_auto] sm:items-end">
           <label className="text-xs font-semibold text-ink/65">
             Display name
-            <input
-              className="mt-1 min-h-11 w-full rounded-md border border-ink/15 bg-white px-3 py-2 text-base sm:text-sm"
-              maxLength={60}
-              placeholder="Example: Daniel"
-              value={displayName}
-              onChange={(event) => onDisplayNameChange(event.target.value)}
-            />
+            <DisplayNameInput displayName={displayName} onDisplayNameChange={onDisplayNameChange} onDisplayNameCommit={onDisplayNameCommit} />
           </label>
           <button className="inline-flex min-h-11 items-center gap-2 self-end rounded-md border border-coral px-4 py-2 text-sm font-semibold text-coral" type="button" onClick={onSignOut}>
             <LogOut className="h-4 w-4" aria-hidden /> Sign out
@@ -98,13 +124,7 @@ export function AuthPanel({ user, isAdmin, isLoading, syncStatus, syncMessage, d
             <div className="grid gap-3 md:grid-cols-[minmax(220px,360px)_minmax(0,1fr)] md:items-end">
               <label className="text-xs font-semibold text-ink/65">
                 Display name
-                <input
-                  className="mt-1 min-h-11 w-full rounded-md border border-ink/15 bg-white px-3 py-2 text-base sm:text-sm"
-                  maxLength={60}
-                  placeholder="Example: Daniel"
-                  value={displayName}
-                  onChange={(event) => onDisplayNameChange(event.target.value)}
-                />
+                <DisplayNameInput displayName={displayName} onDisplayNameChange={onDisplayNameChange} onDisplayNameCommit={onDisplayNameCommit} />
               </label>
               <div className={`inline-flex min-h-11 min-w-0 items-center gap-2 rounded-md border px-3 py-2 text-sm ${syncClass(syncStatus)}`} title={visibleSyncMessage}>
                 <span className="shrink-0">{syncIcon(syncStatus)}</span>

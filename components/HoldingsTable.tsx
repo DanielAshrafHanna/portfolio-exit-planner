@@ -52,12 +52,12 @@ export function HoldingsTable({ holdings, settings, currency, onChange, readOnly
 
   return (
     <>
-      <div className="table-scroll -mx-4 overflow-x-auto border-y border-ink/10 bg-white md:hidden">
+      <div className="table-scroll -mx-4 isolate overflow-x-auto border-y border-ink/10 bg-white md:hidden">
         <table className="min-w-[540px] w-full border-collapse text-left text-[10px]">
           <thead className="bg-marine text-[10px] uppercase text-white">
             <tr>
-              <th className="sticky left-0 z-20 w-7 bg-marine px-1 py-1.5" aria-label="Expand" />
-              <th className="sticky left-7 z-20 bg-marine px-1.5 py-1.5">Symbol</th>
+              <th className="w-7 px-1 py-1.5" aria-label="Expand" />
+              <th className="px-1.5 py-1.5">Symbol</th>
               <th className="px-1.5 py-1.5">Price</th>
               <th className="px-1.5 py-1.5">Value</th>
               <th className="px-1.5 py-1.5">P/L</th>
@@ -72,14 +72,14 @@ export function HoldingsTable({ holdings, settings, currency, onChange, readOnly
               const metrics = computeHoldingRowMetrics(holding, settings);
               return [
                 <tr className="border-t border-ink/10 even:bg-paper/40" key={`${holding.id}-mobile`}>
-                  <td className="sticky left-0 z-10 bg-inherit px-0.5 py-1">
+                  <td className="bg-inherit px-0.5 py-1">
                     {canExpand() ? (
                       <button className="flex min-h-8 min-w-8 items-center justify-center rounded p-0.5" type="button" onClick={() => toggle(holding.id)} aria-label={`Expand ${holding.symbol}`} aria-expanded={Boolean(open[holding.id])}>
                         {open[holding.id] ? <ChevronDown className="h-3.5 w-3.5" aria-hidden /> : <ChevronRight className="h-3.5 w-3.5" aria-hidden />}
                       </button>
                     ) : null}
                   </td>
-                  <td className="sticky left-7 z-10 bg-inherit px-1.5 py-1 font-bold">{holding.symbol}</td>
+                  <td className="bg-inherit px-1.5 py-1 font-bold">{holding.symbol}</td>
                   <td className="whitespace-nowrap px-1.5 py-1 font-semibold text-marine">{quote ? shortMoney(quote.currentPrice, currency) : "…"}</td>
                   <td className="whitespace-nowrap px-1.5 py-1">{metrics.current ? shortMoney(metrics.current.grossValue, currency) : "—"}</td>
                   <td className={`whitespace-nowrap px-1.5 py-1 font-semibold ${valueClass(metrics.current?.profitLoss)}`}>{metrics.current ? `${shortMoney(metrics.current.profitLoss, currency)} ${metrics.current.profitLossPercent}%` : "—"}</td>
@@ -94,7 +94,7 @@ export function HoldingsTable({ holdings, settings, currency, onChange, readOnly
         </table>
       </div>
 
-      <div className="table-scroll -mx-4 hidden overflow-x-auto border-y border-ink/10 bg-white sm:-mx-5 md:block">
+      <div className="table-scroll -mx-4 hidden isolate overflow-x-auto border-y border-ink/10 bg-white sm:-mx-5 md:block">
         <table className="min-w-[1120px] w-full border-collapse text-left text-xs sm:min-w-[1320px] sm:text-sm">
           <thead className="bg-marine text-xs uppercase text-white">
             <tr className="hidden border-b border-white/15 sm:table-row">
@@ -106,8 +106,8 @@ export function HoldingsTable({ holdings, settings, currency, onChange, readOnly
               <th className="border-l-2 border-white/30 px-3 py-2 text-center">Risk</th>
             </tr>
             <tr className="bg-marine/95">
-              <th className="sticky left-0 z-20 bg-marine/95 px-2 py-2 sm:px-3 sm:py-3" aria-label="Expand row" />
-              <th className="sticky left-10 z-20 bg-marine/95 px-2 py-2 sm:left-12 sm:px-3 sm:py-3">Symbol</th>
+              <th className="px-2 py-2 sm:px-3 sm:py-3" aria-label="Expand row" />
+              <th className="px-2 py-2 sm:px-3 sm:py-3">Symbol</th>
               <th className="px-2 py-2 sm:px-3 sm:py-3">Shares</th>
               <th className="px-2 py-2 sm:px-3 sm:py-3">Avg cost</th>
               <th className="border-l-2 border-white/30 px-2 py-2 sm:px-3 sm:py-3">Current price</th>
@@ -128,14 +128,14 @@ export function HoldingsTable({ holdings, settings, currency, onChange, readOnly
               const metrics = computeHoldingRowMetrics(holding, settings);
               return [
                 <tr className="border-t border-ink/10 even:bg-paper/50 hover:bg-mint/20" key={`${holding.id}-summary`}>
-                  <td className="sticky left-0 z-10 bg-inherit px-2 py-2 sm:px-3 sm:py-3">
+                  <td className="bg-inherit px-2 py-2 sm:px-3 sm:py-3">
                     {canExpand() ? (
                       <button className="min-h-8 rounded p-1 hover:bg-mint" type="button" onClick={() => toggle(holding.id)} aria-label={`Expand ${holding.symbol}`} aria-expanded={Boolean(open[holding.id])}>
                         {open[holding.id] ? <ChevronDown className="h-4 w-4" aria-hidden /> : <ChevronRight className="h-4 w-4" aria-hidden />}
                       </button>
                     ) : null}
                   </td>
-                  <td className="sticky left-10 z-10 bg-inherit px-2 py-2 font-bold sm:left-12 sm:px-3 sm:py-3">{holding.symbol}<span className="block max-w-32 truncate text-[11px] font-normal text-ink/55 sm:max-w-44 sm:text-xs">{holding.name}</span></td>
+                  <td className="bg-inherit px-2 py-2 font-bold sm:px-3 sm:py-3">{holding.symbol}<span className="block max-w-32 truncate text-[11px] font-normal text-ink/55 sm:max-w-44 sm:text-xs">{holding.name}</span></td>
                   <td className="px-2 py-2 sm:px-3 sm:py-3">{holding.shares}</td>
                   <td className="px-2 py-2 sm:px-3 sm:py-3">{formatMoney(holding.averageCost, currency)}</td>
                   <td className="border-l-2 border-ink/15 bg-marine/5 px-2 py-2 font-semibold text-marine sm:px-3 sm:py-3">{quote ? formatMoney(quote.currentPrice, currency) : "Loading"}</td>
