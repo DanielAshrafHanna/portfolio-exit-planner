@@ -46,3 +46,5 @@ using ((select auth.uid()) = user_id);
 
 grant usage on schema public to anon, authenticated;
 grant select, insert, update, delete on public.user_portfolios to authenticated;
+
+notify pgrst, 'reload schema';

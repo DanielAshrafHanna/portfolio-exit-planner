@@ -127,6 +127,8 @@ type CloudPortfolioRow = {
   user_id?: string | null;
 };
 
+type CloudSettings = { activeProfileId?: string; displayName?: string; shareHoldings?: boolean } & Partial<FeeSettings>;
+
 async function readJsonResponse<T>(response: Response): Promise<T> {
   try {
     return await response.json() as T;
@@ -138,12 +140,19 @@ async function readJsonResponse<T>(response: Response): Promise<T> {
 function friendlyNameForUser(user: User | null) {
   const metadataName = user?.user_metadata?.full_name || user?.user_metadata?.name;
   if (typeof metadataName === "string" && metadataName.trim()) return metadataName.trim();
+  const emailName = user?.email?.split("@")[0]?.replace(/[._-]+/g, " ").trim();
+  if (emailName) return emailName.replace(/\b\w/g, (letter) => letter.toUpperCase());
   return "Friend";
 }
 
 function normalizeDisplayName(value: string) {
   const trimmed = value.trim();
   return trimmed || "Friend";
+}
+
+function isMissingSharedColumnsError(error?: { message?: string } | null) {
+  const message = error?.message || "";
+  return message.includes("display_name") || message.includes("share_holdings") || message.includes("schema cache");
 }
 
 export default function Home() {
@@ -448,15 +457,34 @@ export default function Home() {
       setCloudSyncMessage("Cloud save failed: portfolio payload could not be serialized.");
       return false;
     }
+    const cloudSettings = {
+      activeProfileId: parsedPayload.activeProfileId,
+      profilesVersion: 2,
+      displayName: normalizeDisplayName(parsedPayload.displayName || displayName),
+      shareHoldings: Boolean(parsedPayload.shareHoldings)
+    };
     const { error } = await supabase.from("user_portfolios").upsert({
       user_id: user.id,
       holdings: parsedPayload.profiles,
-      settings: { activeProfileId: parsedPayload.activeProfileId, profilesVersion: 2 },
-      display_name: normalizeDisplayName(parsedPayload.displayName || displayName),
-      share_holdings: Boolean(parsedPayload.shareHoldings),
+      settings: cloudSettings,
+      display_name: cloudSettings.displayName,
+      share_holdings: cloudSettings.shareHoldings,
       updated_at: new Date().toISOString()
     });
     if (error) {
+      if (isMissingSharedColumnsError(error)) {
+        const { error: legacyError } = await supabase.from("user_portfolios").upsert({
+          user_id: user.id,
+          holdings: parsedPayload.profiles,
+          settings: cloudSettings,
+          updated_at: new Date().toISOString()
+        });
+        if (!legacyError) {
+          setCloudSyncStatus("saved");
+          setCloudSyncMessage("Saved to cloud. Shared holdings need the updated Supabase SQL/schema cache before friends can view them.");
+          return true;
+        }
+      }
       setCloudSyncStatus("error");
       setCloudSyncMessage(`Cloud save failed: ${error.message}`);
       return false;
@@ -477,7 +505,12 @@ export default function Home() {
       .order("updated_at", { ascending: false });
     setIsLoadingSharedProfiles(false);
     if (error) {
-      setWarnings((existing) => [...existing, `Shared portfolios failed to load: ${error.message}`]);
+      setWarnings((existing) => [
+        ...existing,
+        isMissingSharedColumnsError(error)
+          ? "Shared holdings are not active yet. Run the updated Supabase SQL, then reload the schema cache."
+          : `Shared portfolios failed to load: ${error.message}`
+      ]);
       return;
     }
     const entries = ((data || []) as CloudPortfolioRow[]).flatMap((row) => {
@@ -500,7 +533,15 @@ export default function Home() {
     setIsAuthLoading(true);
     setCloudSyncStatus("loading");
     setCloudSyncMessage("Loading cloud portfolio...");
-    const { data, error } = await supabase.from("user_portfolios").select("holdings, settings, display_name, share_holdings").eq("user_id", user.id).maybeSingle();
+    const initialResult = await supabase.from("user_portfolios").select("holdings, settings, display_name, share_holdings").eq("user_id", user.id).maybeSingle();
+    let data = initialResult.data as CloudPortfolioRow | null;
+    let error = initialResult.error;
+    if (isMissingSharedColumnsError(error)) {
+      const fallback = await supabase.from("user_portfolios").select("holdings, settings").eq("user_id", user.id).maybeSingle();
+      data = fallback.data as CloudPortfolioRow | null;
+      error = fallback.error;
+      setWarnings((existing) => [...existing, "Shared holdings need the updated Supabase SQL/schema cache. Cloud sync will keep working privately for now."]);
+    }
     setIsAuthLoading(false);
     if (error) {
       setCloudLoadedUserId(user.id);
@@ -518,11 +559,11 @@ export default function Home() {
       return;
     }
     const row = data as CloudPortfolioRow;
-    setDisplayName(normalizeDisplayName(row.display_name || friendlyNameForUser(user)));
-    setShareHoldings(Boolean(row.share_holdings));
-    const cloudSettings = row.settings && typeof row.settings === "object"
-      ? data.settings as { activeProfileId?: string } & Partial<FeeSettings>
+    const cloudSettings: CloudSettings = row.settings && typeof row.settings === "object"
+      ? data.settings as CloudSettings
       : {};
+    setDisplayName(normalizeDisplayName(row.display_name || cloudSettings.displayName || friendlyNameForUser(user)));
+    setShareHoldings(Boolean(row.share_holdings ?? cloudSettings.shareHoldings));
     const loadedProfiles = coerceProfiles(row.holdings, DEFAULT_SETTINGS);
     if (loadedProfiles.length) {
       setProfiles(loadedProfiles);
@@ -564,8 +605,8 @@ export default function Home() {
     const nextProfile: PortfolioProfile = {
       id,
       name: profileNameForCount(profiles.length),
-      region: "US",
-      currency: "USD",
+      region,
+      currency,
       holdings: [],
       settings: DEFAULT_SETTINGS
     };

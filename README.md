@@ -82,6 +82,8 @@ The schema includes:
 - `display_name`: friendly user name shown in shared portfolio selectors; emails are not shown in the shared view.
 - `share_holdings`: opt-in toggle for whether other signed-in users can read that user's US and Egypt portfolio profiles.
 
+If Supabase says a new column is missing from the schema cache, rerun the full SQL file. The final `notify pgrst, 'reload schema';` line asks Supabase/PostgREST to refresh the API schema cache.
+
 Recommended Supabase Auth setup:
 
 - Enable email/password auth or magic links.

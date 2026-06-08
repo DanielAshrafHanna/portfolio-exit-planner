@@ -1,7 +1,7 @@
 "use client";
 
 import { Plus, Trash2, UserRoundCog } from "lucide-react";
-import type { MarketRegion, PortfolioProfile } from "@/lib/types";
+import type { PortfolioProfile } from "@/lib/types";
 
 type Props = {
   profiles: PortfolioProfile[];
@@ -16,14 +16,6 @@ export function ProfileSelector({ profiles, activeProfileId, onActiveChange, onA
   const activeProfile = profiles.find((profile) => profile.id === activeProfileId) || profiles[0];
   if (!activeProfile) return null;
 
-  const updateRegion = (region: MarketRegion) => {
-    onUpdate({
-      ...activeProfile,
-      region,
-      currency: region === "EG" ? "EGP" : "USD"
-    });
-  };
-
   return (
     <section className="border-b border-ink/10 bg-white px-4 py-4">
       <div className="mx-auto grid max-w-7xl gap-3 lg:grid-cols-[1fr_auto] lg:items-end">
@@ -32,25 +24,29 @@ export function ProfileSelector({ profiles, activeProfileId, onActiveChange, onA
             <UserRoundCog className="h-4 w-4" aria-hidden />
             Portfolio profile
           </div>
-          <div className="grid gap-3 md:grid-cols-[minmax(180px,260px)_minmax(180px,1fr)_180px]">
-            <label className="text-xs font-medium text-ink/70">
-              Active profile
-              <select className="mt-1 min-h-11 w-full rounded-md border border-ink/15 px-3 py-2 text-base sm:text-sm" value={activeProfile.id} onChange={(event) => onActiveChange(event.target.value)}>
-                {profiles.map((profile) => (
-                  <option key={profile.id} value={profile.id}>{profile.name}</option>
-                ))}
-              </select>
-            </label>
+          <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(220px,360px)]">
+            <div>
+              <p className="mb-1 text-xs font-medium text-ink/70">Active profile</p>
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                {profiles.map((profile) => {
+                  const active = profile.id === activeProfile.id;
+                  return (
+                    <button
+                      className={`min-h-11 shrink-0 rounded-full border px-4 py-2 text-sm font-semibold ${active ? "border-marine bg-mint text-marine" : "border-ink/10 bg-white text-ink/70"}`}
+                      key={profile.id}
+                      type="button"
+                      onClick={() => onActiveChange(profile.id)}
+                    >
+                      {profile.name}
+                      <span className="ml-2 text-xs font-normal text-ink/55">{profile.region === "EG" ? "Egypt" : "US"}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
             <label className="text-xs font-medium text-ink/70">
               Profile name
               <input className="mt-1 min-h-11 w-full rounded-md border border-ink/15 px-3 py-2 text-base sm:text-sm" value={activeProfile.name} onChange={(event) => onUpdate({ ...activeProfile, name: event.target.value })} />
-            </label>
-            <label className="text-xs font-medium text-ink/70">
-              Market
-              <select className="mt-1 min-h-11 w-full rounded-md border border-ink/15 px-3 py-2 text-base sm:text-sm" value={activeProfile.region} onChange={(event) => updateRegion(event.target.value as MarketRegion)}>
-                <option value="US">US market</option>
-                <option value="EG">Egypt market</option>
-              </select>
             </label>
           </div>
         </div>
