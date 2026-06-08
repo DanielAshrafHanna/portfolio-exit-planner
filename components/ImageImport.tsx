@@ -69,8 +69,8 @@ export function ImageImport({ onExtracted, setWarning }: Props) {
   };
 
   return (
-    <section className="mx-auto max-w-7xl px-4 pt-6">
-      <div className="grid gap-3 border border-dashed border-marine/35 bg-white p-4 md:grid-cols-[1fr_auto] md:items-center">
+    <div className="rounded-md border border-dashed border-marine/35 bg-white p-4">
+      <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
         <div className="flex gap-3">
           <ImageUp className="mt-1 h-5 w-5 shrink-0 text-marine" aria-hidden />
           <div>
@@ -83,7 +83,7 @@ export function ImageImport({ onExtracted, setWarning }: Props) {
           <input className="sr-only" type="file" accept="image/*" disabled={isExtracting} onChange={(event) => extract(event.target.files?.[0])} />
         </label>
       </div>
-    </section>
+    </div>
   );
 }
 

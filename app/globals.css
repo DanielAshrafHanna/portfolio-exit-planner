@@ -29,3 +29,15 @@ label:has(input:focus-visible) {
 .table-scroll {
   scrollbar-width: thin;
 }
+
+.section-gap > * + * {
+  margin-top: 0;
+}
+
+.btn-primary {
+  @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-marine px-4 py-2 text-sm font-semibold text-white disabled:opacity-50;
+}
+
+.btn-secondary {
+  @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-ink/15 bg-white px-4 py-2 text-sm font-semibold text-ink;
+}

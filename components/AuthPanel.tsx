@@ -14,6 +14,7 @@ type Props = {
   syncStatus: CloudSyncStatus;
   syncMessage: string;
   displayName: string;
+  variant?: "default" | "compact";
   onDisplayNameChange: (value: string) => void;
   onSignIn: (email: string, password: string, mode: "signin" | "signup", displayName?: string) => Promise<void>;
   onSignOut: () => Promise<void>;
@@ -43,7 +44,7 @@ function syncMessageForAudience(message: string, status: CloudSyncStatus, isAdmi
   return message;
 }
 
-export function AuthPanel({ user, isAdmin, isLoading, syncStatus, syncMessage, displayName, onDisplayNameChange, onSignIn, onSignOut }: Props) {
+export function AuthPanel({ user, isAdmin, isLoading, syncStatus, syncMessage, displayName, variant = "default", onDisplayNameChange, onSignIn, onSignOut }: Props) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [signupDisplayName, setSignupDisplayName] = useState("");
@@ -56,6 +57,32 @@ export function AuthPanel({ user, isAdmin, isLoading, syncStatus, syncMessage, d
           Cloud accounts are not configured yet. Portfolios are local-only until Supabase environment variables are added.
         </div>
       </section>
+    );
+  }
+
+  if (user && variant === "compact") {
+    return (
+      <div className="rounded-md border border-ink/10 bg-surface-muted p-4">
+        <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-marine">
+          <UserRound className="h-4 w-4" aria-hidden />
+          Account
+        </div>
+        <div className="grid gap-3 sm:grid-cols-[minmax(180px,1fr)_auto] sm:items-end">
+          <label className="text-xs font-semibold text-ink/65">
+            Display name
+            <input
+              className="mt-1 min-h-11 w-full rounded-md border border-ink/15 bg-white px-3 py-2 text-base sm:text-sm"
+              maxLength={60}
+              placeholder="Example: Daniel"
+              value={displayName}
+              onChange={(event) => onDisplayNameChange(event.target.value)}
+            />
+          </label>
+          <button className="inline-flex min-h-11 items-center gap-2 self-end rounded-md border border-coral px-4 py-2 text-sm font-semibold text-coral" type="button" onClick={onSignOut}>
+            <LogOut className="h-4 w-4" aria-hidden /> Sign out
+          </button>
+        </div>
+      </div>
     );
   }
 

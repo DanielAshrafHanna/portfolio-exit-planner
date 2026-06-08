@@ -29,10 +29,9 @@ export function HoldingsTable({ holdings, settings, currency, onChange, readOnly
   const [open, setOpen] = useState<Record<string, boolean>>({});
 
   return (
-    <section className="mx-auto max-w-7xl px-4 pb-10">
-      <div className="table-scroll overflow-x-auto border-y border-ink/10 bg-white shadow-soft">
+    <div className="table-scroll -mx-4 overflow-x-auto border-y border-ink/10 bg-white sm:-mx-5">
         <table className="min-w-[1120px] w-full border-collapse text-left text-xs sm:min-w-[1320px] sm:text-sm">
-          <thead className="bg-ink text-xs uppercase text-white">
+          <thead className="bg-marine text-xs uppercase text-white">
             <tr className="hidden border-b border-white/15 sm:table-row">
               <th className="px-3 py-2 text-center" colSpan={4}>Position</th>
               <th className="border-l-2 border-white/30 px-3 py-2 text-center" colSpan={3}>Market</th>
@@ -41,7 +40,7 @@ export function HoldingsTable({ holdings, settings, currency, onChange, readOnly
               <th className="border-l-2 border-white/30 px-3 py-2 text-center" colSpan={2}>Target</th>
               <th className="border-l-2 border-white/30 px-3 py-2 text-center">Risk</th>
             </tr>
-            <tr className="bg-ink/95">
+            <tr className="bg-marine/95">
               <th className="px-2 py-2 sm:px-3 sm:py-3" aria-label="Expand row" />
               <th className="px-2 py-2 sm:px-3 sm:py-3">Symbol</th>
               <th className="px-2 py-2 sm:px-3 sm:py-3">Shares</th>
@@ -69,7 +68,7 @@ export function HoldingsTable({ holdings, settings, currency, onChange, readOnly
               const targetPl = quote && targetPrice ? calculateProfitLoss(holding.shares, holding.averageCost, targetPrice, settings) : undefined;
               const canExpand = !readOnly && Boolean(onChange);
               return [
-                  <tr className="border-t border-ink/10" key={`${holding.id}-summary`}>
+                  <tr className="border-t border-ink/10 even:bg-paper/50 hover:bg-mint/20" key={`${holding.id}-summary`}>
                     <td className="px-2 py-2 sm:px-3 sm:py-3">
                       {canExpand ? (
                         <button className="min-h-8 rounded p-1 hover:bg-mint" type="button" onClick={() => setOpen({ ...open, [holding.id]: !open[holding.id] })} aria-label={`Expand ${holding.symbol}`} aria-expanded={Boolean(open[holding.id])}>
@@ -100,7 +99,6 @@ export function HoldingsTable({ holdings, settings, currency, onChange, readOnly
             })}
           </tbody>
         </table>
-      </div>
-    </section>
+    </div>
   );
 }

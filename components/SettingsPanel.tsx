@@ -16,12 +16,12 @@ export function SettingsPanel({ settings, currency, onChange, onClear }: Props) 
   };
 
   return (
-    <section className="border-b border-ink/10 bg-white px-4 py-4">
-      <div className="mx-auto grid max-w-7xl gap-3 md:grid-cols-[1fr_auto] md:items-end">
+    <div className="rounded-md border border-ink/10 bg-surface-muted p-4">
+      <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
         <div>
           <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-marine">
             <SlidersHorizontal className="h-4 w-4" aria-hidden />
-            Fees and privacy
+            Trading fees
           </div>
           <div className="grid gap-3 sm:grid-cols-3">
             <label className="text-xs font-medium text-ink/70">
@@ -43,6 +43,6 @@ export function SettingsPanel({ settings, currency, onChange, onClear }: Props) 
           Clear stored portfolio
         </button>
       </div>
-    </section>
+    </div>
   );
 }
