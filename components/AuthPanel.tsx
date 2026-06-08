@@ -202,7 +202,7 @@ export function AuthPanel({ user, isAdmin, isLoading, syncStatus, syncMessage, d
                     className="mt-1 min-h-11 w-full rounded-md border border-ink/15 px-3 py-2 text-base sm:text-sm"
                     type="text"
                     autoComplete={signInMethod === "email" ? "username" : "off"}
-                    placeholder={signInMethod === "email" ? "you@example.com" : "Example: Chantel"}
+                    placeholder={signInMethod === "email" ? "you@example.com" : "Example: Chantal"}
                     value={signInIdentifier}
                     onChange={(event) => {
                       setSignInIdentifier(event.target.value);
