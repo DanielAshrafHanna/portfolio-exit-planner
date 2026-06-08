@@ -1,17 +1,14 @@
 import OpenAI from "openai";
 import { NextResponse } from "next/server";
-import { z } from "zod";
 import { fallbackAnalysis } from "@/lib/aiFallback";
-
-const requestSchema = z.object({
-  holding: z.any(),
-  quote: z.any(),
-  news: z.array(z.any()).default([])
-});
+import { analysisRequestSchema, normalizeAiAnalysis } from "@/lib/validation";
 
 export async function POST(request: Request) {
-  const parsed = requestSchema.safeParse(await request.json());
-  if (!parsed.success) return NextResponse.json({ error: "Invalid analysis request" }, { status: 400 });
+  const body = await safeJson(request);
+  const parsed = analysisRequestSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json({ error: parsed.error.issues[0]?.message || "Invalid analysis request" }, { status: 400 });
+  }
   const { holding, quote, news } = parsed.data;
 
   if (!process.env.OPENAI_API_KEY) {
@@ -73,11 +70,29 @@ export async function POST(request: Request) {
       ]
     });
     const raw = completion.choices[0]?.message.content || "{}";
-    return NextResponse.json({ analysis: JSON.parse(raw) });
+    const decoded = safeParseJson(raw);
+    const normalized = normalizeAiAnalysis(decoded, holding, quote, news);
+    return NextResponse.json(normalized);
   } catch (error) {
     return NextResponse.json({
       analysis: fallbackAnalysis(holding, quote, news),
       warning: `AI analysis unavailable: ${error instanceof Error ? error.message : "Unknown error"}`
     });
+  }
+}
+
+async function safeJson(request: Request) {
+  try {
+    return await request.json();
+  } catch {
+    return undefined;
+  }
+}
+
+function safeParseJson(raw: string): unknown {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return undefined;
   }
 }

@@ -65,6 +65,14 @@ it("calculates partial sale and remaining position", () => {
   expect(result.remainingUnrealizedProfitLoss).toBe(100);
 });
 
+it("applies fees only to the sold portion in partial-sale math", () => {
+  const result = calculatePartialSale(holding, 120, 50, { fixedTradingFee: 2, percentTradingFee: 1, fxFeePercent: 0 });
+  expect(result.soldShares).toBe(5);
+  expect(result.realizedProfitLoss).toBe(92);
+  expect(result.remainingShares).toBe(5);
+  expect(result.remainingUnrealizedProfitLoss).toBe(100);
+});
+
 describe("target price from desired profit/loss", () => {
   it("calculates the sell price needed for a desired gross P/L", () => {
     const price = calculateSellPriceForProfitLoss(10, 100, 250, { fixedTradingFee: 0, percentTradingFee: 0, fxFeePercent: 0 });
