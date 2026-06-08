@@ -23,30 +23,6 @@ const emptyHolding = (): HoldingInput => ({
   notes: ""
 });
 
-type FieldProps = {
-  label: string;
-  value: string | number;
-  onChange: (value: string) => void;
-  type?: "text" | "number";
-  inputMode?: "decimal" | "text";
-  className?: string;
-};
-
-function MobileField({ label, value, onChange, type = "text", inputMode, className = "" }: FieldProps) {
-  return (
-    <label className={`block text-xs font-semibold text-ink/65 ${className}`}>
-      {label}
-      <input
-        className="mt-1 min-h-11 w-full rounded-md border border-ink/15 bg-white px-3 py-2 text-base text-ink outline-none focus:border-marine focus:ring-2 focus:ring-marine/20"
-        inputMode={inputMode}
-        type={type}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-      />
-    </label>
-  );
-}
-
 export function PortfolioInput({ holdings, onChange, onAnalyze, isAnalyzing, isRefreshingMarket }: Props) {
   const update = (id: string, key: keyof HoldingInput, value: string) => {
     onChange(holdings.map((holding) => {
@@ -123,53 +99,24 @@ export function PortfolioInput({ holdings, onChange, onAnalyze, isAnalyzing, isR
           </button>
         </div>
       </div>
-      <div className="grid gap-3 md:hidden">
-        {holdings.map((holding, index) => (
-          <article className="border border-ink/10 bg-white p-4 shadow-soft" key={holding.id}>
-            <div className="mb-3 flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-xs font-semibold uppercase text-marine">Holding {index + 1}</p>
-                <h3 className="truncate text-lg font-bold">{holding.symbol || "New holding"}</h3>
-                {holding.name ? <p className="break-words text-sm text-ink/60">{holding.name}</p> : null}
-              </div>
-              <button className="min-h-11 shrink-0 rounded-md border border-coral px-3 py-2 text-sm font-semibold text-coral" type="button" onClick={() => onChange(holdings.filter((item) => item.id !== holding.id))}>
-                Delete
-              </button>
-            </div>
-            <div className="grid gap-3">
-              <MobileField label="Symbol" value={holding.symbol} onChange={(value) => update(holding.id, "symbol", value.toUpperCase())} />
-              <MobileField label="Company/ETF name" value={holding.name} onChange={(value) => update(holding.id, "name", value)} />
-              <div className="grid grid-cols-2 gap-3">
-                <MobileField label="Shares" type="number" inputMode="decimal" value={holding.shares} onChange={(value) => update(holding.id, "shares", value)} />
-                <MobileField label="Avg cost" type="number" inputMode="decimal" value={holding.averageCost} onChange={(value) => update(holding.id, "averageCost", value)} />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <MobileField label="Total cost" type="number" inputMode="decimal" value={holding.totalCost} onChange={(value) => update(holding.id, "totalCost", value)} />
-                <MobileField label="Broker value" type="number" inputMode="decimal" value={holding.brokerCurrentValue ?? ""} onChange={(value) => update(holding.id, "brokerCurrentValue", value)} />
-              </div>
-              <MobileField label="Notes" value={holding.notes ?? ""} onChange={(value) => update(holding.id, "notes", value)} />
-            </div>
-          </article>
-        ))}
-      </div>
-      <div className="table-scroll hidden overflow-x-auto border-y border-ink/10 bg-white md:block">
-        <table className="min-w-[1050px] w-full text-left text-sm">
+      <div className="table-scroll overflow-x-auto border-y border-ink/10 bg-white">
+        <table className="min-w-[840px] w-full text-left text-xs sm:min-w-[1050px] sm:text-sm">
           <thead className="bg-mint/60 text-xs uppercase text-ink/65">
             <tr>
-              {["Symbol", "Company/ETF", "Shares", "Avg cost", "Total cost", "Broker value", "Notes", ""].map((head) => <th className="px-3 py-2" key={head}>{head}</th>)}
+              {["Symbol", "Company/ETF", "Shares", "Avg cost", "Total cost", "Broker value", "Notes", ""].map((head) => <th className="px-2 py-2 sm:px-3" key={head}>{head}</th>)}
             </tr>
           </thead>
           <tbody>
             {holdings.map((holding) => (
               <tr className="border-t border-ink/10" key={holding.id}>
-                <td className="px-3 py-2"><input className="w-24 rounded border border-ink/15 px-2 py-1 font-semibold uppercase" value={holding.symbol} onChange={(event) => update(holding.id, "symbol", event.target.value.toUpperCase())} /></td>
-                <td className="px-3 py-2"><input className="w-52 rounded border border-ink/15 px-2 py-1" value={holding.name} onChange={(event) => update(holding.id, "name", event.target.value)} /></td>
-                <td className="px-3 py-2"><input className="w-24 rounded border border-ink/15 px-2 py-1" type="number" value={holding.shares} onChange={(event) => update(holding.id, "shares", event.target.value)} /></td>
-                <td className="px-3 py-2"><input className="w-28 rounded border border-ink/15 px-2 py-1" type="number" value={holding.averageCost} onChange={(event) => update(holding.id, "averageCost", event.target.value)} /></td>
-                <td className="px-3 py-2"><input className="w-28 rounded border border-ink/15 px-2 py-1" type="number" value={holding.totalCost} onChange={(event) => update(holding.id, "totalCost", event.target.value)} /></td>
-                <td className="px-3 py-2"><input className="w-28 rounded border border-ink/15 px-2 py-1" type="number" value={holding.brokerCurrentValue ?? ""} onChange={(event) => update(holding.id, "brokerCurrentValue", event.target.value)} /></td>
-                <td className="px-3 py-2"><input className="w-56 rounded border border-ink/15 px-2 py-1" value={holding.notes ?? ""} onChange={(event) => update(holding.id, "notes", event.target.value)} /></td>
-                <td className="px-3 py-2"><button className="text-sm font-semibold text-coral" type="button" onClick={() => onChange(holdings.filter((item) => item.id !== holding.id))}>Delete</button></td>
+                <td className="px-2 py-2 sm:px-3"><input aria-label={`Symbol for ${holding.name || "holding"}`} className="w-20 rounded border border-ink/15 px-2 py-1 font-semibold uppercase sm:w-24" value={holding.symbol} onChange={(event) => update(holding.id, "symbol", event.target.value.toUpperCase())} /></td>
+                <td className="px-2 py-2 sm:px-3"><input aria-label={`Company or ETF name for ${holding.symbol || "holding"}`} className="w-40 rounded border border-ink/15 px-2 py-1 sm:w-52" value={holding.name} onChange={(event) => update(holding.id, "name", event.target.value)} /></td>
+                <td className="px-2 py-2 sm:px-3"><input aria-label={`Shares for ${holding.symbol || "holding"}`} className="w-20 rounded border border-ink/15 px-2 py-1 sm:w-24" type="number" value={holding.shares} onChange={(event) => update(holding.id, "shares", event.target.value)} /></td>
+                <td className="px-2 py-2 sm:px-3"><input aria-label={`Average cost for ${holding.symbol || "holding"}`} className="w-24 rounded border border-ink/15 px-2 py-1 sm:w-28" type="number" value={holding.averageCost} onChange={(event) => update(holding.id, "averageCost", event.target.value)} /></td>
+                <td className="px-2 py-2 sm:px-3"><input aria-label={`Total cost for ${holding.symbol || "holding"}`} className="w-24 rounded border border-ink/15 px-2 py-1 sm:w-28" type="number" value={holding.totalCost} onChange={(event) => update(holding.id, "totalCost", event.target.value)} /></td>
+                <td className="px-2 py-2 sm:px-3"><input aria-label={`Broker value for ${holding.symbol || "holding"}`} className="w-24 rounded border border-ink/15 px-2 py-1 sm:w-28" type="number" value={holding.brokerCurrentValue ?? ""} onChange={(event) => update(holding.id, "brokerCurrentValue", event.target.value)} /></td>
+                <td className="px-2 py-2 sm:px-3"><input aria-label={`Notes for ${holding.symbol || "holding"}`} className="w-44 rounded border border-ink/15 px-2 py-1 sm:w-56" value={holding.notes ?? ""} onChange={(event) => update(holding.id, "notes", event.target.value)} /></td>
+                <td className="px-2 py-2 sm:px-3"><button className="min-h-9 rounded px-2 text-xs font-semibold text-coral sm:text-sm" type="button" onClick={() => onChange(holdings.filter((item) => item.id !== holding.id))}>Delete</button></td>
               </tr>
             ))}
           </tbody>
