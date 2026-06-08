@@ -2,17 +2,25 @@ create table if not exists public.user_portfolios (
   user_id uuid primary key references auth.users(id) on delete cascade,
   holdings jsonb not null default '[]'::jsonb,
   settings jsonb not null default '{}'::jsonb,
+  display_name text not null default 'Friend',
+  share_holdings boolean not null default false,
   updated_at timestamptz not null default now()
 );
+
+alter table public.user_portfolios
+  add column if not exists display_name text not null default 'Friend',
+  add column if not exists share_holdings boolean not null default false;
 
 alter table public.user_portfolios enable row level security;
 
 drop policy if exists "Users can read own portfolio" on public.user_portfolios;
-create policy "Users can read own portfolio"
+drop policy if exists "Users can read shared portfolios" on public.user_portfolios;
+drop policy if exists "Users can read own or shared portfolios" on public.user_portfolios;
+create policy "Users can read own or shared portfolios"
 on public.user_portfolios
 for select
 to authenticated
-using ((select auth.uid()) = user_id);
+using ((select auth.uid()) = user_id or share_holdings = true);
 
 drop policy if exists "Users can insert own portfolio" on public.user_portfolios;
 create policy "Users can insert own portfolio"

@@ -11,12 +11,13 @@ import { PortfolioInput } from "@/components/PortfolioInput";
 import { ProfileSelector } from "@/components/ProfileSelector";
 import { PortfolioSummary } from "@/components/PortfolioSummary";
 import { SettingsPanel } from "@/components/SettingsPanel";
+import { SharedHoldingsViewer } from "@/components/SharedHoldingsViewer";
 import { defaultSellTargets } from "@/lib/calculations";
 import { applyAnalyzedHoldingResults, type AnalyzedHoldingResult } from "@/lib/holdingMerge";
 import { DEFAULT_SETTINGS, defaultProfiles, displayMarketSymbol } from "@/lib/profileUtils";
 import { coerceHoldings, coerceProfiles, enrichHolding, loadPortfolioState, migrateSinglePortfolio } from "@/lib/storageMigration";
 import { createSupabaseBrowserClient } from "@/lib/supabaseClient";
-import type { AiAnalysis, EnrichedHolding, FeeSettings, HoldingInput, MarketQuote, NewsItem, PortfolioProfile } from "@/lib/types";
+import type { AiAnalysis, EnrichedHolding, FeeSettings, HoldingInput, MarketQuote, NewsItem, PortfolioProfile, SharedPortfolioProfile } from "@/lib/types";
 
 const STORAGE_KEY = "portfolio-exit-planner:v1";
 const SETTINGS_KEY = "portfolio-exit-planner:settings:v1";
@@ -110,12 +111,39 @@ type AnalysisApiResponse = {
 
 type AnalyzedHoldingResponse = AnalyzedHoldingResult & { warning?: string };
 
+type CloudPortfolioPayload = {
+  profiles: PortfolioProfile[];
+  activeProfileId: string;
+  displayName?: string;
+  shareHoldings?: boolean;
+};
+
+type CloudPortfolioRow = {
+  holdings: unknown;
+  settings: unknown;
+  display_name?: string | null;
+  share_holdings?: boolean | null;
+  updated_at?: string | null;
+  user_id?: string | null;
+};
+
 async function readJsonResponse<T>(response: Response): Promise<T> {
   try {
     return await response.json() as T;
   } catch {
     throw new Error(`Server returned an unreadable response (${response.status}).`);
   }
+}
+
+function friendlyNameForUser(user: User | null) {
+  const metadataName = user?.user_metadata?.full_name || user?.user_metadata?.name;
+  if (typeof metadataName === "string" && metadataName.trim()) return metadataName.trim();
+  return "Friend";
+}
+
+function normalizeDisplayName(value: string) {
+  const trimmed = value.trim();
+  return trimmed || "Friend";
 }
 
 export default function Home() {
@@ -130,6 +158,11 @@ export default function Home() {
   const [cloudSyncStatus, setCloudSyncStatus] = useState<CloudSyncStatus>("signed-out");
   const [cloudSyncMessage, setCloudSyncMessage] = useState("Sign in to enable cloud sync.");
   const [cloudLoadedUserId, setCloudLoadedUserId] = useState<string | null>(null);
+  const [displayName, setDisplayName] = useState("Friend");
+  const [shareHoldings, setShareHoldings] = useState(false);
+  const [sharedProfiles, setSharedProfiles] = useState<SharedPortfolioProfile[]>([]);
+  const [selectedSharedProfileId, setSelectedSharedProfileId] = useState("");
+  const [isLoadingSharedProfiles, setIsLoadingSharedProfiles] = useState(false);
   const [isHydrated, setIsHydrated] = useState(false);
   const latestSyncPayload = useRef("");
   const marketRequestId = useRef(0);
@@ -179,6 +212,11 @@ export default function Home() {
       setCloudLoadedUserId(null);
       setCloudSyncStatus("signed-out");
       setCloudSyncMessage("Sign in to enable cloud sync.");
+      setShareHoldings(false);
+      setSharedProfiles([]);
+      setSelectedSharedProfileId("");
+    } else {
+      setDisplayName((existing) => existing === "Friend" ? friendlyNameForUser(user) : existing);
     }
   }, [user]);
 
@@ -402,9 +440,9 @@ export default function Home() {
     if (!supabase || !user) return false;
     setCloudSyncStatus("saving");
     setCloudSyncMessage("Saving changes to cloud...");
-    let parsedPayload: { profiles: PortfolioProfile[]; activeProfileId: string };
+    let parsedPayload: CloudPortfolioPayload;
     try {
-      parsedPayload = JSON.parse(payload) as { profiles: PortfolioProfile[]; activeProfileId: string };
+      parsedPayload = JSON.parse(payload) as CloudPortfolioPayload;
     } catch {
       setCloudSyncStatus("error");
       setCloudSyncMessage("Cloud save failed: portfolio payload could not be serialized.");
@@ -414,6 +452,8 @@ export default function Home() {
       user_id: user.id,
       holdings: parsedPayload.profiles,
       settings: { activeProfileId: parsedPayload.activeProfileId, profilesVersion: 2 },
+      display_name: normalizeDisplayName(parsedPayload.displayName || displayName),
+      share_holdings: Boolean(parsedPayload.shareHoldings),
       updated_at: new Date().toISOString()
     });
     if (error) {
@@ -423,7 +463,36 @@ export default function Home() {
     }
     setCloudSyncStatus("saved");
     setCloudSyncMessage(`Saved to cloud at ${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}.`);
+    void loadSharedProfiles();
     return true;
+  };
+
+  const loadSharedProfiles = async () => {
+    if (!supabase || !user) return;
+    setIsLoadingSharedProfiles(true);
+    const { data, error } = await supabase
+      .from("user_portfolios")
+      .select("user_id, display_name, holdings, settings, updated_at")
+      .eq("share_holdings", true)
+      .order("updated_at", { ascending: false });
+    setIsLoadingSharedProfiles(false);
+    if (error) {
+      setWarnings((existing) => [...existing, `Shared portfolios failed to load: ${error.message}`]);
+      return;
+    }
+    const entries = ((data || []) as CloudPortfolioRow[]).flatMap((row) => {
+      const display = normalizeDisplayName(row.display_name || "Friend");
+      const loadedProfiles = coerceProfiles(row.holdings, DEFAULT_SETTINGS);
+      return loadedProfiles.map((profile) => ({
+        id: `${row.user_id || display}:${profile.id}`,
+        userId: row.user_id || "",
+        displayName: display,
+        profile,
+        updatedAt: row.updated_at || undefined
+      }));
+    });
+    setSharedProfiles(entries);
+    setSelectedSharedProfileId((existing) => entries.some((entry) => entry.id === existing) ? existing : entries[0]?.id || "");
   };
 
   const loadCloudPortfolio = async () => {
@@ -431,7 +500,7 @@ export default function Home() {
     setIsAuthLoading(true);
     setCloudSyncStatus("loading");
     setCloudSyncMessage("Loading cloud portfolio...");
-    const { data, error } = await supabase.from("user_portfolios").select("holdings, settings").eq("user_id", user.id).maybeSingle();
+    const { data, error } = await supabase.from("user_portfolios").select("holdings, settings, display_name, share_holdings").eq("user_id", user.id).maybeSingle();
     setIsAuthLoading(false);
     if (error) {
       setCloudLoadedUserId(user.id);
@@ -441,14 +510,20 @@ export default function Home() {
     }
     if (!data) {
       setCloudLoadedUserId(user.id);
+      setDisplayName(friendlyNameForUser(user));
+      setShareHoldings(false);
       setCloudSyncStatus("saved");
       setCloudSyncMessage("No cloud portfolio yet. Local changes will save automatically.");
+      void loadSharedProfiles();
       return;
     }
-    const cloudSettings = data.settings && typeof data.settings === "object"
+    const row = data as CloudPortfolioRow;
+    setDisplayName(normalizeDisplayName(row.display_name || friendlyNameForUser(user)));
+    setShareHoldings(Boolean(row.share_holdings));
+    const cloudSettings = row.settings && typeof row.settings === "object"
       ? data.settings as { activeProfileId?: string } & Partial<FeeSettings>
       : {};
-    const loadedProfiles = coerceProfiles(data.holdings, DEFAULT_SETTINGS);
+    const loadedProfiles = coerceProfiles(row.holdings, DEFAULT_SETTINGS);
     if (loadedProfiles.length) {
       setProfiles(loadedProfiles);
       setActiveProfileId(loadedProfiles.some((profile) => profile.id === cloudSettings?.activeProfileId) ? cloudSettings.activeProfileId! : loadedProfiles[0].id);
@@ -461,6 +536,7 @@ export default function Home() {
     setCloudLoadedUserId(user.id);
     setCloudSyncStatus("saved");
     setCloudSyncMessage("Cloud portfolio loaded. Changes save automatically.");
+    void loadSharedProfiles();
   };
 
   useEffect(() => {
@@ -472,7 +548,7 @@ export default function Home() {
 
   useEffect(() => {
     if (!supabase || !user || !isHydrated || cloudLoadedUserId !== user.id) return;
-    const payload = JSON.stringify({ profiles, activeProfileId });
+    const payload = JSON.stringify({ profiles, activeProfileId, displayName, shareHoldings });
     if (payload === latestSyncPayload.current) return;
     latestSyncPayload.current = payload;
     const timeout = window.setTimeout(() => {
@@ -481,7 +557,7 @@ export default function Home() {
     return () => window.clearTimeout(timeout);
     // saveCloudPortfolio consumes the serialized payload captured for this debounce tick.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [supabase, user, isHydrated, cloudLoadedUserId, profiles, activeProfileId]);
+  }, [supabase, user, isHydrated, cloudLoadedUserId, profiles, activeProfileId, displayName, shareHoldings]);
 
   const addProfile = () => {
     const id = crypto.randomUUID();
@@ -523,11 +599,24 @@ export default function Home() {
         isLoading={isAuthLoading}
         syncStatus={cloudSyncStatus}
         syncMessage={cloudSyncMessage}
+        displayName={displayName}
         onSignIn={signIn}
         onSignOut={signOut}
       />
       <ProfileSelector profiles={profiles} activeProfileId={activeProfile?.id || activeProfileId} onActiveChange={setActiveProfileId} onAdd={addProfile} onDelete={deleteProfile} onUpdate={updateProfile} />
       <SettingsPanel settings={settings} currency={currency} onChange={setSettings} onClear={clearStored} />
+      {user ? (
+        <SharedHoldingsViewer
+          entries={sharedProfiles}
+          selectedId={selectedSharedProfileId}
+          isLoading={isLoadingSharedProfiles}
+          shareHoldings={shareHoldings}
+          displayName={displayName}
+          onSelectedIdChange={setSelectedSharedProfileId}
+          onShareHoldingsChange={setShareHoldings}
+          onDisplayNameChange={setDisplayName}
+        />
+      ) : null}
       {warnings.length ? (
         <section className="mx-auto max-w-7xl px-4 pt-5">
           <div className="space-y-2 border border-amber/40 bg-amber/10 p-3 text-sm">
