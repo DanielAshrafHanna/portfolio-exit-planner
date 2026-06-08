@@ -136,6 +136,15 @@ export function migrateSinglePortfolio(holdings: EnrichedHolding[], settings: Fe
   ];
 }
 
+export function emptyPortfolioBootstrap(): PortfolioStorageState {
+  const profiles = defaultProfiles();
+  return {
+    profiles,
+    activeProfileId: profiles[0]?.id || "us-portfolio",
+    warnings: []
+  };
+}
+
 export function loadPortfolioState(values: StoredPortfolioValues): PortfolioStorageState {
   const warnings: string[] = [];
   const settingsJson = parseStoredJson(values.storedSettings, "Stored fee settings");
