@@ -11,7 +11,8 @@ type Props = {
   holdings: EnrichedHolding[];
   settings: FeeSettings;
   currency: CurrencyCode;
-  onChange: (holding: EnrichedHolding) => void;
+  onChange?: (holding: EnrichedHolding) => void;
+  readOnly?: boolean;
 };
 
 function badge(value?: string) {
@@ -24,7 +25,7 @@ function valueClass(value?: number) {
   return value < 0 ? "text-coral" : "text-marine";
 }
 
-export function HoldingsTable({ holdings, settings, currency, onChange }: Props) {
+export function HoldingsTable({ holdings, settings, currency, onChange, readOnly = false }: Props) {
   const [open, setOpen] = useState<Record<string, boolean>>({});
 
   return (
@@ -66,12 +67,15 @@ export function HoldingsTable({ holdings, settings, currency, onChange }: Props)
               const stopPl = quote && stopPrice ? calculateProfitLoss(holding.shares, holding.averageCost, stopPrice, settings) : undefined;
               const targetPrice = quote ? holding.selectedTargetPrice || defaultSellTargets(quote.currentPrice, holding.analysis?.suggestedActionPlan.suggestedTakeProfit)[1].price : undefined;
               const targetPl = quote && targetPrice ? calculateProfitLoss(holding.shares, holding.averageCost, targetPrice, settings) : undefined;
+              const canExpand = !readOnly && Boolean(onChange);
               return [
                   <tr className="border-t border-ink/10" key={`${holding.id}-summary`}>
                     <td className="px-2 py-2 sm:px-3 sm:py-3">
-                      <button className="min-h-8 rounded p-1 hover:bg-mint" type="button" onClick={() => setOpen({ ...open, [holding.id]: !open[holding.id] })} aria-label={`Expand ${holding.symbol}`} aria-expanded={Boolean(open[holding.id])}>
-                        {open[holding.id] ? <ChevronDown className="h-4 w-4" aria-hidden /> : <ChevronRight className="h-4 w-4" aria-hidden />}
-                      </button>
+                      {canExpand ? (
+                        <button className="min-h-8 rounded p-1 hover:bg-mint" type="button" onClick={() => setOpen({ ...open, [holding.id]: !open[holding.id] })} aria-label={`Expand ${holding.symbol}`} aria-expanded={Boolean(open[holding.id])}>
+                          {open[holding.id] ? <ChevronDown className="h-4 w-4" aria-hidden /> : <ChevronRight className="h-4 w-4" aria-hidden />}
+                        </button>
+                      ) : null}
                     </td>
                     <td className="px-2 py-2 font-bold sm:px-3 sm:py-3">{holding.symbol}<span className="block max-w-32 truncate text-[11px] font-normal text-ink/55 sm:max-w-44 sm:text-xs">{holding.name}</span></td>
                     <td className="px-2 py-2 sm:px-3 sm:py-3">{holding.shares}</td>
@@ -87,7 +91,7 @@ export function HoldingsTable({ holdings, settings, currency, onChange }: Props)
                     <td className={`bg-mint/70 px-2 py-2 font-bold sm:px-3 sm:py-3 ${valueClass(targetPl?.profitLoss)}`}>{targetPl ? `${formatMoney(targetPl.profitLoss, currency)} (${targetPl.profitLossPercent}%)` : "N/A"}</td>
                     <td className="border-l-2 border-ink/15 px-2 py-2 sm:px-3 sm:py-3">{badge(holding.analysis?.riskLevel)}</td>
                   </tr>,
-                  open[holding.id] ? (
+                  canExpand && onChange && open[holding.id] ? (
                     <tr className="border-t border-ink/10" key={`${holding.id}-details`}>
                       <td colSpan={14} className="p-0"><HoldingDetails holding={holding} settings={settings} currency={currency} onChange={onChange} /></td>
                     </tr>

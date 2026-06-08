@@ -6,6 +6,7 @@ import type { User } from "@supabase/supabase-js";
 import type { CloudSyncStatus } from "@/components/AuthPanel";
 import { AuthPanel } from "@/components/AuthPanel";
 import { HoldingsTable } from "@/components/HoldingsTable";
+import { HoldingsViewSelector, type HoldingsViewOption } from "@/components/HoldingsViewSelector";
 import { ImageImport } from "@/components/ImageImport";
 import { PortfolioInput } from "@/components/PortfolioInput";
 import { ProfileSelector } from "@/components/ProfileSelector";
@@ -25,6 +26,7 @@ const PROFILES_KEY = "portfolio-exit-planner:profiles:v1";
 const ACTIVE_PROFILE_KEY = "portfolio-exit-planner:active-profile:v1";
 const EMPTY_HOLDINGS: EnrichedHolding[] = [];
 const ADMIN_EMAIL = "danielhanna0001@gmail.com";
+const OWN_HOLDINGS_VIEW_ID = "mine";
 
 function sameSymbol(a?: string, b?: string) {
   return (a || "").trim().toUpperCase() === (b || "").trim().toUpperCase();
@@ -197,7 +199,7 @@ export default function Home() {
   const [displayName, setDisplayName] = useState("Friend");
   const [shareHoldings, setShareHoldings] = useState(false);
   const [sharedProfiles, setSharedProfiles] = useState<SharedPortfolioProfile[]>([]);
-  const [selectedSharedProfileId, setSelectedSharedProfileId] = useState("");
+  const [selectedSharedProfileId, setSelectedSharedProfileId] = useState(OWN_HOLDINGS_VIEW_ID);
   const [isLoadingSharedProfiles, setIsLoadingSharedProfiles] = useState(false);
   const [isHydrated, setIsHydrated] = useState(false);
   const latestSyncPayload = useRef("");
@@ -250,7 +252,7 @@ export default function Home() {
       setCloudSyncMessage("Sign in to enable cloud sync.");
       setShareHoldings(false);
       setSharedProfiles([]);
-      setSelectedSharedProfileId("");
+      setSelectedSharedProfileId(OWN_HOLDINGS_VIEW_ID);
     } else {
       setDisplayName((existing) => existing === "Friend" ? friendlyNameForUser(user) : existing);
     }
@@ -265,6 +267,30 @@ export default function Home() {
   const visibleWarnings = useMemo(() => (
     [...new Set(warnings.map((warning) => warningForAudience(warning, isAdmin)).filter((warning): warning is string => Boolean(warning)))]
   ), [warnings, isAdmin]);
+  const selectedSharedProfile = useMemo(() => (
+    sharedProfiles.find((entry) => entry.id === selectedSharedProfileId)
+  ), [sharedProfiles, selectedSharedProfileId]);
+  const holdingsViewOptions = useMemo<HoldingsViewOption[]>(() => {
+    const ownRegion = region === "EG" ? "Egypt" : "US";
+    return [
+      {
+        id: OWN_HOLDINGS_VIEW_ID,
+        label: "My portfolio",
+        sublabel: `${activeProfile?.name || "Portfolio"} - ${ownRegion}`,
+        holdingsCount: holdings.length,
+        isMine: true
+      },
+      ...sharedProfiles.map((entry) => ({
+        id: entry.id,
+        label: entry.displayName,
+        sublabel: `${entry.profile.name} - ${entry.profile.region === "EG" ? "Egypt" : "US"}`,
+        holdingsCount: entry.profile.holdings.length
+      }))
+    ];
+  }, [activeProfile?.name, holdings.length, region, sharedProfiles]);
+  const displayedHoldings = selectedSharedProfile?.profile.holdings || holdings;
+  const displayedSettings = selectedSharedProfile?.profile.settings || settings;
+  const displayedCurrency = selectedSharedProfile?.profile.currency || currency;
   const marketSymbolKey = useMemo(() => (
     holdings.map((holding) => `${holding.id}:${displayMarketSymbol(holding.symbol, region)}`).join("|")
   ), [holdings, region]);
@@ -553,7 +579,7 @@ export default function Home() {
       ]);
       return;
     }
-    const entries = ((data || []) as CloudPortfolioRow[]).flatMap((row) => {
+    const entries = ((data || []) as CloudPortfolioRow[]).filter((row) => row.user_id !== user.id).flatMap((row) => {
       const display = normalizeDisplayName(row.display_name || "Friend");
       const loadedProfiles = coerceProfiles(row.holdings, DEFAULT_SETTINGS);
       return loadedProfiles.map((profile) => ({
@@ -565,7 +591,7 @@ export default function Home() {
       }));
     });
     setSharedProfiles(entries);
-    setSelectedSharedProfileId((existing) => entries.some((entry) => entry.id === existing) ? existing : entries[0]?.id || "");
+    setSelectedSharedProfileId((existing) => existing === OWN_HOLDINGS_VIEW_ID || entries.some((entry) => entry.id === existing) ? existing : OWN_HOLDINGS_VIEW_ID);
   };
 
   const loadCloudPortfolio = async () => {
@@ -691,11 +717,8 @@ export default function Home() {
           <ProfileSelector profiles={profiles} activeProfileId={activeProfile?.id || activeProfileId} onActiveChange={setActiveProfileId} onAdd={addProfile} onDelete={deleteProfile} onUpdate={updateProfile} />
           <SettingsPanel settings={settings} currency={currency} onChange={setSettings} onClear={clearStored} />
           <SharedHoldingsViewer
-            entries={sharedProfiles}
-            selectedId={selectedSharedProfileId}
             isLoading={isLoadingSharedProfiles}
             shareHoldings={shareHoldings}
-            onSelectedIdChange={setSelectedSharedProfileId}
             onShareHoldingsChange={setShareHoldings}
           />
         </>
@@ -731,8 +754,15 @@ export default function Home() {
               {[0, 1, 2].map((item) => <div className="h-24 animate-pulse bg-white" key={item} />)}
             </section>
           ) : null}
-          <PortfolioSummary holdings={holdings} settings={settings} currency={currency} />
-          <HoldingsTable holdings={holdings} settings={settings} currency={currency} onChange={updateHolding} />
+          <HoldingsViewSelector options={holdingsViewOptions} selectedId={selectedSharedProfileId} onChange={setSelectedSharedProfileId} />
+          <PortfolioSummary holdings={displayedHoldings} settings={displayedSettings} currency={displayedCurrency} />
+          <HoldingsTable
+            holdings={displayedHoldings}
+            settings={displayedSettings}
+            currency={displayedCurrency}
+            onChange={selectedSharedProfile ? undefined : updateHolding}
+            readOnly={Boolean(selectedSharedProfile)}
+          />
         </>
       ) : null}
     </main>
