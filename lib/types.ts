@@ -100,3 +100,11 @@ export type PortfolioProfile = {
   holdings: EnrichedHolding[];
   settings: FeeSettings;
 };
+
+export type SharedPortfolioProfile = {
+  id: string;
+  userId: string;
+  displayName: string;
+  profile: PortfolioProfile;
+  updatedAt?: string;
+};

@@ -75,7 +75,12 @@ The calculation tests cover cost basis, fee-aware P/L, ATR and percentage stop-l
 
 ## Supabase Auth And User Portfolios
 
-Run the SQL in `supabase/schema.sql` in your Supabase project SQL editor. It creates `public.user_portfolios` with Row Level Security so each signed-in user can only read, insert, update, or delete their own portfolio.
+Run the SQL in `supabase/schema.sql` in your Supabase project SQL editor. It creates `public.user_portfolios` with Row Level Security so each signed-in user can update only their own portfolio. Users can optionally enable sharing, which lets other signed-in users read that shared row through the app's shared holdings view.
+
+The schema includes:
+
+- `display_name`: friendly user name shown in shared portfolio selectors; emails are not shown in the shared view.
+- `share_holdings`: opt-in toggle for whether other signed-in users can read that user's US and Egypt portfolio profiles.
 
 Recommended Supabase Auth setup:
 

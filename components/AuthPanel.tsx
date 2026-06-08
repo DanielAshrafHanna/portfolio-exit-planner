@@ -12,6 +12,7 @@ type Props = {
   isLoading: boolean;
   syncStatus: CloudSyncStatus;
   syncMessage: string;
+  displayName: string;
   onSignIn: (email: string, password: string, mode: "signin" | "signup") => Promise<void>;
   onSignOut: () => Promise<void>;
 };
@@ -29,7 +30,7 @@ function syncClass(status: CloudSyncStatus) {
   return "border-ink/15 bg-paper text-ink/70";
 }
 
-export function AuthPanel({ user, isLoading, syncStatus, syncMessage, onSignIn, onSignOut }: Props) {
+export function AuthPanel({ user, isLoading, syncStatus, syncMessage, displayName, onSignIn, onSignOut }: Props) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
@@ -53,7 +54,7 @@ export function AuthPanel({ user, isLoading, syncStatus, syncMessage, onSignIn, 
           </div>
           {user ? (
             <div className="space-y-2">
-              <p className="text-sm text-ink/70">Signed in as <span className="font-semibold text-ink">{user.email}</span>. Cloud sync is private to this account.</p>
+              <p className="text-sm text-ink/70">Signed in as <span className="font-semibold text-ink">{displayName || "Friend"}</span>. Cloud sync is private to this account unless sharing is enabled.</p>
               <div className={`inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm ${syncClass(syncStatus)}`}>
                 {syncIcon(syncStatus)}
                 {syncMessage}
