@@ -6,37 +6,49 @@ import { SectionCard } from "@/components/ui/SectionCard";
 
 type Props = {
   profileBar: ReactNode;
+  compactProfileBar?: ReactNode;
   holdingsView: ReactNode;
   summary: ReactNode;
   quickAdd: ReactNode;
   emptyState?: ReactNode;
   holdingsTable: ReactNode;
+  holdingsCards?: ReactNode;
   editHoldings: ReactNode;
   analyzing?: ReactNode;
   hasHoldings: boolean;
   onAddFirstHolding?: () => void;
+  onFabClick?: () => void;
+  showFab?: boolean;
   readOnly?: boolean;
 };
 
 export function PortfolioWorkspace({
   profileBar,
+  compactProfileBar,
   holdingsView,
   summary,
   quickAdd,
   emptyState,
   holdingsTable,
+  holdingsCards,
   editHoldings,
   analyzing,
   hasHoldings,
   onAddFirstHolding,
+  onFabClick,
+  showFab = false,
   readOnly = false
 }: Props) {
   return (
     <div className="space-y-6">
-      <div className="sticky top-[88px] z-20 -mx-4 border-y border-ink/10 bg-white/95 px-4 py-3 backdrop-blur md:top-[92px]">
+      <div
+        className="sticky z-20 -mx-4 border-y border-ink/10 bg-white/95 px-4 py-3 backdrop-blur"
+        style={{ top: "var(--app-header-height, 88px)" }}
+      >
         <div className="space-y-3">
-          {profileBar}
-          {holdingsView}
+          {compactProfileBar ? <div className="md:hidden">{compactProfileBar}</div> : null}
+          <div className="hidden md:block">{profileBar}</div>
+          <div className="hidden md:block">{holdingsView}</div>
         </div>
       </div>
 
@@ -72,27 +84,24 @@ export function PortfolioWorkspace({
             ) : null}
           </div>
         ) : null}
-        <div className={!readOnly && hasHoldings ? "mt-4" : readOnly ? "" : "mt-0"}>
+        <div className={!readOnly && hasHoldings ? "mt-4 space-y-4" : readOnly ? "" : "mt-0"}>
+          {holdingsCards}
           {holdingsTable}
         </div>
         {analyzing}
         {!readOnly ? <div className="mt-6">{editHoldings}</div> : null}
       </SectionCard>
 
-      {!readOnly ? (
-        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-ink/10 bg-white/95 p-3 backdrop-blur md:hidden">
-          <button
-            className="btn-primary min-h-11 w-full"
-            type="button"
-            onClick={() => {
-              onAddFirstHolding?.();
-              document.getElementById("portfolio-workspace")?.scrollIntoView({ behavior: "smooth", block: "start" });
-            }}
-          >
-            <Plus className="h-4 w-4" aria-hidden />
-            Add holding
-          </button>
-        </div>
+      {showFab && !readOnly ? (
+        <button
+          className="fixed right-4 z-30 inline-flex h-14 w-14 items-center justify-center rounded-full bg-marine text-white shadow-soft-lg md:hidden"
+          style={{ bottom: "calc(4.5rem + env(safe-area-inset-bottom, 0px))" }}
+          type="button"
+          aria-label="Add holding"
+          onClick={onFabClick}
+        >
+          <Plus className="h-6 w-6" aria-hidden />
+        </button>
       ) : null}
     </div>
   );

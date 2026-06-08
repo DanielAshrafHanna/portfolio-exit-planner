@@ -2,6 +2,10 @@ import { defineConfig } from "vitest/config";
 import { fileURLToPath } from "url";
 
 export default defineConfig({
+  esbuild: {
+    jsx: "automatic",
+    jsxImportSource: "react"
+  },
   resolve: {
     alias: {
       "@": fileURLToPath(new URL(".", import.meta.url))
@@ -9,6 +13,6 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    include: ["lib/**/*.test.ts", "app/**/*.test.ts"]
+    include: ["lib/**/*.test.ts", "app/**/*.test.ts", "components/**/*.test.tsx"]
   }
 });

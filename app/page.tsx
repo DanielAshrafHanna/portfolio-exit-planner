@@ -6,14 +6,17 @@ import type { User } from "@supabase/supabase-js";
 import type { CloudSyncStatus } from "@/components/AuthPanel";
 import { AuthPanel } from "@/components/AuthPanel";
 import { DashboardShell } from "@/components/DashboardShell";
+import { HoldingsCardList } from "@/components/HoldingsCardList";
 import { HoldingsTable } from "@/components/HoldingsTable";
 import { HoldingsViewSelector, type HoldingsViewOption } from "@/components/HoldingsViewSelector";
+import { MobileContextBar } from "@/components/MobileContextBar";
+import { MobileTabShell } from "@/components/MobileTabShell";
 import { ImageImport } from "@/components/ImageImport";
 import { PortfolioInput } from "@/components/PortfolioInput";
 import { PortfolioWorkspace } from "@/components/PortfolioWorkspace";
 import { ProfileSelector } from "@/components/ProfileSelector";
 import { PortfolioSummary } from "@/components/PortfolioSummary";
-import { QuickAddHolding } from "@/components/QuickAddHolding";
+import { QuickAddHolding, type QuickAddHoldingHandle } from "@/components/QuickAddHolding";
 import { SettingsAccordion } from "@/components/SettingsAccordion";
 import { SettingsPanel } from "@/components/SettingsPanel";
 import { SharedHoldingsViewer } from "@/components/SharedHoldingsViewer";
@@ -273,6 +276,8 @@ export default function Home() {
   const [isLoadingSharedProfiles, setIsLoadingSharedProfiles] = useState(false);
   const [isHydrated, setIsHydrated] = useState(false);
   const [quickAddFocusToken, setQuickAddFocusToken] = useState(0);
+  const [quickAddExpanded, setQuickAddExpanded] = useState(false);
+  const quickAddRef = useRef<QuickAddHoldingHandle>(null);
   const latestSyncKey = useRef("");
   const userEditRevision = useRef(0);
   const profilesRef = useRef(profiles);
@@ -960,8 +965,129 @@ export default function Home() {
   ) : undefined;
   const viewingSharedPortfolio = Boolean(selectedSharedProfile);
 
+  const holdingsCards = (
+    <HoldingsCardList
+      holdings={displayedHoldings}
+      settings={displayedSettings}
+      currency={displayedCurrency}
+      onChange={viewingSharedPortfolio ? undefined : updateHolding}
+      readOnly={viewingSharedPortfolio}
+    />
+  );
+
+  const holdingsTable = (
+    <HoldingsTable
+      holdings={displayedHoldings}
+      settings={displayedSettings}
+      currency={displayedCurrency}
+      onChange={viewingSharedPortfolio ? undefined : updateHolding}
+      readOnly={viewingSharedPortfolio}
+    />
+  );
+
+  const quickAddForm = viewingSharedPortfolio ? null : (
+    <QuickAddHolding
+      ref={quickAddRef}
+      onAdd={handleQuickAdd}
+      focusToken={quickAddFocusToken}
+      disabled={isAuthLoading}
+      expanded={quickAddExpanded}
+      onExpandedChange={setQuickAddExpanded}
+    />
+  );
+
+  const mobileSettings = (
+    <div className="space-y-4 pb-2">
+      <AuthPanel
+        user={user}
+        isAdmin={isAdmin}
+        isLoading={isAuthLoading}
+        syncStatus={cloudSyncStatus}
+        syncMessage={cloudSyncMessage}
+        displayName={displayName}
+        variant="compact"
+        onDisplayNameChange={handleDisplayNameChange}
+        onSignIn={signIn}
+        onSignOut={signOut}
+      />
+      <SharedHoldingsViewer
+        isLoading={isLoadingSharedProfiles}
+        shareHoldings={shareHoldings}
+        syncHint={prefsSyncHint}
+        onShareHoldingsChange={handleShareHoldingsChange}
+      />
+      <SettingsPanel settings={settings} currency={currency} onChange={setSettings} onClear={clearStored} />
+      <ImageImport
+        onExtracted={(rows) => {
+          touchLocalPortfolioTimestamp();
+          setHoldings((existing) => mergeExtractedRows(existing, rows));
+          setWarnings((existing) => [...existing, `${rows.length} image row${rows.length === 1 ? "" : "s"} added or updated. Confirm every field before analysis.`]);
+        }}
+        setWarning={(warning) => setWarnings((existing) => [...existing, warning])}
+      />
+    </div>
+  );
+
+  const workspaceProps = {
+    hasHoldings: displayedHoldings.some((holding) => holding.symbol),
+    readOnly: viewingSharedPortfolio,
+    onAddFirstHolding: () => {
+      setQuickAddExpanded(true);
+      setQuickAddFocusToken((token) => token + 1);
+    },
+    onFabClick: () => {
+      setQuickAddExpanded(true);
+      quickAddRef.current?.expand();
+      quickAddRef.current?.focusSymbol();
+      document.getElementById("portfolio-workspace")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    },
+    showFab: !viewingSharedPortfolio,
+    compactProfileBar: (
+      <MobileContextBar
+        profiles={profiles}
+        activeProfileId={activeProfile?.id || activeProfileId}
+        onActiveChange={setActiveProfileId}
+        onAdd={addProfile}
+        onDelete={deleteProfile}
+        onUpdate={updateProfile}
+        holdingsViewOptions={holdingsViewOptions}
+        selectedViewId={selectedSharedProfileId}
+        onViewChange={setSelectedSharedProfileId}
+      />
+    ),
+    profileBar: (
+      <ProfileSelector
+        profiles={profiles}
+        activeProfileId={activeProfile?.id || activeProfileId}
+        onActiveChange={setActiveProfileId}
+        onAdd={addProfile}
+        onDelete={deleteProfile}
+        onUpdate={updateProfile}
+      />
+    ),
+    holdingsView: <HoldingsViewSelector options={holdingsViewOptions} selectedId={selectedSharedProfileId} onChange={setSelectedSharedProfileId} />,
+    summary: <PortfolioSummary holdings={displayedHoldings} settings={displayedSettings} currency={displayedCurrency} />,
+    quickAdd: quickAddForm,
+    holdingsCards,
+    holdingsTable,
+    analyzing: isAnalyzing ? (
+      <div className="mt-4 grid gap-3 sm:grid-cols-3">
+        {[0, 1, 2].map((item) => <div className="h-24 animate-pulse rounded-md bg-paper" key={item} />)}
+      </div>
+    ) : null,
+    editHoldings: viewingSharedPortfolio ? null : (
+      <PortfolioInput
+        holdings={inputRows}
+        onChange={setInputRows}
+        onAnalyze={analyze}
+        isAnalyzing={isAnalyzing}
+        isRefreshingMarket={isRefreshingMarket}
+      />
+    )
+  };
+
   return (
-    <DashboardShell syncBadge={syncBadge}>
+    <DashboardShell syncBadge={syncBadge} mobileTabsActive={Boolean(user)}>
       {!user ? (
         <AuthPanel
           user={user}
@@ -990,88 +1116,50 @@ export default function Home() {
       ) : null}
       {user ? (
         <>
-          <PortfolioWorkspace
-            hasHoldings={displayedHoldings.some((holding) => holding.symbol)}
-            readOnly={viewingSharedPortfolio}
-            onAddFirstHolding={() => setQuickAddFocusToken((token) => token + 1)}
-            profileBar={(
-              <ProfileSelector
-                profiles={profiles}
-                activeProfileId={activeProfile?.id || activeProfileId}
-                onActiveChange={setActiveProfileId}
-                onAdd={addProfile}
-                onDelete={deleteProfile}
-                onUpdate={updateProfile}
-              />
-            )}
-            holdingsView={<HoldingsViewSelector options={holdingsViewOptions} selectedId={selectedSharedProfileId} onChange={setSelectedSharedProfileId} />}
-            summary={<PortfolioSummary holdings={displayedHoldings} settings={displayedSettings} currency={displayedCurrency} />}
-            quickAdd={viewingSharedPortfolio ? null : (
-              <QuickAddHolding
-                onAdd={handleQuickAdd}
-                focusToken={quickAddFocusToken}
-                disabled={isAuthLoading}
-              />
-            )}
-            holdingsTable={(
-              <HoldingsTable
-                holdings={displayedHoldings}
-                settings={displayedSettings}
-                currency={displayedCurrency}
-                onChange={viewingSharedPortfolio ? undefined : updateHolding}
-                readOnly={viewingSharedPortfolio}
-              />
-            )}
-            analyzing={isAnalyzing ? (
-              <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                {[0, 1, 2].map((item) => <div className="h-24 animate-pulse rounded-md bg-paper" key={item} />)}
-              </div>
-            ) : null}
-            editHoldings={viewingSharedPortfolio ? null : (
-              <PortfolioInput
-                holdings={inputRows}
-                onChange={setInputRows}
-                onAnalyze={analyze}
-                isAnalyzing={isAnalyzing}
-                isRefreshingMarket={isRefreshingMarket}
-              />
-            )}
-          />
-          <SettingsAccordion
-            account={(
-              <AuthPanel
-                user={user}
-                isAdmin={isAdmin}
-                isLoading={isAuthLoading}
-                syncStatus={cloudSyncStatus}
-                syncMessage={cloudSyncMessage}
-                displayName={displayName}
-                variant="compact"
-                onDisplayNameChange={handleDisplayNameChange}
-                onSignIn={signIn}
-                onSignOut={signOut}
-              />
-            )}
-            sharing={(
-              <SharedHoldingsViewer
-                isLoading={isLoadingSharedProfiles}
-                shareHoldings={shareHoldings}
-                syncHint={prefsSyncHint}
-                onShareHoldingsChange={handleShareHoldingsChange}
-              />
-            )}
-            fees={<SettingsPanel settings={settings} currency={currency} onChange={setSettings} onClear={clearStored} />}
-            importTools={(
-              <ImageImport
-                onExtracted={(rows) => {
-                  touchLocalPortfolioTimestamp();
-                  setHoldings((existing) => mergeExtractedRows(existing, rows));
-                  setWarnings((existing) => [...existing, `${rows.length} image row${rows.length === 1 ? "" : "s"} added or updated. Confirm every field before analysis.`]);
-                }}
-                setWarning={(warning) => setWarnings((existing) => [...existing, warning])}
-              />
-            )}
-          />
+          <div className="md:hidden">
+            <MobileTabShell
+              portfolio={<PortfolioWorkspace {...workspaceProps} />}
+              settings={mobileSettings}
+            />
+          </div>
+          <div className="hidden space-y-6 md:block">
+            <PortfolioWorkspace {...workspaceProps} />
+            <SettingsAccordion
+              account={(
+                <AuthPanel
+                  user={user}
+                  isAdmin={isAdmin}
+                  isLoading={isAuthLoading}
+                  syncStatus={cloudSyncStatus}
+                  syncMessage={cloudSyncMessage}
+                  displayName={displayName}
+                  variant="compact"
+                  onDisplayNameChange={handleDisplayNameChange}
+                  onSignIn={signIn}
+                  onSignOut={signOut}
+                />
+              )}
+              sharing={(
+                <SharedHoldingsViewer
+                  isLoading={isLoadingSharedProfiles}
+                  shareHoldings={shareHoldings}
+                  syncHint={prefsSyncHint}
+                  onShareHoldingsChange={handleShareHoldingsChange}
+                />
+              )}
+              fees={<SettingsPanel settings={settings} currency={currency} onChange={setSettings} onClear={clearStored} />}
+              importTools={(
+                <ImageImport
+                  onExtracted={(rows) => {
+                    touchLocalPortfolioTimestamp();
+                    setHoldings((existing) => mergeExtractedRows(existing, rows));
+                    setWarnings((existing) => [...existing, `${rows.length} image row${rows.length === 1 ? "" : "s"} added or updated. Confirm every field before analysis.`]);
+                  }}
+                  setWarning={(warning) => setWarnings((existing) => [...existing, warning])}
+                />
+              )}
+            />
+          </div>
         </>
       ) : null}
     </DashboardShell>
