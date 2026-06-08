@@ -44,7 +44,9 @@ export function SharedHoldingsViewer({
             <p className="text-xs text-ink/55">
               When enabled, signed-in users can see your US and Egypt profiles by this friendly name. Your email is not shown here.
             </p>
-            {isLoading ? <p className="text-xs text-ink/55">Refreshing shared profile list...</p> : null}
+            <p className={`min-h-4 text-xs text-ink/55 ${isLoading ? "" : "invisible"}`} aria-hidden={!isLoading}>
+              Refreshing shared profile list...
+            </p>
           </div>
         </div>
       </div>
