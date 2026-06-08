@@ -24,6 +24,7 @@ const STORAGE_KEY = "portfolio-exit-planner:v1";
 const SETTINGS_KEY = "portfolio-exit-planner:settings:v1";
 const PROFILES_KEY = "portfolio-exit-planner:profiles:v1";
 const ACTIVE_PROFILE_KEY = "portfolio-exit-planner:active-profile:v1";
+const LOCAL_UPDATED_AT_KEY = "portfolio-exit-planner:local-updated-at:v1";
 const EMPTY_HOLDINGS: EnrichedHolding[] = [];
 const ADMIN_EMAIL = "danielhanna0001@gmail.com";
 const OWN_HOLDINGS_VIEW_ID = "mine";
@@ -193,6 +194,48 @@ function sharedUserViewId(entry: SharedPortfolioProfile) {
   return `shared:${entry.userId || entry.displayName}`;
 }
 
+function holdingSymbols(profiles: PortfolioProfile[]) {
+  return profiles.flatMap((profile) => profile.holdings.map((holding) => holding.symbol.trim().toUpperCase()).filter(Boolean));
+}
+
+function localHasHoldingsNotInCloud(local: PortfolioProfile[], cloud: PortfolioProfile[]) {
+  const cloudSymbolSet = new Set(holdingSymbols(cloud));
+  return holdingSymbols(local).some((symbol) => !cloudSymbolSet.has(symbol));
+}
+
+function profilesSyncKey(profiles: PortfolioProfile[], activeProfileId: string, displayName: string, shareHoldings: boolean) {
+  return JSON.stringify({
+    activeProfileId,
+    displayName: normalizeDisplayName(displayName),
+    shareHoldings: Boolean(shareHoldings),
+    profiles: profiles.map((profile) => ({
+      id: profile.id,
+      name: profile.name,
+      region: profile.region,
+      currency: profile.currency,
+      settings: profile.settings,
+      holdings: profile.holdings.map((holding) => ({
+        id: holding.id,
+        symbol: holding.symbol,
+        name: holding.name,
+        shares: holding.shares,
+        averageCost: holding.averageCost,
+        totalCost: holding.totalCost,
+        brokerCurrentValue: holding.brokerCurrentValue,
+        notes: holding.notes,
+        selectedStopStyle: holding.selectedStopStyle,
+        selectedTargetPrice: holding.selectedTargetPrice,
+        targetPriceEdited: holding.targetPriceEdited,
+        sellPercent: holding.sellPercent
+      }))
+    }))
+  });
+}
+
+function buildCloudPayload(profiles: PortfolioProfile[], activeProfileId: string, displayName: string, shareHoldings: boolean) {
+  return JSON.stringify({ profiles, activeProfileId, displayName, shareHoldings });
+}
+
 export default function Home() {
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
   const [profiles, setProfiles] = useState<PortfolioProfile[]>(() => defaultProfiles());
@@ -211,12 +254,26 @@ export default function Home() {
   const [selectedSharedProfileId, setSelectedSharedProfileId] = useState(OWN_HOLDINGS_VIEW_ID);
   const [isLoadingSharedProfiles, setIsLoadingSharedProfiles] = useState(false);
   const [isHydrated, setIsHydrated] = useState(false);
-  const latestSyncPayload = useRef("");
-  const pendingSyncPayload = useRef("");
+  const latestSyncKey = useRef("");
+  const userEditRevision = useRef(0);
+  const profilesRef = useRef(profiles);
+  const displayNameRef = useRef(displayName);
+  const shareHoldingsRef = useRef(shareHoldings);
   const marketRequestId = useRef(0);
   const analysisRequestId = useRef(0);
   const activeProfileIdRef = useRef(activeProfileId);
   const holdingInputKeyRef = useRef("");
+
+  profilesRef.current = profiles;
+  displayNameRef.current = displayName;
+  shareHoldingsRef.current = shareHoldings;
+
+  const touchLocalPortfolioTimestamp = () => {
+    userEditRevision.current += 1;
+    if (typeof window !== "undefined") {
+      localStorage.setItem(LOCAL_UPDATED_AT_KEY, new Date().toISOString());
+    }
+  };
 
   useEffect(() => {
     const restored = loadPortfolioState({
@@ -254,9 +311,13 @@ export default function Home() {
     return () => listener.subscription.unsubscribe();
   }, [supabase]);
 
+  const currentProfilesSyncKey = useMemo(
+    () => profilesSyncKey(profiles, activeProfileId, displayName, shareHoldings),
+    [profiles, activeProfileId, displayName, shareHoldings]
+  );
+
   useEffect(() => {
-    latestSyncPayload.current = "";
-    pendingSyncPayload.current = "";
+    latestSyncKey.current = "";
     if (!user) {
       setCloudLoadedUserId(null);
       setCloudSyncStatus("signed-out");
@@ -350,12 +411,14 @@ export default function Home() {
   };
 
   const setSettings = (nextSettings: FeeSettings) => {
+    touchLocalPortfolioTimestamp();
     updateActiveProfile((profile) => ({ ...profile, settings: nextSettings }));
   };
 
   const inputRows = useMemo(() => holdings.map(toHoldingInput), [holdings]);
 
   const setInputRows = (rows: HoldingInput[]) => {
+    touchLocalPortfolioTimestamp();
     setHoldings(rows.map((row) => {
       const existing = holdings.find((holding) => holding.id === row.id);
       const symbolUnchanged = sameSymbol(existing?.symbol, row.symbol);
@@ -378,6 +441,7 @@ export default function Home() {
   };
 
   const updateHolding = (next: EnrichedHolding) => {
+    touchLocalPortfolioTimestamp();
     setHoldings((items) => items.map((item) => item.id === next.id ? next : item));
   };
 
@@ -496,6 +560,7 @@ export default function Home() {
     localStorage.removeItem(SETTINGS_KEY);
     localStorage.removeItem(PROFILES_KEY);
     localStorage.removeItem(ACTIVE_PROFILE_KEY);
+    localStorage.removeItem(LOCAL_UPDATED_AT_KEY);
     const nextProfiles = defaultProfiles();
     setProfiles(nextProfiles);
     setActiveProfileId(nextProfiles[0].id);
@@ -604,6 +669,9 @@ export default function Home() {
       setCloudSyncMessage(`Cloud save failed: ${error.message}`);
       return false;
     }
+    if (typeof window !== "undefined") {
+      localStorage.setItem(LOCAL_UPDATED_AT_KEY, new Date().toISOString());
+    }
     setCloudSyncStatus("saved");
     setCloudSyncMessage(`Saved to cloud at ${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}.`);
     void loadSharedProfiles();
@@ -645,14 +713,15 @@ export default function Home() {
 
   const loadCloudPortfolio = async () => {
     if (!supabase || !user || cloudLoadedUserId === user.id) return;
+    const revisionAtLoadStart = userEditRevision.current;
     setIsAuthLoading(true);
     setCloudSyncStatus("loading");
     setCloudSyncMessage("Loading cloud portfolio...");
-    const initialResult = await supabase.from("user_portfolios").select("holdings, settings, display_name, share_holdings").eq("user_id", user.id).maybeSingle();
+    const initialResult = await supabase.from("user_portfolios").select("holdings, settings, display_name, share_holdings, updated_at").eq("user_id", user.id).maybeSingle();
     let data = initialResult.data as CloudPortfolioRow | null;
     let error = initialResult.error;
     if (isMissingSharedColumnsError(error)) {
-      const fallback = await supabase.from("user_portfolios").select("holdings, settings").eq("user_id", user.id).maybeSingle();
+      const fallback = await supabase.from("user_portfolios").select("holdings, settings, updated_at").eq("user_id", user.id).maybeSingle();
       data = fallback.data as CloudPortfolioRow | null;
       error = fallback.error;
       setWarnings((existing) => [...existing, "Shared holdings need the updated Supabase SQL/schema cache. Cloud sync will keep working privately for now."]);
@@ -677,19 +746,57 @@ export default function Home() {
     const cloudSettings: CloudSettings = row.settings && typeof row.settings === "object"
       ? data.settings as CloudSettings
       : {};
+    const loadedProfiles = coerceProfiles(row.holdings, DEFAULT_SETTINGS);
+    const resolvedProfiles = loadedProfiles.length
+      ? loadedProfiles
+      : migrateSinglePortfolio(coerceHoldings(data.holdings), { ...DEFAULT_SETTINGS, ...cloudSettings });
+    const resolvedActiveProfileId = loadedProfiles.length
+      ? (loadedProfiles.some((profile) => profile.id === cloudSettings?.activeProfileId) ? cloudSettings.activeProfileId! : loadedProfiles[0].id)
+      : resolvedProfiles[0].id;
+    const localUpdatedAt = localStorage.getItem(LOCAL_UPDATED_AT_KEY);
+    const cloudUpdatedAt = row.updated_at || undefined;
+    const localIsNewer = Boolean(localUpdatedAt && cloudUpdatedAt && new Date(localUpdatedAt) > new Date(cloudUpdatedAt));
+    const userEditedDuringLoad = revisionAtLoadStart !== userEditRevision.current;
+    const localHasUnsavedHoldings = localHasHoldingsNotInCloud(profilesRef.current, resolvedProfiles);
+    const keepLocalPortfolio = userEditedDuringLoad || localIsNewer || localHasUnsavedHoldings;
+
+    if (keepLocalPortfolio) {
+      setCloudLoadedUserId(user.id);
+      setCloudSyncStatus("saving");
+      setCloudSyncMessage(userEditedDuringLoad ? "Keeping your recent edits and syncing to cloud." : "Keeping newer local portfolio and syncing to cloud.");
+      const payload = buildCloudPayload(
+        profilesRef.current,
+        activeProfileIdRef.current,
+        displayNameRef.current,
+        shareHoldingsRef.current
+      );
+      const syncKey = profilesSyncKey(
+        profilesRef.current,
+        activeProfileIdRef.current,
+        displayNameRef.current,
+        shareHoldingsRef.current
+      );
+      void saveCloudPortfolio(payload).then((saved) => {
+        if (saved) latestSyncKey.current = syncKey;
+      });
+      void loadSharedProfiles();
+      return;
+    }
+
     setDisplayName(normalizeDisplayName(row.display_name || cloudSettings.displayName || friendlyNameForUser(user)));
     setShareHoldings(Boolean(row.share_holdings ?? cloudSettings.shareHoldings));
-    const loadedProfiles = coerceProfiles(row.holdings, DEFAULT_SETTINGS);
-    if (loadedProfiles.length) {
-      setProfiles(loadedProfiles);
-      setActiveProfileId(loadedProfiles.some((profile) => profile.id === cloudSettings?.activeProfileId) ? cloudSettings.activeProfileId! : loadedProfiles[0].id);
-    } else {
-      const legacyHoldings = coerceHoldings(data.holdings);
-      const migratedProfiles = migrateSinglePortfolio(legacyHoldings, { ...DEFAULT_SETTINGS, ...cloudSettings });
-      setProfiles(migratedProfiles);
-      setActiveProfileId(migratedProfiles[0].id);
-    }
+    setProfiles(resolvedProfiles);
+    setActiveProfileId(resolvedActiveProfileId);
     setCloudLoadedUserId(user.id);
+    latestSyncKey.current = profilesSyncKey(
+      resolvedProfiles,
+      resolvedActiveProfileId,
+      normalizeDisplayName(row.display_name || cloudSettings.displayName || friendlyNameForUser(user)),
+      Boolean(row.share_holdings ?? cloudSettings.shareHoldings)
+    );
+    if (cloudUpdatedAt && typeof window !== "undefined") {
+      localStorage.setItem(LOCAL_UPDATED_AT_KEY, cloudUpdatedAt);
+    }
     setCloudSyncStatus("saved");
     setCloudSyncMessage("Cloud portfolio loaded. Changes save automatically.");
     void loadSharedProfiles();
@@ -704,22 +811,30 @@ export default function Home() {
 
   useEffect(() => {
     if (!supabase || !user || !isHydrated || cloudLoadedUserId !== user.id) return;
-    const payload = JSON.stringify({ profiles, activeProfileId, displayName, shareHoldings });
-    if (payload === latestSyncPayload.current) return;
-    pendingSyncPayload.current = payload;
+    if (currentProfilesSyncKey === latestSyncKey.current) return;
     const timeout = window.setTimeout(() => {
+      const payload = buildCloudPayload(
+        profilesRef.current,
+        activeProfileIdRef.current,
+        displayNameRef.current,
+        shareHoldingsRef.current
+      );
+      const syncKey = profilesSyncKey(
+        profilesRef.current,
+        activeProfileIdRef.current,
+        displayNameRef.current,
+        shareHoldingsRef.current
+      );
       void saveCloudPortfolio(payload).then((saved) => {
-        if (saved && pendingSyncPayload.current === payload) {
-          latestSyncPayload.current = payload;
-        }
+        if (saved) latestSyncKey.current = syncKey;
       });
     }, 500);
     return () => window.clearTimeout(timeout);
-    // saveCloudPortfolio consumes the serialized payload captured for this debounce tick.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [supabase, user, isHydrated, cloudLoadedUserId, profiles, activeProfileId, displayName, shareHoldings]);
+  }, [supabase, user, isHydrated, cloudLoadedUserId, currentProfilesSyncKey]);
 
   const addProfile = () => {
+    touchLocalPortfolioTimestamp();
     const id = crypto.randomUUID();
     const nextProfile: PortfolioProfile = {
       id,
@@ -734,6 +849,7 @@ export default function Home() {
   };
 
   const deleteProfile = (id: string) => {
+    touchLocalPortfolioTimestamp();
     setProfiles((items) => {
       if (items.length <= 1) return items;
       const nextProfiles = items.filter((profile) => profile.id !== id);
@@ -743,7 +859,18 @@ export default function Home() {
   };
 
   const updateProfile = (nextProfile: PortfolioProfile) => {
+    touchLocalPortfolioTimestamp();
     setProfiles((items) => items.map((profile) => profile.id === nextProfile.id ? nextProfile : profile));
+  };
+
+  const handleDisplayNameChange = (nextDisplayName: string) => {
+    touchLocalPortfolioTimestamp();
+    setDisplayName(nextDisplayName);
+  };
+
+  const handleShareHoldingsChange = (nextShareHoldings: boolean) => {
+    touchLocalPortfolioTimestamp();
+    setShareHoldings(nextShareHoldings);
   };
 
   return (
@@ -761,7 +888,7 @@ export default function Home() {
         syncStatus={cloudSyncStatus}
         syncMessage={cloudSyncMessage}
         displayName={displayName}
-        onDisplayNameChange={setDisplayName}
+        onDisplayNameChange={handleDisplayNameChange}
         onSignIn={signIn}
         onSignOut={signOut}
       />
@@ -771,7 +898,7 @@ export default function Home() {
           <SharedHoldingsViewer
             isLoading={isLoadingSharedProfiles}
             shareHoldings={shareHoldings}
-            onShareHoldingsChange={setShareHoldings}
+            onShareHoldingsChange={handleShareHoldingsChange}
           />
         </>
       ) : (
@@ -795,6 +922,7 @@ export default function Home() {
         <>
           <ImageImport
             onExtracted={(rows) => {
+              touchLocalPortfolioTimestamp();
               setHoldings((existing) => mergeExtractedRows(existing, rows));
               setWarnings((existing) => [...existing, `${rows.length} image row${rows.length === 1 ? "" : "s"} added or updated. Confirm every field before analysis.`]);
             }}
