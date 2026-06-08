@@ -35,7 +35,7 @@ export function ProfileSelector({ profiles, activeProfileId, onActiveChange, onA
           <div className="grid gap-3 md:grid-cols-[minmax(180px,260px)_minmax(180px,1fr)_180px]">
             <label className="text-xs font-medium text-ink/70">
               Active profile
-              <select className="mt-1 w-full rounded-md border border-ink/15 px-3 py-2 text-sm" value={activeProfile.id} onChange={(event) => onActiveChange(event.target.value)}>
+              <select className="mt-1 min-h-11 w-full rounded-md border border-ink/15 px-3 py-2 text-base sm:text-sm" value={activeProfile.id} onChange={(event) => onActiveChange(event.target.value)}>
                 {profiles.map((profile) => (
                   <option key={profile.id} value={profile.id}>{profile.name}</option>
                 ))}
@@ -43,23 +43,23 @@ export function ProfileSelector({ profiles, activeProfileId, onActiveChange, onA
             </label>
             <label className="text-xs font-medium text-ink/70">
               Profile name
-              <input className="mt-1 w-full rounded-md border border-ink/15 px-3 py-2 text-sm" value={activeProfile.name} onChange={(event) => onUpdate({ ...activeProfile, name: event.target.value })} />
+              <input className="mt-1 min-h-11 w-full rounded-md border border-ink/15 px-3 py-2 text-base sm:text-sm" value={activeProfile.name} onChange={(event) => onUpdate({ ...activeProfile, name: event.target.value })} />
             </label>
             <label className="text-xs font-medium text-ink/70">
               Market
-              <select className="mt-1 w-full rounded-md border border-ink/15 px-3 py-2 text-sm" value={activeProfile.region} onChange={(event) => updateRegion(event.target.value as MarketRegion)}>
+              <select className="mt-1 min-h-11 w-full rounded-md border border-ink/15 px-3 py-2 text-base sm:text-sm" value={activeProfile.region} onChange={(event) => updateRegion(event.target.value as MarketRegion)}>
                 <option value="US">US market</option>
                 <option value="EG">Egypt market</option>
               </select>
             </label>
           </div>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <button className="inline-flex items-center justify-center gap-2 rounded-md border border-ink/15 px-3 py-2 text-sm font-semibold" type="button" onClick={onAdd}>
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+          <button className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-ink/15 px-3 py-2 text-sm font-semibold" type="button" onClick={onAdd}>
             <Plus className="h-4 w-4" aria-hidden />
             New profile
           </button>
-          <button className="inline-flex items-center justify-center gap-2 rounded-md border border-coral px-3 py-2 text-sm font-semibold text-coral disabled:opacity-50" type="button" disabled={profiles.length <= 1} onClick={() => onDelete(activeProfile.id)}>
+          <button className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-coral px-3 py-2 text-sm font-semibold text-coral disabled:opacity-50" type="button" disabled={profiles.length <= 1} onClick={() => onDelete(activeProfile.id)}>
             <Trash2 className="h-4 w-4" aria-hidden />
             Delete profile
           </button>

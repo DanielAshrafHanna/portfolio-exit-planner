@@ -61,12 +61,12 @@ export function AuthPanel({ user, isLoading, syncStatus, syncMessage, onSignIn, 
             </div>
           ) : (
             <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto_auto]">
-              <input className="rounded-md border border-ink/15 px-3 py-2 text-sm" type="email" placeholder="Email" value={email} onChange={(event) => setEmail(event.target.value)} />
-              <input className="rounded-md border border-ink/15 px-3 py-2 text-sm" type="password" placeholder="Password" value={password} onChange={(event) => setPassword(event.target.value)} />
-              <button className="inline-flex items-center justify-center gap-2 rounded-md bg-marine px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" type="button" disabled={isLoading || !email || !password} onClick={() => onSignIn(email, password, "signin")}>
+              <input className="min-h-11 rounded-md border border-ink/15 px-3 py-2 text-base sm:text-sm" type="email" placeholder="Email" value={email} onChange={(event) => setEmail(event.target.value)} />
+              <input className="min-h-11 rounded-md border border-ink/15 px-3 py-2 text-base sm:text-sm" type="password" placeholder="Password" value={password} onChange={(event) => setPassword(event.target.value)} />
+              <button className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-marine px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" type="button" disabled={isLoading || !email || !password} onClick={() => onSignIn(email, password, "signin")}>
                 <LogIn className="h-4 w-4" aria-hidden /> Sign in
               </button>
-              <button className="rounded-md border border-ink/15 px-4 py-2 text-sm font-semibold disabled:opacity-50" type="button" disabled={isLoading || !email || !password} onClick={() => onSignIn(email, password, "signup")}>
+              <button className="min-h-11 rounded-md border border-ink/15 px-4 py-2 text-sm font-semibold disabled:opacity-50" type="button" disabled={isLoading || !email || !password} onClick={() => onSignIn(email, password, "signup")}>
                 Create account
               </button>
             </div>
@@ -74,7 +74,7 @@ export function AuthPanel({ user, isLoading, syncStatus, syncMessage, onSignIn, 
         </div>
         {user ? (
           <div className="flex flex-wrap gap-2">
-            <button className="inline-flex items-center gap-2 rounded-md border border-coral px-4 py-2 text-sm font-semibold text-coral" type="button" onClick={onSignOut}>
+            <button className="inline-flex min-h-11 items-center gap-2 rounded-md border border-coral px-4 py-2 text-sm font-semibold text-coral" type="button" onClick={onSignOut}>
               <LogOut className="h-4 w-4" aria-hidden /> Sign out
             </button>
           </div>

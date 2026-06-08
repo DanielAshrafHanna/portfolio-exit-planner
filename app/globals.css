@@ -17,6 +17,15 @@ button, input, textarea, select {
   font: inherit;
 }
 
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+label:has(input:focus-visible) {
+  outline: 2px solid #145c72;
+  outline-offset: 2px;
+}
+
 .table-scroll {
   scrollbar-width: thin;
 }

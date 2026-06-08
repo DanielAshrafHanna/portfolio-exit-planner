@@ -78,7 +78,7 @@ export function ImageImport({ onExtracted, setWarning }: Props) {
             <p className="text-sm text-ink/65">Choose a portfolio screenshot, then explicitly click extraction through the file picker. Extracted rows remain editable before analysis.</p>
           </div>
         </div>
-        <label className={`inline-flex items-center justify-center gap-2 rounded-md bg-ink px-4 py-2 text-sm font-semibold text-white ${isExtracting ? "cursor-wait opacity-70" : "cursor-pointer"}`}>
+        <label className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-ink px-4 py-2 text-sm font-semibold text-white ${isExtracting ? "cursor-wait opacity-70" : "cursor-pointer"}`}>
           <Wand2 className="h-4 w-4" aria-hidden /> {isExtracting ? "Extracting..." : "Extract from image"}
           <input className="sr-only" type="file" accept="image/*" disabled={isExtracting} onChange={(event) => extract(event.target.files?.[0])} />
         </label>
