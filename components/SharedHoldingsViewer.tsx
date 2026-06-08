@@ -11,10 +11,8 @@ type Props = {
   selectedId: string;
   isLoading: boolean;
   shareHoldings: boolean;
-  displayName: string;
   onSelectedIdChange: (id: string) => void;
   onShareHoldingsChange: (value: boolean) => void;
-  onDisplayNameChange: (value: string) => void;
 };
 
 function regionLabel(region: string) {
@@ -33,10 +31,8 @@ export function SharedHoldingsViewer({
   selectedId,
   isLoading,
   shareHoldings,
-  displayName,
   onSelectedIdChange,
-  onShareHoldingsChange,
-  onDisplayNameChange
+  onShareHoldingsChange
 }: Props) {
   const selected = useMemo(() => entries.find((entry) => entry.id === selectedId) || entries[0], [entries, selectedId]);
   const holdings = selected?.profile.holdings || [];
@@ -57,16 +53,6 @@ export function SharedHoldingsViewer({
           </div>
 
           <div className="grid gap-3 rounded-md border border-ink/10 bg-paper p-3">
-            <label className="text-xs font-semibold text-ink/65">
-              Your friendly name
-              <input
-                className="mt-1 min-h-11 w-full rounded-md border border-ink/15 bg-white px-3 py-2 text-base sm:text-sm"
-                maxLength={60}
-                placeholder="Example: Daniel"
-                value={displayName}
-                onChange={(event) => onDisplayNameChange(event.target.value)}
-              />
-            </label>
             <label className="flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-md border border-ink/10 bg-white px-3 py-2 text-sm font-semibold">
               <span className="inline-flex items-center gap-2">
                 {shareHoldings ? <Eye className="h-4 w-4 text-marine" aria-hidden /> : <EyeOff className="h-4 w-4 text-ink/45" aria-hidden />}
