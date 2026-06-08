@@ -4,11 +4,12 @@ import { useEffect, useRef, type ReactNode } from "react";
 
 type Props = {
   syncBadge?: ReactNode;
+  headerActions?: ReactNode;
   children: ReactNode;
   mobileTabsActive?: boolean;
 };
 
-export function DashboardShell({ syncBadge, children, mobileTabsActive = false }: Props) {
+export function DashboardShell({ syncBadge, headerActions, children, mobileTabsActive = false }: Props) {
   const headerRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
@@ -37,7 +38,10 @@ export function DashboardShell({ syncBadge, children, mobileTabsActive = false }
             <h1 className="truncate text-base font-bold text-ink md:text-4xl">Portfolio Exit Planner</h1>
             <p className="mt-1 hidden max-w-2xl text-sm text-ink/65 md:block md:text-base">Pick a profile, add holdings, and review exit scenarios for US and Egypt markets.</p>
           </div>
-          {syncBadge ? <div className="shrink-0">{syncBadge}</div> : null}
+          <div className="flex shrink-0 items-center gap-2">
+            {headerActions}
+            {syncBadge}
+          </div>
         </div>
       </header>
       <div
