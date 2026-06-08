@@ -22,7 +22,7 @@ async function readJson(response: Response) {
   return await response.json() as Record<string, unknown>;
 }
 
-function mockSupabaseClient(rows: unknown[], email = "chantel@example.com") {
+function mockSupabaseClient(rows: unknown[], email = "chantal@example.com") {
   const limit = vi.fn().mockResolvedValue({ data: rows, error: null });
   const ilike = vi.fn(() => ({ limit }));
   const select = vi.fn(() => ({ ilike }));
@@ -73,7 +73,7 @@ describe("/api/resolveLoginIdentifier", () => {
   it("returns a safe error when display name login is not configured", async () => {
     delete process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-    const response = await POST(jsonRequest({ identifier: "Chantel" }));
+    const response = await POST(jsonRequest({ identifier: "Chantal" }));
     const body = await readJson(response);
 
     expect(response.status).toBe(503);
@@ -85,7 +85,7 @@ describe("/api/resolveLoginIdentifier", () => {
     process.env.SUPABASE_SERVICE_ROLE_KEY = "service-key";
     mockSupabaseClient([]);
 
-    const response = await POST(jsonRequest({ identifier: "Chantel" }));
+    const response = await POST(jsonRequest({ identifier: "Chantal" }));
     const body = await readJson(response);
 
     expect(response.status).toBe(404);
@@ -96,11 +96,11 @@ describe("/api/resolveLoginIdentifier", () => {
     process.env.NEXT_PUBLIC_SUPABASE_URL = "https://example.supabase.co";
     process.env.SUPABASE_SERVICE_ROLE_KEY = "service-key";
     mockSupabaseClient([
-      { user_id: "user-1", display_name: "Chantel" },
-      { user_id: "user-2", display_name: "chantel" }
+      { user_id: "user-1", display_name: "Chantal" },
+      { user_id: "user-2", display_name: "chantal" }
     ]);
 
-    const response = await POST(jsonRequest({ identifier: "Chantel" }));
+    const response = await POST(jsonRequest({ identifier: "Chantal" }));
     const body = await readJson(response);
 
     expect(response.status).toBe(409);
@@ -110,14 +110,14 @@ describe("/api/resolveLoginIdentifier", () => {
   it("resolves an exact display name to the user's email", async () => {
     process.env.NEXT_PUBLIC_SUPABASE_URL = "https://example.supabase.co";
     process.env.SUPABASE_SERVICE_ROLE_KEY = "service-key";
-    const { getUserById, ilike } = mockSupabaseClient([{ user_id: "user-1", display_name: "Chantel" }]);
+    const { getUserById, ilike } = mockSupabaseClient([{ user_id: "user-1", display_name: "Chantal" }]);
 
-    const response = await POST(jsonRequest({ identifier: "chantel" }));
+    const response = await POST(jsonRequest({ identifier: "chantal" }));
     const body = await readJson(response);
 
     expect(response.status).toBe(200);
-    expect(body.email).toBe("chantel@example.com");
-    expect(ilike).toHaveBeenCalledWith("display_name", "chantel");
+    expect(body.email).toBe("chantal@example.com");
+    expect(ilike).toHaveBeenCalledWith("display_name", "chantal");
     expect(getUserById).toHaveBeenCalledWith("user-1");
   });
 });
