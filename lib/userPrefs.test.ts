@@ -11,13 +11,15 @@ describe("userPrefs", () => {
     expect(parseStoredUserPrefs("{bad")).toBeNull();
   });
 
-  it("keeps local prefs when local storage is newer than cloud", () => {
+  it("keeps local display name when local storage is newer than cloud", () => {
     const resolved = resolveUserPrefsForSync({
       local: { displayName: "Chantel", shareHoldings: true },
       cloudDisplayName: "Friend",
       cloudShareHoldings: false,
-      localIsNewer: true
+      localIsNewer: true,
+      shareHoldingsTouched: true
     });
+    expect(resolved.displayName).toBe("Chantel");
     expect(resolved.shareHoldings).toBe(true);
   });
 
@@ -29,5 +31,27 @@ describe("userPrefs", () => {
       localIsNewer: false
     });
     expect(resolved).toEqual({ displayName: "Chantel", shareHoldings: true });
+  });
+
+  it("keeps cloud sharing when local portfolio is newer but sharing was not toggled locally", () => {
+    const resolved = resolveUserPrefsForSync({
+      local: { displayName: "Chantel", shareHoldings: false },
+      cloudDisplayName: "Chantel",
+      cloudShareHoldings: true,
+      localIsNewer: true,
+      shareHoldingsTouched: false
+    });
+    expect(resolved).toEqual({ displayName: "Chantel", shareHoldings: true });
+  });
+
+  it("honors a local sharing toggle when local portfolio is newer", () => {
+    const resolved = resolveUserPrefsForSync({
+      local: { displayName: "Chantel", shareHoldings: false },
+      cloudDisplayName: "Chantel",
+      cloudShareHoldings: true,
+      localIsNewer: true,
+      shareHoldingsTouched: true
+    });
+    expect(resolved).toEqual({ displayName: "Chantel", shareHoldings: false });
   });
 });

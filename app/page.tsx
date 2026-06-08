@@ -285,6 +285,8 @@ export default function Home() {
   const profilesRef = useRef(profiles);
   const displayNameRef = useRef(displayName);
   const shareHoldingsRef = useRef(shareHoldings);
+  const cloudShareHoldingsRef = useRef(false);
+  const shareHoldingsTouchedRef = useRef(false);
   const marketRequestId = useRef(0);
   const analysisRequestId = useRef(0);
   const activeProfileIdRef = useRef(activeProfileId);
@@ -293,6 +295,16 @@ export default function Home() {
   profilesRef.current = profiles;
   displayNameRef.current = displayName;
   shareHoldingsRef.current = shareHoldings;
+
+  const shareHoldingsForCloudSave = () => (
+    shareHoldingsTouchedRef.current ? shareHoldingsRef.current : cloudShareHoldingsRef.current
+  );
+
+  const applyShareHoldingsFromCloud = (nextShareHoldings: boolean) => {
+    cloudShareHoldingsRef.current = nextShareHoldings;
+    shareHoldingsTouchedRef.current = false;
+    setShareHoldings(nextShareHoldings);
+  };
 
   const touchLocalPortfolioTimestamp = () => {
     userEditRevision.current += 1;
@@ -359,6 +371,8 @@ export default function Home() {
     if (!user) {
       hydratedPrefsUserId.current = null;
       latestSyncKey.current = "";
+      cloudShareHoldingsRef.current = false;
+      shareHoldingsTouchedRef.current = false;
       setCloudLoadedUserId(null);
       setCloudSyncStatus("signed-out");
       setCloudSyncMessage("Sign in to enable cloud sync.");
@@ -725,6 +739,7 @@ export default function Home() {
     if (typeof window !== "undefined") {
       localStorage.setItem(LOCAL_UPDATED_AT_KEY, new Date().toISOString());
     }
+    cloudShareHoldingsRef.current = cloudSettings.shareHoldings;
     setCloudSyncStatus("saved");
     setCloudSyncMessage(`Saved to cloud at ${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}.`);
     void loadSharedProfiles();
@@ -789,7 +804,7 @@ export default function Home() {
     if (!data) {
       setCloudLoadedUserId(user.id);
       setDisplayName(friendlyNameForUser(user));
-      setShareHoldings(false);
+      applyShareHoldingsFromCloud(false);
       setCloudSyncStatus("saved");
       setCloudSyncMessage("No cloud portfolio yet. Local changes will save automatically.");
       void loadSharedProfiles();
@@ -821,10 +836,12 @@ export default function Home() {
         },
         cloudDisplayName: row.display_name ?? cloudSettings.displayName,
         cloudShareHoldings: row.share_holdings ?? cloudSettings.shareHoldings,
-        localIsNewer
+        localIsNewer,
+        shareHoldingsTouched: shareHoldingsTouchedRef.current
       });
       setDisplayName(resolvedPrefs.displayName);
-      setShareHoldings(resolvedPrefs.shareHoldings);
+      cloudShareHoldingsRef.current = resolvedPrefs.shareHoldings;
+      if (!shareHoldingsTouchedRef.current) setShareHoldings(resolvedPrefs.shareHoldings);
       setCloudLoadedUserId(user.id);
       setCloudSyncStatus("saving");
       setCloudSyncMessage(userEditedDuringLoad ? "Keeping your recent edits and syncing to cloud." : "Keeping newer local portfolio and syncing to cloud.");
@@ -848,7 +865,7 @@ export default function Home() {
     }
 
     setDisplayName(normalizeDisplayName(row.display_name || cloudSettings.displayName || friendlyNameForUser(user)));
-    setShareHoldings(Boolean(row.share_holdings ?? cloudSettings.shareHoldings));
+    applyShareHoldingsFromCloud(Boolean(row.share_holdings ?? cloudSettings.shareHoldings));
     setProfiles(resolvedProfiles);
     setActiveProfileId(resolvedActiveProfileId);
     setCloudLoadedUserId(user.id);
@@ -877,17 +894,18 @@ export default function Home() {
     if (!supabase || !user || !isHydrated || cloudLoadedUserId !== user.id) return;
     if (currentProfilesSyncKey === latestSyncKey.current) return;
     const timeout = window.setTimeout(() => {
+      const resolvedShareHoldings = shareHoldingsForCloudSave();
       const payload = buildCloudPayload(
         profilesRef.current,
         activeProfileIdRef.current,
         displayNameRef.current,
-        shareHoldingsRef.current
+        resolvedShareHoldings
       );
       const syncKey = profilesSyncKey(
         profilesRef.current,
         activeProfileIdRef.current,
         displayNameRef.current,
-        shareHoldingsRef.current
+        resolvedShareHoldings
       );
       void saveCloudPortfolio(payload).then((saved) => {
         if (saved) latestSyncKey.current = syncKey;
@@ -930,7 +948,7 @@ export default function Home() {
   const pushCloudPortfolioNow = async (override?: { displayName?: string; shareHoldings?: boolean }) => {
     if (!supabase || !user || cloudLoadedUserId !== user.id) return;
     const resolvedDisplayName = normalizeDisplayName(override?.displayName ?? displayNameRef.current);
-    const resolvedShareHoldings = override?.shareHoldings ?? shareHoldingsRef.current;
+    const resolvedShareHoldings = override?.shareHoldings ?? shareHoldingsForCloudSave();
     const payload = buildCloudPayload(
       profilesRef.current,
       activeProfileIdRef.current,
@@ -961,6 +979,8 @@ export default function Home() {
   };
 
   const handleShareHoldingsChange = (nextShareHoldings: boolean) => {
+    shareHoldingsTouchedRef.current = true;
+    cloudShareHoldingsRef.current = nextShareHoldings;
     setShareHoldings(nextShareHoldings);
     void pushCloudPortfolioNow({ shareHoldings: nextShareHoldings });
   };
