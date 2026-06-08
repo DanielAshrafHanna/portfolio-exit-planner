@@ -19,6 +19,7 @@ Add these secrets in your deployment environment:
 
 - `NEXT_PUBLIC_SUPABASE_URL`: Supabase project URL for user accounts and cloud portfolios.
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`: Supabase anon/publishable key. Safe for browser use when RLS is enabled.
+- `SUPABASE_SERVICE_ROLE_KEY`: server-only Supabase service role key used by `/api/resolveLoginIdentifier` to let users sign in with a previously saved display name. Never expose this as a `NEXT_PUBLIC_` variable.
 - `OPENAI_API_KEY`: enables AI decision analysis and image OCR.
 - `OPENAI_MODEL`: optional, defaults to `gpt-4o-mini`.
 - `OPENAI_VISION_MODEL`: optional, defaults to `gpt-4o-mini`.
@@ -84,6 +85,8 @@ The schema includes:
 - `display_name`: friendly user name shown in shared portfolio selectors; emails are not shown in the shared view.
 - `share_holdings`: opt-in toggle for whether other signed-in users can read that user's US and Egypt portfolio profiles.
 - Admin metadata for `danielhanna0001@gmail.com`, used by the UI to show setup logs/error details only to the admin.
+
+Users can sign in with either email or an exact display name after their cloud portfolio has saved at least once. If multiple users have the same display name, the app asks for email instead of guessing.
 
 If Supabase says a new column is missing from the schema cache, rerun the full SQL file. The final `notify pgrst, 'reload schema';` line asks Supabase/PostgREST to refresh the API schema cache.
 

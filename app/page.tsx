@@ -129,6 +129,11 @@ type AnalysisApiResponse = {
   error?: string;
 };
 
+type LoginIdentifierResponse = {
+  email?: string;
+  error?: string;
+};
+
 type AnalyzedHoldingResponse = AnalyzedHoldingResult & { warning?: string };
 
 type CloudPortfolioPayload = {
@@ -207,6 +212,7 @@ export default function Home() {
   const [isLoadingSharedProfiles, setIsLoadingSharedProfiles] = useState(false);
   const [isHydrated, setIsHydrated] = useState(false);
   const latestSyncPayload = useRef("");
+  const pendingSyncPayload = useRef("");
   const marketRequestId = useRef(0);
   const analysisRequestId = useRef(0);
   const activeProfileIdRef = useRef(activeProfileId);
@@ -250,6 +256,7 @@ export default function Home() {
 
   useEffect(() => {
     latestSyncPayload.current = "";
+    pendingSyncPayload.current = "";
     if (!user) {
       setCloudLoadedUserId(null);
       setCloudSyncStatus("signed-out");
@@ -495,15 +502,38 @@ export default function Home() {
     setWarnings(["Stored portfolio data cleared."]);
   };
 
-  const signIn = async (email: string, password: string, mode: "signin" | "signup", signupDisplayName?: string) => {
+  const signIn = async (identifier: string, password: string, mode: "signin" | "signup", signupDisplayName?: string) => {
     if (!supabase) return;
     setIsAuthLoading(true);
     const emailRedirectTo = typeof window !== "undefined" ? window.location.origin : "https://portfolio-exit-planner.vercel.app";
-    const normalizedSignupName = normalizeDisplayName(signupDisplayName || friendlyNameFromEmail(email));
+    const trimmedIdentifier = identifier.trim();
+    if (mode === "signup" && !trimmedIdentifier.includes("@")) {
+      setIsAuthLoading(false);
+      setWarnings((existing) => [...existing, "Create an account with an email address. You can choose a display name separately."]);
+      return;
+    }
+    let authEmail = trimmedIdentifier;
+    if (mode === "signin" && !trimmedIdentifier.includes("@")) {
+      try {
+        const response = await fetch("/api/resolveLoginIdentifier", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ identifier: trimmedIdentifier })
+        });
+        const data = await readJsonResponse<LoginIdentifierResponse>(response);
+        if (!response.ok || !data.email) throw new Error(data.error || "Display name login failed");
+        authEmail = data.email;
+      } catch (error) {
+        setIsAuthLoading(false);
+        setWarnings((existing) => [...existing, error instanceof Error ? error.message : "Display name login failed"]);
+        return;
+      }
+    }
+    const normalizedSignupName = normalizeDisplayName(signupDisplayName || friendlyNameFromEmail(authEmail));
     const result = mode === "signin"
-      ? await supabase.auth.signInWithPassword({ email, password })
+      ? await supabase.auth.signInWithPassword({ email: authEmail, password })
       : await supabase.auth.signUp({
-        email,
+        email: authEmail,
         password,
         options: {
           emailRedirectTo,
@@ -676,10 +706,14 @@ export default function Home() {
     if (!supabase || !user || !isHydrated || cloudLoadedUserId !== user.id) return;
     const payload = JSON.stringify({ profiles, activeProfileId, displayName, shareHoldings });
     if (payload === latestSyncPayload.current) return;
-    latestSyncPayload.current = payload;
+    pendingSyncPayload.current = payload;
     const timeout = window.setTimeout(() => {
-      void saveCloudPortfolio(payload);
-    }, 1200);
+      void saveCloudPortfolio(payload).then((saved) => {
+        if (saved && pendingSyncPayload.current === payload) {
+          latestSyncPayload.current = payload;
+        }
+      });
+    }, 500);
     return () => window.clearTimeout(timeout);
     // saveCloudPortfolio consumes the serialized payload captured for this debounce tick.
     // eslint-disable-next-line react-hooks/exhaustive-deps

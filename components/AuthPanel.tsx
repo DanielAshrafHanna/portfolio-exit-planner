@@ -87,7 +87,7 @@ export function AuthPanel({ user, isAdmin, isLoading, syncStatus, syncMessage, d
           ) : (
             <div className="grid gap-3 sm:grid-cols-[1fr_1fr_1fr_auto_auto]">
               <input className="min-h-11 rounded-md border border-ink/15 px-3 py-2 text-base sm:text-sm" type="text" placeholder="Display name" value={signupDisplayName} onChange={(event) => setSignupDisplayName(event.target.value)} />
-              <input className="min-h-11 rounded-md border border-ink/15 px-3 py-2 text-base sm:text-sm" type="email" placeholder="Email" value={email} onChange={(event) => setEmail(event.target.value)} />
+              <input className="min-h-11 rounded-md border border-ink/15 px-3 py-2 text-base sm:text-sm" type="text" placeholder="Email or display name" value={email} onChange={(event) => setEmail(event.target.value)} />
               <input className="min-h-11 rounded-md border border-ink/15 px-3 py-2 text-base sm:text-sm" type="password" placeholder="Password" value={password} onChange={(event) => setPassword(event.target.value)} />
               <button className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-marine px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" type="button" disabled={isLoading || !email || !password} onClick={() => onSignIn(email, password, "signin")}>
                 <LogIn className="h-4 w-4" aria-hidden /> Sign in
