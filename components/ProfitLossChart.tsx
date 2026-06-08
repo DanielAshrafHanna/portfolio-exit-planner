@@ -28,9 +28,9 @@ export function ProfitLossChart({ holding, targetPrice, settings, currency }: Pr
   const stopPrice = calculateStopLosses(holding, holding.quote)[holding.selectedStopStyle].price;
 
   return (
-    <div className="h-64 w-full">
+    <div className="h-64 min-w-0 overflow-hidden w-full">
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={data} margin={{ top: 10, right: 20, bottom: 10, left: 0 }}>
+        <LineChart data={data} margin={{ top: 10, right: 12, bottom: 10, left: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#d8ded5" />
           <XAxis dataKey="price" tickFormatter={(value) => formatMoney(Number(value), currency)} />
           <YAxis tickFormatter={(value) => formatMoney(Number(value), currency)} />

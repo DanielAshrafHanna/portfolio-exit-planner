@@ -39,7 +39,7 @@ export function StopLossSelector({ stops, selected, currency, onChange }: Props)
       <div className="grid gap-2 sm:grid-cols-3">
         {(["tight", "balanced", "loose"] as StopStyle[]).map((style) => (
           <button
-            className={`rounded-md border p-3 text-left text-sm ${selected === style ? "border-marine bg-mint" : "border-ink/10 bg-white"}`}
+            className={`min-h-32 rounded-md border p-3 text-left text-sm ${selected === style ? "border-marine bg-mint" : "border-ink/10 bg-white"}`}
             key={style}
             onClick={() => onChange(style)}
             type="button"

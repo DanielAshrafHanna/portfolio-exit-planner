@@ -23,6 +23,30 @@ const emptyHolding = (): HoldingInput => ({
   notes: ""
 });
 
+type FieldProps = {
+  label: string;
+  value: string | number;
+  onChange: (value: string) => void;
+  type?: "text" | "number";
+  inputMode?: "decimal" | "text";
+  className?: string;
+};
+
+function MobileField({ label, value, onChange, type = "text", inputMode, className = "" }: FieldProps) {
+  return (
+    <label className={`block text-xs font-semibold text-ink/65 ${className}`}>
+      {label}
+      <input
+        className="mt-1 min-h-11 w-full rounded-md border border-ink/15 bg-white px-3 py-2 text-base text-ink outline-none focus:border-marine focus:ring-2 focus:ring-marine/20"
+        inputMode={inputMode}
+        type={type}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      />
+    </label>
+  );
+}
+
 export function PortfolioInput({ holdings, onChange, onAnalyze, isAnalyzing, isRefreshingMarket }: Props) {
   const update = (id: string, key: keyof HoldingInput, value: string) => {
     onChange(holdings.map((holding) => {
@@ -78,28 +102,57 @@ export function PortfolioInput({ holdings, onChange, onAnalyze, isAnalyzing, isR
 
   return (
     <section className="mx-auto max-w-7xl px-4 py-6">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+      <div className="mb-4 grid gap-3 md:flex md:items-center md:justify-between">
         <div>
           <h2 className="text-lg font-semibold">Portfolio input</h2>
           {isRefreshingMarket ? <p className="text-sm text-ink/55">Refreshing prices...</p> : null}
         </div>
-        <div className="flex flex-wrap gap-2">
-          <button className="inline-flex items-center gap-2 rounded-md bg-marine px-3 py-2 text-sm font-semibold text-white" type="button" onClick={() => onChange([...holdings, emptyHolding()])}>
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+          <button className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-marine px-3 py-2 text-sm font-semibold text-white" type="button" onClick={() => onChange([...holdings, emptyHolding()])}>
             <Plus className="h-4 w-4" aria-hidden /> Add row
           </button>
-          <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-ink/15 px-3 py-2 text-sm font-semibold">
+          <label className="inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-md border border-ink/15 bg-white px-3 py-2 text-sm font-semibold">
             <FileUp className="h-4 w-4" aria-hidden /> Import CSV
             <input className="sr-only" type="file" accept=".csv" onChange={(event) => importCsv(event.target.files?.[0])} />
           </label>
-          <button className="inline-flex items-center gap-2 rounded-md border border-ink/15 px-3 py-2 text-sm font-semibold" type="button" onClick={exportCsv}>
+          <button className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-ink/15 bg-white px-3 py-2 text-sm font-semibold" type="button" onClick={exportCsv}>
             <Download className="h-4 w-4" aria-hidden /> Export CSV
           </button>
-          <button className="inline-flex items-center gap-2 rounded-md bg-coral px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" type="button" onClick={onAnalyze} disabled={isAnalyzing || holdings.every((h) => !h.symbol)}>
+          <button className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-coral px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" type="button" onClick={onAnalyze} disabled={isAnalyzing || holdings.every((h) => !h.symbol)}>
             <Sparkles className="h-4 w-4" aria-hidden /> {isAnalyzing ? "Analyzing..." : "Run analysis"}
           </button>
         </div>
       </div>
-      <div className="table-scroll overflow-x-auto border-y border-ink/10 bg-white">
+      <div className="grid gap-3 md:hidden">
+        {holdings.map((holding, index) => (
+          <article className="border border-ink/10 bg-white p-4 shadow-soft" key={holding.id}>
+            <div className="mb-3 flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-xs font-semibold uppercase text-marine">Holding {index + 1}</p>
+                <h3 className="truncate text-lg font-bold">{holding.symbol || "New holding"}</h3>
+                {holding.name ? <p className="break-words text-sm text-ink/60">{holding.name}</p> : null}
+              </div>
+              <button className="min-h-11 shrink-0 rounded-md border border-coral px-3 py-2 text-sm font-semibold text-coral" type="button" onClick={() => onChange(holdings.filter((item) => item.id !== holding.id))}>
+                Delete
+              </button>
+            </div>
+            <div className="grid gap-3">
+              <MobileField label="Symbol" value={holding.symbol} onChange={(value) => update(holding.id, "symbol", value.toUpperCase())} />
+              <MobileField label="Company/ETF name" value={holding.name} onChange={(value) => update(holding.id, "name", value)} />
+              <div className="grid grid-cols-2 gap-3">
+                <MobileField label="Shares" type="number" inputMode="decimal" value={holding.shares} onChange={(value) => update(holding.id, "shares", value)} />
+                <MobileField label="Avg cost" type="number" inputMode="decimal" value={holding.averageCost} onChange={(value) => update(holding.id, "averageCost", value)} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <MobileField label="Total cost" type="number" inputMode="decimal" value={holding.totalCost} onChange={(value) => update(holding.id, "totalCost", value)} />
+                <MobileField label="Broker value" type="number" inputMode="decimal" value={holding.brokerCurrentValue ?? ""} onChange={(value) => update(holding.id, "brokerCurrentValue", value)} />
+              </div>
+              <MobileField label="Notes" value={holding.notes ?? ""} onChange={(value) => update(holding.id, "notes", value)} />
+            </div>
+          </article>
+        ))}
+      </div>
+      <div className="table-scroll hidden overflow-x-auto border-y border-ink/10 bg-white md:block">
         <table className="min-w-[1050px] w-full text-left text-sm">
           <thead className="bg-mint/60 text-xs uppercase text-ink/65">
             <tr>

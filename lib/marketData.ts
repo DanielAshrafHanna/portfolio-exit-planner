@@ -12,6 +12,10 @@ type ProviderResult<T> = {
   warning?: string;
 };
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 function providerName() {
   return process.env.MARKET_DATA_PROVIDER || "mock";
 }
@@ -175,10 +179,6 @@ function parseFormattedNumber(value: string) {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value && typeof value === "object" && !Array.isArray(value));
-}
-
 function numberValue(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
@@ -208,13 +208,13 @@ export async function getNews(symbol: string, region: MarketRegion = "US"): Prom
     const cutoff = Date.now() - 14 * 24 * 60 * 60 * 1000;
     const feed = isRecord(data) && Array.isArray(data.feed) ? data.feed : [];
     const items = feed.map((item) => {
-      const row = isRecord(item) ? item : {};
+      const newsItem = isRecord(item) ? item : {};
       return {
-        headline: String(row.title || ""),
-        source: String(row.source || ""),
-        date: String(row.time_published || ""),
-        url: String(row.url || ""),
-        summary: String(row.summary || "No summary provided.")
+        headline: typeof newsItem.title === "string" ? newsItem.title : "",
+        source: typeof newsItem.source === "string" ? newsItem.source : "",
+        date: typeof newsItem.time_published === "string" ? newsItem.time_published : "",
+        url: typeof newsItem.url === "string" ? newsItem.url : "",
+        summary: typeof newsItem.summary === "string" && newsItem.summary ? newsItem.summary : "No summary provided."
       };
     }).filter((item: NewsItem) => {
       const parsed = Date.parse(item.date);
