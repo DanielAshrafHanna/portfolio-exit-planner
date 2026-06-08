@@ -1,16 +1,20 @@
 "use client";
 
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, CheckCircle2, Cloud, CloudOff, Loader2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import type { CloudSyncStatus } from "@/components/AuthPanel";
 import { AuthPanel } from "@/components/AuthPanel";
+import { DashboardShell } from "@/components/DashboardShell";
 import { HoldingsTable } from "@/components/HoldingsTable";
 import { HoldingsViewSelector, type HoldingsViewOption } from "@/components/HoldingsViewSelector";
 import { ImageImport } from "@/components/ImageImport";
 import { PortfolioInput } from "@/components/PortfolioInput";
+import { PortfolioWorkspace } from "@/components/PortfolioWorkspace";
 import { ProfileSelector } from "@/components/ProfileSelector";
 import { PortfolioSummary } from "@/components/PortfolioSummary";
+import { QuickAddHolding } from "@/components/QuickAddHolding";
+import { SettingsAccordion } from "@/components/SettingsAccordion";
 import { SettingsPanel } from "@/components/SettingsPanel";
 import { SharedHoldingsViewer } from "@/components/SharedHoldingsViewer";
 import { defaultSellTargets } from "@/lib/calculations";
@@ -18,6 +22,7 @@ import { applyAnalyzedHoldingResults, type AnalyzedHoldingResult } from "@/lib/h
 import { DEFAULT_SETTINGS, defaultProfiles, displayMarketSymbol } from "@/lib/profileUtils";
 import { coerceHoldings, coerceProfiles, enrichHolding, loadPortfolioState, migrateSinglePortfolio } from "@/lib/storageMigration";
 import { createSupabaseBrowserClient } from "@/lib/supabaseClient";
+import { parseStoredUserPrefs, serializeUserPrefs, resolveUserPrefsForSync, USER_PREFS_KEY } from "@/lib/userPrefs";
 import type { AiAnalysis, EnrichedHolding, FeeSettings, HoldingInput, MarketQuote, NewsItem, PortfolioProfile, SharedPortfolioProfile } from "@/lib/types";
 
 const STORAGE_KEY = "portfolio-exit-planner:v1";
@@ -236,6 +241,19 @@ function buildCloudPayload(profiles: PortfolioProfile[], activeProfileId: string
   return JSON.stringify({ profiles, activeProfileId, displayName, shareHoldings });
 }
 
+function syncBadgeClass(status: CloudSyncStatus) {
+  if (status === "error") return "border-coral/35 bg-coral/10 text-coral";
+  if (status === "saved") return "border-marine/20 bg-mint text-marine";
+  return "border-ink/15 bg-paper text-ink/70";
+}
+
+function syncBadgeIcon(status: CloudSyncStatus) {
+  if (status === "loading" || status === "saving") return <Loader2 className="h-4 w-4 animate-spin" aria-hidden />;
+  if (status === "saved") return <CheckCircle2 className="h-4 w-4" aria-hidden />;
+  if (status === "error") return <CloudOff className="h-4 w-4" aria-hidden />;
+  return <Cloud className="h-4 w-4" aria-hidden />;
+}
+
 export default function Home() {
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
   const [profiles, setProfiles] = useState<PortfolioProfile[]>(() => defaultProfiles());
@@ -254,6 +272,7 @@ export default function Home() {
   const [selectedSharedProfileId, setSelectedSharedProfileId] = useState(OWN_HOLDINGS_VIEW_ID);
   const [isLoadingSharedProfiles, setIsLoadingSharedProfiles] = useState(false);
   const [isHydrated, setIsHydrated] = useState(false);
+  const [quickAddFocusToken, setQuickAddFocusToken] = useState(0);
   const latestSyncKey = useRef("");
   const userEditRevision = useRef(0);
   const profilesRef = useRef(profiles);
@@ -284,6 +303,11 @@ export default function Home() {
     });
     setProfiles(restored.profiles);
     setActiveProfileId(restored.activeProfileId);
+    const storedPrefs = parseStoredUserPrefs(localStorage.getItem(USER_PREFS_KEY));
+    if (storedPrefs) {
+      setDisplayName(storedPrefs.displayName);
+      setShareHoldings(storedPrefs.shareHoldings);
+    }
     if (restored.warnings.length) setWarnings((existing) => [...existing, ...restored.warnings]);
     setIsHydrated(true);
   }, []);
@@ -292,6 +316,14 @@ export default function Home() {
     if (!isHydrated) return;
     localStorage.setItem(PROFILES_KEY, JSON.stringify(profiles));
   }, [profiles, isHydrated]);
+
+  useEffect(() => {
+    if (!isHydrated) return;
+    localStorage.setItem(USER_PREFS_KEY, serializeUserPrefs({
+      displayName: normalizeDisplayName(displayName),
+      shareHoldings
+    }));
+  }, [displayName, shareHoldings, isHydrated]);
 
   useEffect(() => {
     if (!isHydrated) return;
@@ -322,11 +354,16 @@ export default function Home() {
       setCloudLoadedUserId(null);
       setCloudSyncStatus("signed-out");
       setCloudSyncMessage("Sign in to enable cloud sync.");
-      setShareHoldings(false);
       setSharedProfiles([]);
       setSelectedSharedProfileId(OWN_HOLDINGS_VIEW_ID);
     } else {
-      setDisplayName((existing) => existing === "Friend" ? friendlyNameForUser(user) : existing);
+      const storedPrefs = parseStoredUserPrefs(localStorage.getItem(USER_PREFS_KEY));
+      if (storedPrefs) {
+        setDisplayName(storedPrefs.displayName);
+        setShareHoldings(storedPrefs.shareHoldings);
+      } else {
+        setDisplayName((existing) => existing === "Friend" ? friendlyNameForUser(user) : existing);
+      }
     }
   }, [user]);
 
@@ -561,9 +598,12 @@ export default function Home() {
     localStorage.removeItem(PROFILES_KEY);
     localStorage.removeItem(ACTIVE_PROFILE_KEY);
     localStorage.removeItem(LOCAL_UPDATED_AT_KEY);
+    localStorage.removeItem(USER_PREFS_KEY);
     const nextProfiles = defaultProfiles();
     setProfiles(nextProfiles);
     setActiveProfileId(nextProfiles[0].id);
+    setDisplayName("Friend");
+    setShareHoldings(false);
     setWarnings(["Stored portfolio data cleared."]);
   };
 
@@ -761,20 +801,31 @@ export default function Home() {
     const keepLocalPortfolio = userEditedDuringLoad || localIsNewer || localHasUnsavedHoldings;
 
     if (keepLocalPortfolio) {
+      const resolvedPrefs = resolveUserPrefsForSync({
+        local: {
+          displayName: normalizeDisplayName(displayNameRef.current),
+          shareHoldings: shareHoldingsRef.current
+        },
+        cloudDisplayName: row.display_name ?? cloudSettings.displayName,
+        cloudShareHoldings: row.share_holdings ?? cloudSettings.shareHoldings,
+        localIsNewer
+      });
+      setDisplayName(resolvedPrefs.displayName);
+      setShareHoldings(resolvedPrefs.shareHoldings);
       setCloudLoadedUserId(user.id);
       setCloudSyncStatus("saving");
       setCloudSyncMessage(userEditedDuringLoad ? "Keeping your recent edits and syncing to cloud." : "Keeping newer local portfolio and syncing to cloud.");
       const payload = buildCloudPayload(
         profilesRef.current,
         activeProfileIdRef.current,
-        displayNameRef.current,
-        shareHoldingsRef.current
+        resolvedPrefs.displayName,
+        resolvedPrefs.shareHoldings
       );
       const syncKey = profilesSyncKey(
         profilesRef.current,
         activeProfileIdRef.current,
-        displayNameRef.current,
-        shareHoldingsRef.current
+        resolvedPrefs.displayName,
+        resolvedPrefs.shareHoldings
       );
       void saveCloudPortfolio(payload).then((saved) => {
         if (saved) latestSyncKey.current = syncKey;
@@ -863,89 +914,166 @@ export default function Home() {
     setProfiles((items) => items.map((profile) => profile.id === nextProfile.id ? nextProfile : profile));
   };
 
+  const pushCloudPortfolioNow = async (override?: { displayName?: string; shareHoldings?: boolean }) => {
+    if (!supabase || !user || cloudLoadedUserId !== user.id) return;
+    const resolvedDisplayName = normalizeDisplayName(override?.displayName ?? displayNameRef.current);
+    const resolvedShareHoldings = override?.shareHoldings ?? shareHoldingsRef.current;
+    const payload = buildCloudPayload(
+      profilesRef.current,
+      activeProfileIdRef.current,
+      resolvedDisplayName,
+      resolvedShareHoldings
+    );
+    const syncKey = profilesSyncKey(
+      profilesRef.current,
+      activeProfileIdRef.current,
+      resolvedDisplayName,
+      resolvedShareHoldings
+    );
+    const saved = await saveCloudPortfolio(payload);
+    if (saved) latestSyncKey.current = syncKey;
+  };
+
   const handleDisplayNameChange = (nextDisplayName: string) => {
-    touchLocalPortfolioTimestamp();
-    setDisplayName(nextDisplayName);
+    const normalized = normalizeDisplayName(nextDisplayName);
+    setDisplayName(normalized);
+    void pushCloudPortfolioNow({ displayName: normalized });
   };
 
   const handleShareHoldingsChange = (nextShareHoldings: boolean) => {
-    touchLocalPortfolioTimestamp();
     setShareHoldings(nextShareHoldings);
+    void pushCloudPortfolioNow({ shareHoldings: nextShareHoldings });
   };
 
+  const handleQuickAdd = (holding: HoldingInput) => {
+    touchLocalPortfolioTimestamp();
+    setInputRows([...inputRows, holding]);
+    setQuickAddFocusToken((token) => token + 1);
+  };
+
+  const prefsSyncHint = cloudSyncStatus === "saving" ? "Saving…" : cloudSyncStatus === "saved" ? "Saved" : undefined;
+  const syncBadge = user ? (
+    <div className={`inline-flex min-h-11 max-w-xs items-center gap-2 rounded-md border px-3 py-2 text-sm ${syncBadgeClass(cloudSyncStatus)}`} title={cloudSyncMessage}>
+      {syncBadgeIcon(cloudSyncStatus)}
+      <span className="truncate">{isAdmin ? cloudSyncMessage : cloudSyncStatus === "error" ? "Sync issue" : cloudSyncStatus === "saved" ? "Synced" : cloudSyncStatus === "saving" ? "Saving…" : cloudSyncStatus === "loading" ? "Loading…" : "Cloud sync"}</span>
+    </div>
+  ) : undefined;
+  const viewingSharedPortfolio = Boolean(selectedSharedProfile);
+
   return (
-    <main>
-      <header className="bg-white px-4 py-6">
-        <div className="mx-auto max-w-7xl">
-          <h1 className="max-w-3xl text-4xl font-bold tracking-normal text-ink md:text-5xl">Portfolio Exit Planner</h1>
-          <p className="mt-2 max-w-3xl text-base text-ink/70">Manage holdings, compare exits, and track US and Egyptian market positions.</p>
-        </div>
-      </header>
-      <AuthPanel
-        user={user}
-        isAdmin={isAdmin}
-        isLoading={isAuthLoading}
-        syncStatus={cloudSyncStatus}
-        syncMessage={cloudSyncMessage}
-        displayName={displayName}
-        onDisplayNameChange={handleDisplayNameChange}
-        onSignIn={signIn}
-        onSignOut={signOut}
-      />
-      {user ? (
-        <>
-          <SettingsPanel settings={settings} currency={currency} onChange={setSettings} onClear={clearStored} />
-          <SharedHoldingsViewer
-            isLoading={isLoadingSharedProfiles}
-            shareHoldings={shareHoldings}
-            onShareHoldingsChange={handleShareHoldingsChange}
-          />
-        </>
-      ) : (
-        <section className="mx-auto max-w-7xl px-4 py-8">
-          <div className="border border-ink/10 bg-white p-5 shadow-soft">
-            <h2 className="text-lg font-semibold">Sign in to view portfolios</h2>
-            <p className="mt-1 text-sm text-ink/65">Stock holdings, profiles, shared portfolios, and analysis tables are only visible after login.</p>
-          </div>
+    <DashboardShell syncBadge={syncBadge}>
+      {!user ? (
+        <AuthPanel
+          user={user}
+          isAdmin={isAdmin}
+          isLoading={isAuthLoading}
+          syncStatus={cloudSyncStatus}
+          syncMessage={cloudSyncMessage}
+          displayName={displayName}
+          onDisplayNameChange={handleDisplayNameChange}
+          onSignIn={signIn}
+          onSignOut={signOut}
+        />
+      ) : null}
+      {!user ? (
+        <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-soft">
+          <h2 className="text-lg font-semibold">Sign in to view portfolios</h2>
+          <p className="mt-1 text-sm text-ink/65">Stock holdings, profiles, shared portfolios, and analysis tables are only visible after login.</p>
         </section>
-      )}
+      ) : null}
       {visibleWarnings.length ? (
-        <section className="mx-auto max-w-7xl px-4 pt-5">
-          <div className="space-y-2 border border-amber/40 bg-amber/10 p-3 text-sm">
-            {visibleWarnings.map((warning) => (
-              <p className="flex gap-2" key={warning}><AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber" aria-hidden />{warning}</p>
-            ))}
-          </div>
-        </section>
+        <div className="space-y-2 rounded-md border border-amber/40 bg-amber/10 p-3 text-sm">
+          {visibleWarnings.map((warning) => (
+            <p className="flex gap-2" key={warning}><AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber" aria-hidden />{warning}</p>
+          ))}
+        </div>
       ) : null}
       {user ? (
         <>
-          <ImageImport
-            onExtracted={(rows) => {
-              touchLocalPortfolioTimestamp();
-              setHoldings((existing) => mergeExtractedRows(existing, rows));
-              setWarnings((existing) => [...existing, `${rows.length} image row${rows.length === 1 ? "" : "s"} added or updated. Confirm every field before analysis.`]);
-            }}
-            setWarning={(warning) => setWarnings((existing) => [...existing, warning])}
+          <PortfolioWorkspace
+            hasHoldings={displayedHoldings.some((holding) => holding.symbol)}
+            readOnly={viewingSharedPortfolio}
+            onAddFirstHolding={() => setQuickAddFocusToken((token) => token + 1)}
+            profileBar={(
+              <ProfileSelector
+                profiles={profiles}
+                activeProfileId={activeProfile?.id || activeProfileId}
+                onActiveChange={setActiveProfileId}
+                onAdd={addProfile}
+                onDelete={deleteProfile}
+                onUpdate={updateProfile}
+              />
+            )}
+            holdingsView={<HoldingsViewSelector options={holdingsViewOptions} selectedId={selectedSharedProfileId} onChange={setSelectedSharedProfileId} />}
+            summary={<PortfolioSummary holdings={displayedHoldings} settings={displayedSettings} currency={displayedCurrency} />}
+            quickAdd={viewingSharedPortfolio ? null : (
+              <QuickAddHolding
+                onAdd={handleQuickAdd}
+                focusToken={quickAddFocusToken}
+                disabled={isAuthLoading}
+              />
+            )}
+            holdingsTable={(
+              <HoldingsTable
+                holdings={displayedHoldings}
+                settings={displayedSettings}
+                currency={displayedCurrency}
+                onChange={viewingSharedPortfolio ? undefined : updateHolding}
+                readOnly={viewingSharedPortfolio}
+              />
+            )}
+            analyzing={isAnalyzing ? (
+              <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                {[0, 1, 2].map((item) => <div className="h-24 animate-pulse rounded-md bg-paper" key={item} />)}
+              </div>
+            ) : null}
+            editHoldings={viewingSharedPortfolio ? null : (
+              <PortfolioInput
+                holdings={inputRows}
+                onChange={setInputRows}
+                onAnalyze={analyze}
+                isAnalyzing={isAnalyzing}
+                isRefreshingMarket={isRefreshingMarket}
+              />
+            )}
           />
-          <PortfolioInput holdings={inputRows} onChange={setInputRows} onAnalyze={analyze} isAnalyzing={isAnalyzing} isRefreshingMarket={isRefreshingMarket} />
-          {isAnalyzing ? (
-            <section className="mx-auto grid max-w-7xl gap-3 px-4 pb-8 sm:grid-cols-3">
-              {[0, 1, 2].map((item) => <div className="h-24 animate-pulse bg-white" key={item} />)}
-            </section>
-          ) : null}
-          <ProfileSelector profiles={profiles} activeProfileId={activeProfile?.id || activeProfileId} onActiveChange={setActiveProfileId} onAdd={addProfile} onDelete={deleteProfile} onUpdate={updateProfile} />
-          <HoldingsViewSelector options={holdingsViewOptions} selectedId={selectedSharedProfileId} onChange={setSelectedSharedProfileId} />
-          <PortfolioSummary holdings={displayedHoldings} settings={displayedSettings} currency={displayedCurrency} />
-          <HoldingsTable
-            holdings={displayedHoldings}
-            settings={displayedSettings}
-            currency={displayedCurrency}
-            onChange={selectedSharedProfile ? undefined : updateHolding}
-            readOnly={Boolean(selectedSharedProfile)}
+          <SettingsAccordion
+            account={(
+              <AuthPanel
+                user={user}
+                isAdmin={isAdmin}
+                isLoading={isAuthLoading}
+                syncStatus={cloudSyncStatus}
+                syncMessage={cloudSyncMessage}
+                displayName={displayName}
+                variant="compact"
+                onDisplayNameChange={handleDisplayNameChange}
+                onSignIn={signIn}
+                onSignOut={signOut}
+              />
+            )}
+            sharing={(
+              <SharedHoldingsViewer
+                isLoading={isLoadingSharedProfiles}
+                shareHoldings={shareHoldings}
+                syncHint={prefsSyncHint}
+                onShareHoldingsChange={handleShareHoldingsChange}
+              />
+            )}
+            fees={<SettingsPanel settings={settings} currency={currency} onChange={setSettings} onClear={clearStored} />}
+            importTools={(
+              <ImageImport
+                onExtracted={(rows) => {
+                  touchLocalPortfolioTimestamp();
+                  setHoldings((existing) => mergeExtractedRows(existing, rows));
+                  setWarnings((existing) => [...existing, `${rows.length} image row${rows.length === 1 ? "" : "s"} added or updated. Confirm every field before analysis.`]);
+                }}
+                setWarning={(warning) => setWarnings((existing) => [...existing, warning])}
+              />
+            )}
           />
         </>
       ) : null}
-    </main>
+    </DashboardShell>
   );
 }
