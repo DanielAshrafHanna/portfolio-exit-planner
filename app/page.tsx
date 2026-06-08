@@ -140,7 +140,11 @@ async function readJsonResponse<T>(response: Response): Promise<T> {
 function friendlyNameForUser(user: User | null) {
   const metadataName = user?.user_metadata?.full_name || user?.user_metadata?.name;
   if (typeof metadataName === "string" && metadataName.trim()) return metadataName.trim();
-  const emailName = user?.email?.split("@")[0]?.replace(/[._-]+/g, " ").trim();
+  return friendlyNameFromEmail(user?.email);
+}
+
+function friendlyNameFromEmail(email?: string) {
+  const emailName = email?.split("@")[0]?.replace(/[._-]+/g, " ").trim();
   if (emailName) return emailName.replace(/\b\w/g, (letter) => letter.toUpperCase());
   return "Friend";
 }
@@ -419,19 +423,28 @@ export default function Home() {
     setWarnings(["Stored portfolio data cleared."]);
   };
 
-  const signIn = async (email: string, password: string, mode: "signin" | "signup") => {
+  const signIn = async (email: string, password: string, mode: "signin" | "signup", signupDisplayName?: string) => {
     if (!supabase) return;
     setIsAuthLoading(true);
     const emailRedirectTo = typeof window !== "undefined" ? window.location.origin : "https://portfolio-exit-planner.vercel.app";
+    const normalizedSignupName = normalizeDisplayName(signupDisplayName || friendlyNameFromEmail(email));
     const result = mode === "signin"
       ? await supabase.auth.signInWithPassword({ email, password })
-      : await supabase.auth.signUp({ email, password, options: { emailRedirectTo } });
+      : await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo,
+          data: { full_name: normalizedSignupName, name: normalizedSignupName }
+        }
+      });
     setIsAuthLoading(false);
     if (result.error) {
       setWarnings((existing) => [...existing, result.error.message]);
       return;
     }
     if (mode === "signup" && !result.data.session) {
+      setDisplayName(normalizedSignupName);
       setWarnings((existing) => [...existing, "Account created. Check your email to confirm before signing in."]);
     } else {
       setWarnings((existing) => [...existing, "Signed in. Cloud sync will load once and then save changes automatically."]);
@@ -641,6 +654,7 @@ export default function Home() {
         syncStatus={cloudSyncStatus}
         syncMessage={cloudSyncMessage}
         displayName={displayName}
+        onDisplayNameChange={setDisplayName}
         onSignIn={signIn}
         onSignOut={signOut}
       />
@@ -652,10 +666,8 @@ export default function Home() {
           selectedId={selectedSharedProfileId}
           isLoading={isLoadingSharedProfiles}
           shareHoldings={shareHoldings}
-          displayName={displayName}
           onSelectedIdChange={setSelectedSharedProfileId}
           onShareHoldingsChange={setShareHoldings}
-          onDisplayNameChange={setDisplayName}
         />
       ) : null}
       {warnings.length ? (

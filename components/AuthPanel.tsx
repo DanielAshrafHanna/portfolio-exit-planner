@@ -13,7 +13,8 @@ type Props = {
   syncStatus: CloudSyncStatus;
   syncMessage: string;
   displayName: string;
-  onSignIn: (email: string, password: string, mode: "signin" | "signup") => Promise<void>;
+  onDisplayNameChange: (value: string) => void;
+  onSignIn: (email: string, password: string, mode: "signin" | "signup", displayName?: string) => Promise<void>;
   onSignOut: () => Promise<void>;
 };
 
@@ -30,9 +31,10 @@ function syncClass(status: CloudSyncStatus) {
   return "border-ink/15 bg-paper text-ink/70";
 }
 
-export function AuthPanel({ user, isLoading, syncStatus, syncMessage, displayName, onSignIn, onSignOut }: Props) {
+export function AuthPanel({ user, isLoading, syncStatus, syncMessage, displayName, onDisplayNameChange, onSignIn, onSignOut }: Props) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [signupDisplayName, setSignupDisplayName] = useState("");
 
   if (!hasSupabaseConfig()) {
     return (
@@ -53,21 +55,31 @@ export function AuthPanel({ user, isLoading, syncStatus, syncMessage, displayNam
             Account dashboard
           </div>
           {user ? (
-            <div className="space-y-2">
-              <p className="text-sm text-ink/70">Signed in as <span className="font-semibold text-ink">{displayName || "Friend"}</span>. Cloud sync is private to this account unless sharing is enabled.</p>
+            <div className="grid gap-3 md:grid-cols-[minmax(220px,360px)_minmax(0,1fr)] md:items-end">
+              <label className="text-xs font-semibold text-ink/65">
+                Display name
+                <input
+                  className="mt-1 min-h-11 w-full rounded-md border border-ink/15 bg-white px-3 py-2 text-base sm:text-sm"
+                  maxLength={60}
+                  placeholder="Example: Daniel"
+                  value={displayName}
+                  onChange={(event) => onDisplayNameChange(event.target.value)}
+                />
+              </label>
               <div className={`inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm ${syncClass(syncStatus)}`}>
                 {syncIcon(syncStatus)}
                 {syncMessage}
               </div>
             </div>
           ) : (
-            <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto_auto]">
+            <div className="grid gap-3 sm:grid-cols-[1fr_1fr_1fr_auto_auto]">
+              <input className="min-h-11 rounded-md border border-ink/15 px-3 py-2 text-base sm:text-sm" type="text" placeholder="Display name" value={signupDisplayName} onChange={(event) => setSignupDisplayName(event.target.value)} />
               <input className="min-h-11 rounded-md border border-ink/15 px-3 py-2 text-base sm:text-sm" type="email" placeholder="Email" value={email} onChange={(event) => setEmail(event.target.value)} />
               <input className="min-h-11 rounded-md border border-ink/15 px-3 py-2 text-base sm:text-sm" type="password" placeholder="Password" value={password} onChange={(event) => setPassword(event.target.value)} />
               <button className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-marine px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" type="button" disabled={isLoading || !email || !password} onClick={() => onSignIn(email, password, "signin")}>
                 <LogIn className="h-4 w-4" aria-hidden /> Sign in
               </button>
-              <button className="min-h-11 rounded-md border border-ink/15 px-4 py-2 text-sm font-semibold disabled:opacity-50" type="button" disabled={isLoading || !email || !password} onClick={() => onSignIn(email, password, "signup")}>
+              <button className="min-h-11 rounded-md border border-ink/15 px-4 py-2 text-sm font-semibold disabled:opacity-50" type="button" disabled={isLoading || !email || !password} onClick={() => onSignIn(email, password, "signup", signupDisplayName)}>
                 Create account
               </button>
             </div>
