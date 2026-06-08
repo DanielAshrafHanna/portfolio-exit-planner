@@ -82,7 +82,7 @@ async function alphaQuote(symbol: string): Promise<MarketQuote> {
       volume: Number(dailyRow["6. volume"])
     };
   }).filter((row) => Number.isFinite(row.high) && Number.isFinite(row.low) && Number.isFinite(row.close));
-  if (!rows.length) throw new Error(`Invalid daily data for ${symbol}`);
+  if (!rows.length) throw new Error(`Daily price history is unavailable for ${symbol}`);
   const closes = rows.map((row) => row.close);
   return {
     symbol,
@@ -179,6 +179,14 @@ function parseFormattedNumber(value: string) {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
+function numberValue(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function nullableNumberArray(value: unknown): Array<number | null> {
+  return Array.isArray(value) ? value.map((item) => numberValue(item) ?? null) : [];
+}
+
 export async function getNews(symbol: string, region: MarketRegion = "US"): Promise<ProviderResult<NewsItem[]>> {
   const cleanSymbol = symbol.trim().toUpperCase();
   const marketSymbol = normalizeMarketSymbol(cleanSymbol, region);
@@ -229,43 +237,59 @@ async function getYahooQuote(symbol: string): Promise<MarketQuote | undefined> {
     const response = await fetch(url, { next: { revalidate: 300 } });
     if (!response.ok) return undefined;
     const data = await response.json();
-    const result = data.chart?.result?.[0];
-    const meta = result?.meta;
-    const quoteRows = result?.indicators?.quote?.[0];
-    if (!meta?.regularMarketPrice || !quoteRows?.close?.length) return undefined;
-
-    const rows = quoteRows.close.map((close: number | null, index: number) => ({
-      close,
-      high: quoteRows.high?.[index] ?? null,
-      low: quoteRows.low?.[index] ?? null,
-      volume: quoteRows.volume?.[index] ?? null
-    })).filter((row: { close: number | null; high: number | null; low: number | null }) => (
-      typeof row.close === "number" && typeof row.high === "number" && typeof row.low === "number"
-    )).reverse() as Array<{ close: number; high: number; low: number; volume: number | null }>;
-
-    const closes = rows.map((row) => row.close);
-    const currentPrice = Number(Number(meta.regularMarketPrice).toFixed(2));
-    const previousClose = Number(Number(meta.previousClose || meta.chartPreviousClose || closes[1] || currentPrice).toFixed(2));
-    const dailyChangePercent = previousClose > 0 ? Number((((currentPrice - previousClose) / previousClose) * 100).toFixed(2)) : 0;
-
-    return {
-      symbol,
-      currentPrice,
-      dailyChangePercent,
-      previousClose,
-      week52High: typeof meta.fiftyTwoWeekHigh === "number" ? Number(meta.fiftyTwoWeekHigh.toFixed(2)) : Math.round(Math.max(...closes.slice(0, 252)) * 100) / 100,
-      week52Low: typeof meta.fiftyTwoWeekLow === "number" ? Number(meta.fiftyTwoWeekLow.toFixed(2)) : Math.round(Math.min(...closes.slice(0, 252)) * 100) / 100,
-      volume: typeof meta.regularMarketVolume === "number" ? meta.regularMarketVolume : rows[0]?.volume ?? undefined,
-      ma20: movingAverage(closes, 20),
-      ma50: movingAverage(closes, 50),
-      ma200: movingAverage(closes, 200),
-      atr: calculateAtr(rows),
-      rsi: calculateRsi(closes),
-      provider: "yahoo_finance"
-    };
+    return parseYahooChartQuote(data, symbol);
   } catch {
     return undefined;
   }
+}
+
+export function parseYahooChartQuote(data: unknown, symbol: string): MarketQuote | undefined {
+  const chart = isRecord(data) ? data.chart : undefined;
+  const result = isRecord(chart) && Array.isArray(chart.result) ? chart.result[0] : undefined;
+  const meta = isRecord(result) && isRecord(result.meta) ? result.meta : undefined;
+  const indicators = isRecord(result) && isRecord(result.indicators) ? result.indicators : undefined;
+  const quoteRows = indicators && Array.isArray(indicators.quote) && isRecord(indicators.quote[0]) ? indicators.quote[0] : undefined;
+  const regularMarketPrice = meta ? numberValue(meta.regularMarketPrice) : undefined;
+  const close = quoteRows ? nullableNumberArray(quoteRows.close) : [];
+  if (!regularMarketPrice || !close.length || !quoteRows) return undefined;
+
+  const high = nullableNumberArray(quoteRows.high);
+  const low = nullableNumberArray(quoteRows.low);
+  const volume = nullableNumberArray(quoteRows.volume);
+  const rows = close.map((closeValue, index) => ({
+    close: closeValue,
+    high: high[index] ?? null,
+    low: low[index] ?? null,
+    volume: volume[index] ?? null
+  })).filter((row): row is { close: number; high: number; low: number; volume: number | null } => (
+    typeof row.close === "number" && typeof row.high === "number" && typeof row.low === "number"
+  )).reverse();
+  if (!rows.length) return undefined;
+
+  const closes = rows.map((row) => row.close);
+  const currentPrice = Number(regularMarketPrice.toFixed(2));
+  const previousCloseSource = meta ? numberValue(meta.previousClose) ?? numberValue(meta.chartPreviousClose) : undefined;
+  const previousClose = Number((previousCloseSource ?? closes[1] ?? currentPrice).toFixed(2));
+  const dailyChangePercent = previousClose > 0 ? Number((((currentPrice - previousClose) / previousClose) * 100).toFixed(2)) : 0;
+  const week52High = meta ? numberValue(meta.fiftyTwoWeekHigh) : undefined;
+  const week52Low = meta ? numberValue(meta.fiftyTwoWeekLow) : undefined;
+  const regularMarketVolume = meta ? numberValue(meta.regularMarketVolume) : undefined;
+
+  return {
+    symbol,
+    currentPrice,
+    dailyChangePercent,
+    previousClose,
+    week52High: week52High !== undefined ? Number(week52High.toFixed(2)) : Math.round(Math.max(...closes.slice(0, 252)) * 100) / 100,
+    week52Low: week52Low !== undefined ? Number(week52Low.toFixed(2)) : Math.round(Math.min(...closes.slice(0, 252)) * 100) / 100,
+    volume: regularMarketVolume ?? rows[0]?.volume ?? undefined,
+    ma20: movingAverage(closes, 20),
+    ma50: movingAverage(closes, 50),
+    ma200: movingAverage(closes, 200),
+    atr: calculateAtr(rows),
+    rsi: calculateRsi(closes),
+    provider: "yahoo_finance"
+  };
 }
 
 function decodeXml(value: string) {
