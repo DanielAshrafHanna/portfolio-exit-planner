@@ -17,8 +17,8 @@ export function ProfileSelector({ profiles, activeProfileId, onActiveChange, onA
   if (!activeProfile) return null;
 
   return (
-    <section className="border-b border-ink/10 bg-white px-4 py-4">
-      <div className="mx-auto grid max-w-7xl gap-3 lg:grid-cols-[1fr_auto] lg:items-end">
+    <section className="mx-auto max-w-7xl px-4 pb-4">
+      <div className="grid gap-3 border border-ink/10 bg-white p-4 shadow-soft lg:grid-cols-[1fr_auto] lg:items-end">
         <div>
           <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-marine">
             <UserRoundCog className="h-4 w-4" aria-hidden />
