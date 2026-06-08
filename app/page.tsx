@@ -48,6 +48,23 @@ function normalizeWarning(warning: string) {
   return warning;
 }
 
+function warningForAudience(warning: string, isAdmin: boolean) {
+  if (isAdmin) return warning;
+  if (warning.includes("Supabase SQL") || warning.includes("schema cache") || warning.includes("display_name") || warning.includes("share_holdings")) {
+    return null;
+  }
+  if (warning.includes("OPENAI_API_KEY")) {
+    return "AI/OCR features are unavailable right now. Ask the admin to check setup.";
+  }
+  if (warning.includes("MARKET_DATA_API_KEY")) {
+    return "Some market data may be delayed or using a fallback provider.";
+  }
+  if (warning.startsWith("Cloud save failed:") || warning.startsWith("Cloud load failed:")) {
+    return "Cloud sync had a problem. Your local portfolio is still available.";
+  }
+  return warning;
+}
+
 function mergeExtractedRows(existingRows: EnrichedHolding[], extractedRows: HoldingInput[]) {
   const bySymbol = new Map(existingRows.map((holding) => [holding.symbol.trim().toUpperCase(), holding]));
   const merged = [...existingRows];
@@ -245,6 +262,9 @@ export default function Home() {
   const currency = activeProfile?.currency || "USD";
   const region = activeProfile?.region || "US";
   const isAdmin = isAdminUser(user);
+  const visibleWarnings = useMemo(() => (
+    [...new Set(warnings.map((warning) => warningForAudience(warning, isAdmin)).filter((warning): warning is string => Boolean(warning)))]
+  ), [warnings, isAdmin]);
   const marketSymbolKey = useMemo(() => (
     holdings.map((holding) => `${holding.id}:${displayMarketSymbol(holding.symbol, region)}`).join("|")
   ), [holdings, region]);
@@ -687,10 +707,10 @@ export default function Home() {
           </div>
         </section>
       )}
-      {isAdmin && warnings.length ? (
+      {visibleWarnings.length ? (
         <section className="mx-auto max-w-7xl px-4 pt-5">
           <div className="space-y-2 border border-amber/40 bg-amber/10 p-3 text-sm">
-            {[...new Set(warnings)].map((warning) => (
+            {visibleWarnings.map((warning) => (
               <p className="flex gap-2" key={warning}><AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber" aria-hidden />{warning}</p>
             ))}
           </div>
