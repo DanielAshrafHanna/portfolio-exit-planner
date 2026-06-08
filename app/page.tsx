@@ -184,6 +184,10 @@ function isMissingSharedColumnsError(error?: { message?: string } | null) {
   return message.includes("display_name") || message.includes("share_holdings") || message.includes("schema cache");
 }
 
+function sharedUserViewId(entry: SharedPortfolioProfile) {
+  return `shared:${entry.userId || entry.displayName}`;
+}
+
 export default function Home() {
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
   const [profiles, setProfiles] = useState<PortfolioProfile[]>(() => defaultProfiles());
@@ -267,9 +271,18 @@ export default function Home() {
   const visibleWarnings = useMemo(() => (
     [...new Set(warnings.map((warning) => warningForAudience(warning, isAdmin)).filter((warning): warning is string => Boolean(warning)))]
   ), [warnings, isAdmin]);
+  const sharedProfilesForRegion = useMemo(() => {
+    const byUser = new Map<string, SharedPortfolioProfile>();
+    sharedProfiles.forEach((entry) => {
+      if (entry.profile.region !== region) return;
+      const viewId = sharedUserViewId(entry);
+      if (!byUser.has(viewId)) byUser.set(viewId, entry);
+    });
+    return [...byUser.values()];
+  }, [region, sharedProfiles]);
   const selectedSharedProfile = useMemo(() => (
-    sharedProfiles.find((entry) => entry.id === selectedSharedProfileId)
-  ), [sharedProfiles, selectedSharedProfileId]);
+    sharedProfilesForRegion.find((entry) => sharedUserViewId(entry) === selectedSharedProfileId)
+  ), [selectedSharedProfileId, sharedProfilesForRegion]);
   const holdingsViewOptions = useMemo<HoldingsViewOption[]>(() => {
     const ownRegion = region === "EG" ? "Egypt" : "US";
     return [
@@ -280,14 +293,14 @@ export default function Home() {
         holdingsCount: holdings.length,
         isMine: true
       },
-      ...sharedProfiles.map((entry) => ({
-        id: entry.id,
+      ...sharedProfilesForRegion.map((entry) => ({
+        id: sharedUserViewId(entry),
         label: entry.displayName,
-        sublabel: `${entry.profile.name} - ${entry.profile.region === "EG" ? "Egypt" : "US"}`,
+        sublabel: `${entry.profile.name} - ${ownRegion}`,
         holdingsCount: entry.profile.holdings.length
       }))
     ];
-  }, [activeProfile?.name, holdings.length, region, sharedProfiles]);
+  }, [activeProfile?.name, holdings.length, region, sharedProfilesForRegion]);
   const displayedHoldings = selectedSharedProfile?.profile.holdings || holdings;
   const displayedSettings = selectedSharedProfile?.profile.settings || settings;
   const displayedCurrency = selectedSharedProfile?.profile.currency || currency;
@@ -311,6 +324,12 @@ export default function Home() {
     activeProfileIdRef.current = activeProfile?.id || activeProfileId;
     holdingInputKeyRef.current = holdingInputKey;
   }, [activeProfile?.id, activeProfileId, holdingInputKey]);
+
+  useEffect(() => {
+    if (!holdingsViewOptions.some((option) => option.id === selectedSharedProfileId)) {
+      setSelectedSharedProfileId(OWN_HOLDINGS_VIEW_ID);
+    }
+  }, [holdingsViewOptions, selectedSharedProfileId]);
 
   const updateActiveProfile = (updater: (profile: PortfolioProfile) => PortfolioProfile) => {
     setProfiles((items) => items.map((profile) => profile.id === activeProfile?.id ? updater(profile) : profile));
@@ -591,7 +610,7 @@ export default function Home() {
       }));
     });
     setSharedProfiles(entries);
-    setSelectedSharedProfileId((existing) => existing === OWN_HOLDINGS_VIEW_ID || entries.some((entry) => entry.id === existing) ? existing : OWN_HOLDINGS_VIEW_ID);
+    setSelectedSharedProfileId((existing) => existing === OWN_HOLDINGS_VIEW_ID || entries.some((entry) => sharedUserViewId(entry) === existing) ? existing : OWN_HOLDINGS_VIEW_ID);
   };
 
   const loadCloudPortfolio = async () => {
