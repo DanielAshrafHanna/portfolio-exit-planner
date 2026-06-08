@@ -28,6 +28,32 @@ label:has(input:focus-visible) {
 
 .table-scroll {
   scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+  position: relative;
+}
+
+@media (min-width: 768px) {
+  .table-scroll::after {
+    content: "";
+    position: sticky;
+    right: 0;
+    top: 0;
+    float: right;
+    width: 2rem;
+    height: 100%;
+    margin-left: -2rem;
+    pointer-events: none;
+    background: linear-gradient(to left, rgba(255, 255, 255, 0.95), transparent);
+  }
+}
+
+.mobile-scroll-x {
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+}
+
+.mobile-snap-card {
+  scroll-snap-align: start;
 }
 
 .section-gap > * + * {
