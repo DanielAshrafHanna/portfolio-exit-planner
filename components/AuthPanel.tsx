@@ -32,11 +32,22 @@ function syncClass(status: CloudSyncStatus) {
   return "border-ink/15 bg-paper text-ink/70";
 }
 
+function syncMessageForAudience(message: string, status: CloudSyncStatus, isAdmin: boolean) {
+  if (isAdmin) return message;
+  const isTechnicalSetupMessage = message.includes("Supabase SQL")
+    || message.includes("schema cache")
+    || message.includes("display_name")
+    || message.includes("share_holdings");
+  if (isTechnicalSetupMessage) return status === "saved" ? "Saved to cloud." : "Cloud sync needs admin attention.";
+  if (status === "error") return "Cloud sync needs admin attention.";
+  return message;
+}
+
 export function AuthPanel({ user, isAdmin, isLoading, syncStatus, syncMessage, displayName, onDisplayNameChange, onSignIn, onSignOut }: Props) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [signupDisplayName, setSignupDisplayName] = useState("");
-  const visibleSyncMessage = !isAdmin && syncStatus === "error" ? "Cloud sync needs admin attention." : syncMessage;
+  const visibleSyncMessage = syncMessageForAudience(syncMessage, syncStatus, isAdmin);
 
   if (!hasSupabaseConfig()) {
     return (
