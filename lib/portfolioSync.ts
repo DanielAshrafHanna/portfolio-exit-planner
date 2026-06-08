@@ -39,7 +39,7 @@ export function shouldSkipEmptyCloudOverwrite(
 export function mergeProfilesForCloudSave(
   local: PortfolioProfile[],
   cloud: PortfolioProfile[],
-  editedProfileIds: ReadonlySet<string>
+  editedHoldingsProfileIds: ReadonlySet<string>
 ): PortfolioProfile[] {
   const cloudById = new Map(cloud.map((profile) => [profile.id, profile]));
   const localIds = new Set(local.map((profile) => profile.id));
@@ -49,7 +49,7 @@ export function mergeProfilesForCloudSave(
       cloudProfile
       && profileHoldingCount(localProfile) === 0
       && profileHoldingCount(cloudProfile) > 0
-      && !editedProfileIds.has(localProfile.id)
+      && !editedHoldingsProfileIds.has(localProfile.id)
     );
     return preserveCloudHoldings
       ? { ...localProfile, holdings: cloudProfile!.holdings }

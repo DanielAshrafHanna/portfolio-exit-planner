@@ -62,6 +62,14 @@ describe("portfolio sync policy", () => {
     expect(merged.find((item) => item.id === "eg-portfolio")?.holdings.map((holding) => holding.symbol)).toEqual(["ORHD"]);
   });
 
+  it("preserves cloud holdings when only another profile's holdings were edited", () => {
+    const local = [profile("us-portfolio", "US", []), profile("eg-portfolio", "EG", ["ORHD", "RAYA"])];
+    const cloud = [profile("us-portfolio", "US", ["NASA"]), profile("eg-portfolio", "EG", ["ORHD"])];
+    const merged = mergeProfilesForCloudSave(local, cloud, new Set(["eg-portfolio"]));
+    expect(merged.find((item) => item.id === "us-portfolio")?.holdings.map((holding) => holding.symbol)).toEqual(["NASA"]);
+    expect(merged.find((item) => item.id === "eg-portfolio")?.holdings.map((holding) => holding.symbol)).toEqual(["ORHD", "RAYA"]);
+  });
+
   it("allows an intentionally cleared profile to save empty holdings", () => {
     const local = [profile("us-portfolio", "US", []), profile("eg-portfolio", "EG", ["ORHD"])];
     const cloud = [profile("us-portfolio", "US", ["NASA"]), profile("eg-portfolio", "EG", ["ORHD"])];

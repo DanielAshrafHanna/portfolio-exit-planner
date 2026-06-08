@@ -303,7 +303,7 @@ export default function Home() {
   const cloudShareHoldingsRef = useRef(false);
   const shareHoldingsTouchedRef = useRef(false);
   const sessionPortfolioEditedRef = useRef(false);
-  const sessionEditedProfileIdsRef = useRef<Set<string>>(new Set());
+  const sessionEditedHoldingsProfileIdsRef = useRef<Set<string>>(new Set());
   const lastCloudProfilesRef = useRef<PortfolioProfile[]>(defaultProfiles());
   const cloudPortfolioUpdatedAtRef = useRef<string | null>(null);
   const cloudHoldingCountRef = useRef(0);
@@ -328,18 +328,22 @@ export default function Home() {
     setShareHoldings(nextShareHoldings);
   };
 
-  const touchLocalPortfolioTimestamp = () => {
+  const touchPortfolioSave = () => {
     userEditRevision.current += 1;
     sessionPortfolioEditedRef.current = true;
+  };
+
+  const touchHoldingsEdit = () => {
+    touchPortfolioSave();
     const profileId = activeProfileIdRef.current;
-    if (profileId) sessionEditedProfileIdsRef.current.add(profileId);
+    if (profileId) sessionEditedHoldingsProfileIdsRef.current.add(profileId);
   };
 
   const applyEmptyPortfolioBootstrap = () => {
     const bootstrap = emptyPortfolioBootstrap();
     userEditRevision.current = 0;
     sessionPortfolioEditedRef.current = false;
-    sessionEditedProfileIdsRef.current = new Set();
+    sessionEditedHoldingsProfileIdsRef.current = new Set();
     latestSyncKey.current = "";
     cloudPortfolioUpdatedAtRef.current = null;
     cloudHoldingCountRef.current = 0;
@@ -364,7 +368,7 @@ export default function Home() {
   ) => {
     const resolvedUpdatedAt = options.cloudUpdatedAt ?? snapshot.cloudUpdatedAt ?? null;
     sessionPortfolioEditedRef.current = false;
-    sessionEditedProfileIdsRef.current = new Set();
+    sessionEditedHoldingsProfileIdsRef.current = new Set();
     cloudPortfolioUpdatedAtRef.current = resolvedUpdatedAt;
     cloudHoldingCountRef.current = portfolioHoldingSymbols(snapshot.profiles).length;
     lastCloudProfilesRef.current = snapshot.profiles;
@@ -407,7 +411,7 @@ export default function Home() {
     if (!user) {
       signedInUserIdRef.current = null;
       sessionPortfolioEditedRef.current = false;
-      sessionEditedProfileIdsRef.current = new Set();
+      sessionEditedHoldingsProfileIdsRef.current = new Set();
       cloudPortfolioUpdatedAtRef.current = null;
       cloudHoldingCountRef.current = 0;
       lastCloudProfilesRef.current = defaultProfiles();
@@ -429,7 +433,7 @@ export default function Home() {
 
     signedInUserIdRef.current = user.id;
     sessionPortfolioEditedRef.current = false;
-    sessionEditedProfileIdsRef.current = new Set();
+    sessionEditedHoldingsProfileIdsRef.current = new Set();
     cloudPortfolioUpdatedAtRef.current = null;
     cloudHoldingCountRef.current = 0;
     lastCloudProfilesRef.current = defaultProfiles();
@@ -564,14 +568,14 @@ export default function Home() {
   };
 
   const setSettings = (nextSettings: FeeSettings) => {
-    touchLocalPortfolioTimestamp();
+    touchPortfolioSave();
     updateActiveProfile((profile) => ({ ...profile, settings: nextSettings }));
   };
 
   const inputRows = useMemo(() => holdings.map(toHoldingInput), [holdings]);
 
   const setInputRows = (rows: HoldingInput[]) => {
-    touchLocalPortfolioTimestamp();
+    touchHoldingsEdit();
     setHoldings(rows.map((row) => {
       const existing = holdings.find((holding) => holding.id === row.id);
       const symbolUnchanged = sameSymbol(existing?.symbol, row.symbol);
@@ -594,7 +598,7 @@ export default function Home() {
   };
 
   const updateHolding = (next: EnrichedHolding) => {
-    touchLocalPortfolioTimestamp();
+    touchHoldingsEdit();
     setHoldings((items) => items.map((item) => item.id === next.id ? next : item));
   };
 
@@ -798,10 +802,20 @@ export default function Home() {
       setCloudSyncMessage("Cloud save failed: portfolio payload could not be serialized.");
       return false;
     }
+    let cloudProfilesForMerge = lastCloudProfilesRef.current;
+    const cloudSnapshot = await supabase
+      .from("user_portfolios")
+      .select("holdings")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (!cloudSnapshot.error && cloudSnapshot.data?.holdings) {
+      const loadedCloudProfiles = coerceProfiles(cloudSnapshot.data.holdings, DEFAULT_SETTINGS);
+      if (loadedCloudProfiles.length) cloudProfilesForMerge = loadedCloudProfiles;
+    }
     const mergedProfiles = mergeProfilesForCloudSave(
       parsedPayload.profiles,
-      lastCloudProfilesRef.current,
-      sessionEditedProfileIdsRef.current
+      cloudProfilesForMerge,
+      sessionEditedHoldingsProfileIdsRef.current
     );
     const cloudSettings = {
       activeProfileId: parsedPayload.activeProfileId,
@@ -841,7 +855,7 @@ export default function Home() {
     cloudHoldingCountRef.current = portfolioHoldingSymbols(mergedProfiles).length;
     lastCloudProfilesRef.current = mergedProfiles;
     sessionPortfolioEditedRef.current = false;
-    sessionEditedProfileIdsRef.current = new Set();
+    sessionEditedHoldingsProfileIdsRef.current = new Set();
     latestSyncKey.current = profilesSyncKey(
       mergedProfiles,
       parsedPayload.activeProfileId,
@@ -1089,7 +1103,7 @@ export default function Home() {
   }, [supabase, user, isHydrated, cloudLoadedUserId, currentProfilesSyncKey]);
 
   const addProfile = () => {
-    touchLocalPortfolioTimestamp();
+    touchPortfolioSave();
     const id = crypto.randomUUID();
     const nextProfile: PortfolioProfile = {
       id,
@@ -1104,7 +1118,7 @@ export default function Home() {
   };
 
   const deleteProfile = (id: string) => {
-    touchLocalPortfolioTimestamp();
+    touchPortfolioSave();
     setProfiles((items) => {
       if (items.length <= 1) return items;
       const nextProfiles = items.filter((profile) => profile.id !== id);
@@ -1114,7 +1128,7 @@ export default function Home() {
   };
 
   const updateProfile = (nextProfile: PortfolioProfile) => {
-    touchLocalPortfolioTimestamp();
+    touchPortfolioSave();
     setProfiles((items) => items.map((profile) => profile.id === nextProfile.id ? nextProfile : profile));
   };
 
@@ -1159,7 +1173,7 @@ export default function Home() {
   };
 
   const handleQuickAdd = (holding: HoldingInput) => {
-    touchLocalPortfolioTimestamp();
+    touchHoldingsEdit();
     setInputRows([...inputRows, holding]);
     setQuickAddFocusToken((token) => token + 1);
   };
@@ -1219,7 +1233,7 @@ export default function Home() {
       <SettingsPanel settings={settings} currency={currency} onChange={setSettings} onClear={clearStored} />
       <ImageImport
         onExtracted={(rows) => {
-          touchLocalPortfolioTimestamp();
+          touchHoldingsEdit();
           setHoldings((existing) => mergeExtractedRows(existing, rows));
           setWarnings((existing) => [...existing, `${rows.length} image row${rows.length === 1 ? "" : "s"} added or updated. Confirm every field before analysis.`]);
         }}
@@ -1260,7 +1274,7 @@ export default function Home() {
       <SettingsPanel settings={settings} currency={currency} onChange={setSettings} onClear={clearStored} />
       <ImageImport
         onExtracted={(rows) => {
-          touchLocalPortfolioTimestamp();
+          touchHoldingsEdit();
           setHoldings((existing) => mergeExtractedRows(existing, rows));
           setWarnings((existing) => [...existing, `${rows.length} image row${rows.length === 1 ? "" : "s"} added or updated. Confirm every field before analysis.`]);
         }}
