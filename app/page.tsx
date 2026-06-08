@@ -34,6 +34,7 @@ import {
 import { coerceHoldings, coerceProfiles, emptyPortfolioBootstrap, enrichHolding, migrateSinglePortfolio } from "@/lib/storageMigration";
 import { createSupabaseBrowserClient } from "@/lib/supabaseClient";
 import {
+  mergeProfilesForCloudSave,
   portfolioHoldingSymbols,
   shouldKeepSessionPortfolioEdits,
   shouldSkipEmptyCloudOverwrite
@@ -302,6 +303,8 @@ export default function Home() {
   const cloudShareHoldingsRef = useRef(false);
   const shareHoldingsTouchedRef = useRef(false);
   const sessionPortfolioEditedRef = useRef(false);
+  const sessionEditedProfileIdsRef = useRef<Set<string>>(new Set());
+  const lastCloudProfilesRef = useRef<PortfolioProfile[]>(defaultProfiles());
   const cloudPortfolioUpdatedAtRef = useRef<string | null>(null);
   const cloudHoldingCountRef = useRef(0);
   const signedInUserIdRef = useRef<string | null>(null);
@@ -328,15 +331,19 @@ export default function Home() {
   const touchLocalPortfolioTimestamp = () => {
     userEditRevision.current += 1;
     sessionPortfolioEditedRef.current = true;
+    const profileId = activeProfileIdRef.current;
+    if (profileId) sessionEditedProfileIdsRef.current.add(profileId);
   };
 
   const applyEmptyPortfolioBootstrap = () => {
     const bootstrap = emptyPortfolioBootstrap();
     userEditRevision.current = 0;
     sessionPortfolioEditedRef.current = false;
+    sessionEditedProfileIdsRef.current = new Set();
     latestSyncKey.current = "";
     cloudPortfolioUpdatedAtRef.current = null;
     cloudHoldingCountRef.current = 0;
+    lastCloudProfilesRef.current = defaultProfiles();
     setProfiles(bootstrap.profiles);
     setActiveProfileId(bootstrap.activeProfileId);
     return bootstrap;
@@ -357,8 +364,10 @@ export default function Home() {
   ) => {
     const resolvedUpdatedAt = options.cloudUpdatedAt ?? snapshot.cloudUpdatedAt ?? null;
     sessionPortfolioEditedRef.current = false;
+    sessionEditedProfileIdsRef.current = new Set();
     cloudPortfolioUpdatedAtRef.current = resolvedUpdatedAt;
     cloudHoldingCountRef.current = portfolioHoldingSymbols(snapshot.profiles).length;
+    lastCloudProfilesRef.current = snapshot.profiles;
     setProfiles(snapshot.profiles);
     setActiveProfileId(snapshot.activeProfileId);
     setDisplayName(options.displayName);
@@ -398,8 +407,10 @@ export default function Home() {
     if (!user) {
       signedInUserIdRef.current = null;
       sessionPortfolioEditedRef.current = false;
+      sessionEditedProfileIdsRef.current = new Set();
       cloudPortfolioUpdatedAtRef.current = null;
       cloudHoldingCountRef.current = 0;
+      lastCloudProfilesRef.current = defaultProfiles();
       latestSyncKey.current = "";
       setCloudLoadedUserId(null);
       const guest = readGuestPortfolioState();
@@ -418,8 +429,10 @@ export default function Home() {
 
     signedInUserIdRef.current = user.id;
     sessionPortfolioEditedRef.current = false;
+    sessionEditedProfileIdsRef.current = new Set();
     cloudPortfolioUpdatedAtRef.current = null;
     cloudHoldingCountRef.current = 0;
+    lastCloudProfilesRef.current = defaultProfiles();
     latestSyncKey.current = "";
     setCloudLoadedUserId(null);
     const bootstrap = defaultPortfolioSnapshot();
@@ -785,6 +798,11 @@ export default function Home() {
       setCloudSyncMessage("Cloud save failed: portfolio payload could not be serialized.");
       return false;
     }
+    const mergedProfiles = mergeProfilesForCloudSave(
+      parsedPayload.profiles,
+      lastCloudProfilesRef.current,
+      sessionEditedProfileIdsRef.current
+    );
     const cloudSettings = {
       activeProfileId: parsedPayload.activeProfileId,
       profilesVersion: 2,
@@ -793,7 +811,7 @@ export default function Home() {
     };
     const { error } = await supabase.from("user_portfolios").upsert({
       user_id: user.id,
-      holdings: parsedPayload.profiles,
+      holdings: mergedProfiles,
       settings: cloudSettings,
       display_name: cloudSettings.displayName,
       share_holdings: cloudSettings.shareHoldings,
@@ -803,7 +821,7 @@ export default function Home() {
       if (isMissingSharedColumnsError(error)) {
         const { error: legacyError } = await supabase.from("user_portfolios").upsert({
           user_id: user.id,
-          holdings: parsedPayload.profiles,
+          holdings: mergedProfiles,
           settings: cloudSettings,
           updated_at: new Date().toISOString()
         });
@@ -820,10 +838,18 @@ export default function Home() {
     const savedAt = new Date().toISOString();
     cloudShareHoldingsRef.current = cloudSettings.shareHoldings;
     cloudPortfolioUpdatedAtRef.current = savedAt;
-    cloudHoldingCountRef.current = portfolioHoldingSymbols(parsedPayload.profiles).length;
+    cloudHoldingCountRef.current = portfolioHoldingSymbols(mergedProfiles).length;
+    lastCloudProfilesRef.current = mergedProfiles;
     sessionPortfolioEditedRef.current = false;
+    sessionEditedProfileIdsRef.current = new Set();
+    latestSyncKey.current = profilesSyncKey(
+      mergedProfiles,
+      parsedPayload.activeProfileId,
+      cloudSettings.displayName,
+      cloudSettings.shareHoldings
+    );
     persistSignedInPortfolioCache(portfolioSnapshotFromProfiles(
-      parsedPayload.profiles,
+      mergedProfiles,
       parsedPayload.activeProfileId,
       savedAt
     ));

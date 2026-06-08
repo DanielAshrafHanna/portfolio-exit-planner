@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_SETTINGS } from "./profileUtils";
 import {
+  mergeProfilesForCloudSave,
   portfolioHasUnsavedSymbols,
   shouldKeepSessionPortfolioEdits,
   shouldSkipEmptyCloudOverwrite
@@ -51,5 +52,20 @@ describe("portfolio sync policy", () => {
     const local = [profile("us-portfolio", "US", []), profile("eg-portfolio", "EG", [])];
     expect(shouldSkipEmptyCloudOverwrite(local, 1, false)).toBe(true);
     expect(shouldSkipEmptyCloudOverwrite(local, 1, true)).toBe(false);
+  });
+
+  it("preserves cloud holdings for profiles that were not edited locally", () => {
+    const local = [profile("us-portfolio", "US", []), profile("eg-portfolio", "EG", ["ORHD"])];
+    const cloud = [profile("us-portfolio", "US", ["NASA"]), profile("eg-portfolio", "EG", ["ORHD"])];
+    const merged = mergeProfilesForCloudSave(local, cloud, new Set(["eg-portfolio"]));
+    expect(merged.find((item) => item.id === "us-portfolio")?.holdings.map((holding) => holding.symbol)).toEqual(["NASA"]);
+    expect(merged.find((item) => item.id === "eg-portfolio")?.holdings.map((holding) => holding.symbol)).toEqual(["ORHD"]);
+  });
+
+  it("allows an intentionally cleared profile to save empty holdings", () => {
+    const local = [profile("us-portfolio", "US", []), profile("eg-portfolio", "EG", ["ORHD"])];
+    const cloud = [profile("us-portfolio", "US", ["NASA"]), profile("eg-portfolio", "EG", ["ORHD"])];
+    const merged = mergeProfilesForCloudSave(local, cloud, new Set(["us-portfolio"]));
+    expect(merged.find((item) => item.id === "us-portfolio")?.holdings).toHaveLength(0);
   });
 });
