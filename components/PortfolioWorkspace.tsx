@@ -42,14 +42,9 @@ export function PortfolioWorkspace({
       {compactProfileBar ? (
         <div className="md:hidden">{compactProfileBar}</div>
       ) : null}
-      <div
-        className="sticky z-20 hidden border-y border-ink/10 bg-white/95 px-4 py-3 backdrop-blur md:block"
-        style={{ top: "var(--app-header-height, 88px)" }}
-      >
-        <div className="space-y-3">
-          {profileBar}
-          {holdingsView}
-        </div>
+      <div className="hidden space-y-3 border-b border-ink/10 pb-3 md:block">
+        {profileBar}
+        {holdingsView}
       </div>
 
       {summary}
