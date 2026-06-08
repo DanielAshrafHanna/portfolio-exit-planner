@@ -428,7 +428,7 @@ export default function Home() {
   useEffect(() => {
     if (!isHydrated || !holdings.some((holding) => holding.symbol)) return;
     const timeout = window.setTimeout(() => {
-      void refreshMarketData({ showLoading: true, showWarnings: false });
+      void refreshMarketData({ showLoading: false, showWarnings: false });
     }, 500);
     return () => window.clearTimeout(timeout);
     // Keyed by symbol/profile fingerprint so quote-only updates do not trigger another refresh.
@@ -438,7 +438,7 @@ export default function Home() {
   useEffect(() => {
     if (!isHydrated || !holdings.some((holding) => holding.symbol)) return;
     const interval = window.setInterval(() => {
-      void refreshMarketData({ showLoading: true, showWarnings: false });
+      void refreshMarketData({ showLoading: false, showWarnings: false });
     }, 60_000);
     return () => window.clearInterval(interval);
     // Keyed by input fingerprint so quote-only updates do not reset the polling interval.

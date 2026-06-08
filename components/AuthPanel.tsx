@@ -79,9 +79,9 @@ export function AuthPanel({ user, isAdmin, isLoading, syncStatus, syncMessage, d
                   onChange={(event) => onDisplayNameChange(event.target.value)}
                 />
               </label>
-              <div className={`inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm ${syncClass(syncStatus)}`}>
-                {syncIcon(syncStatus)}
-                {visibleSyncMessage}
+              <div className={`inline-flex min-h-11 min-w-0 items-center gap-2 rounded-md border px-3 py-2 text-sm ${syncClass(syncStatus)}`} title={visibleSyncMessage}>
+                <span className="shrink-0">{syncIcon(syncStatus)}</span>
+                <span className="min-w-0 truncate">{visibleSyncMessage}</span>
               </div>
             </div>
           ) : (

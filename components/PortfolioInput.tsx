@@ -87,7 +87,9 @@ export function PortfolioInput({ holdings, onChange, onAnalyze, isAnalyzing, isR
             </div>
             <h2 className="text-xl font-semibold text-ink">Add or edit your holdings</h2>
             <p className="mt-1 text-sm text-ink/60">Enter stocks manually, import CSV rows, then run analysis for the active portfolio.</p>
-            {isRefreshingMarket ? <p className="mt-1 text-sm text-ink/55">Refreshing prices...</p> : null}
+            <p className={`mt-1 min-h-5 text-sm text-ink/55 ${isRefreshingMarket ? "" : "invisible"}`} aria-hidden={!isRefreshingMarket}>
+              Refreshing prices...
+            </p>
           </div>
           <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
             <button className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-marine px-3 py-2 text-sm font-semibold text-white" type="button" onClick={() => onChange([...holdings, emptyHolding()])}>
