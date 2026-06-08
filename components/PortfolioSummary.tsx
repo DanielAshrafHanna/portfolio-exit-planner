@@ -8,7 +8,7 @@ import { formatMoney } from "@/lib/profileUtils";
 
 type Props = { holdings: EnrichedHolding[]; settings: FeeSettings; currency: CurrencyCode };
 
-type SummaryCard = { label: string; value: string; icon: LucideIcon };
+type SummaryCard = { label: string; value: string; icon: LucideIcon; shortLabel: string };
 
 export function PortfolioSummary({ holdings, settings, currency }: Props) {
   const rows = holdings.filter((holding) => holding.quote);
@@ -27,24 +27,26 @@ export function PortfolioSummary({ holdings, settings, currency }: Props) {
     pl: calculateProfitLoss(holding.shares, holding.averageCost, holding.quote!.currentPrice, settings).profitLoss
   })).sort((a, b) => a.pl - b.pl);
   const highestRisk = rows.find((holding) => holding.analysis?.riskLevel === "Very High") || rows.find((holding) => holding.analysis?.riskLevel === "High");
+  const currentPl = roundMoney(totalValue - totalCost);
 
   const cards: SummaryCard[] = [
-    { label: "Total value", value: formatMoney(totalValue, currency), icon: WalletCards },
-    { label: "Current P/L", value: formatMoney(roundMoney(totalValue - totalCost), currency), icon: totalValue >= totalCost ? TrendingUp : TrendingDown },
-    { label: "Highest risk", value: highestRisk?.symbol || "N/A", icon: AlertTriangle },
-    { label: "P/L if stops hit", value: formatMoney(roundMoney(stopValue - totalCost), currency), icon: AlertTriangle },
-    { label: "Best target P/L", value: formatMoney(roundMoney(targetValue - totalCost), currency), icon: TrendingUp },
-    { label: "Biggest loss / gain", value: `${sortedByPl[0]?.symbol || "N/A"} / ${sortedByPl.at(-1)?.symbol || "N/A"}`, icon: TrendingUp }
+    { label: "Total value", shortLabel: "Value", value: formatMoney(totalValue, currency), icon: WalletCards },
+    { label: "Current P/L", shortLabel: "P/L", value: formatMoney(currentPl, currency), icon: totalValue >= totalCost ? TrendingUp : TrendingDown },
+    { label: "Highest risk", shortLabel: "Risk", value: highestRisk?.symbol || "N/A", icon: AlertTriangle },
+    { label: "P/L if stops hit", shortLabel: "Stop P/L", value: formatMoney(roundMoney(stopValue - totalCost), currency), icon: AlertTriangle },
+    { label: "Best target P/L", shortLabel: "Target P/L", value: formatMoney(roundMoney(targetValue - totalCost), currency), icon: TrendingUp },
+    { label: "Biggest loss / gain", shortLabel: "L / G", value: `${sortedByPl[0]?.symbol || "N/A"} / ${sortedByPl.at(-1)?.symbol || "N/A"}`, icon: TrendingUp }
   ];
+
+  const mobilePrimary = cards.slice(0, 3);
 
   return (
     <>
-      <div className="mobile-scroll-x -mx-4 flex gap-3 overflow-x-auto px-4 pb-1 md:hidden">
-        {cards.map(({ label, value, icon: Icon }) => (
-          <div className="mobile-snap-card min-w-[72vw] shrink-0 rounded-md border border-mint/50 bg-surface-muted p-3" key={label}>
-            <Icon className="mb-2 h-5 w-5 text-marine" aria-hidden />
-            <p className="text-xs uppercase text-ink/55">{label}</p>
-            <p className="mt-1 break-words text-base font-semibold">{value}</p>
+      <div className="grid grid-cols-3 gap-1.5 md:hidden">
+        {mobilePrimary.map(({ shortLabel, value }) => (
+          <div className="min-w-0 rounded border border-mint/40 bg-surface-muted px-2 py-1.5" key={shortLabel}>
+            <p className="text-[10px] uppercase text-ink/50">{shortLabel}</p>
+            <p className="truncate text-xs font-semibold">{value}</p>
           </div>
         ))}
       </div>

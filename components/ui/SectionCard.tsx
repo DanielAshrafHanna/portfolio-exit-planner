@@ -21,6 +21,7 @@ type Props = {
   children: ReactNode;
   className?: string;
   id?: string;
+  compactHeader?: boolean;
 };
 
 export function SectionCard({
@@ -32,11 +33,12 @@ export function SectionCard({
   action,
   children,
   className = "",
-  id
+  id,
+  compactHeader = false
 }: Props) {
   return (
     <section className={`rounded-lg ${variantClasses[variant]} ${className}`} id={id}>
-      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-ink/8 px-4 py-4 sm:px-5">
+      <div className={`flex flex-wrap items-start justify-between gap-3 border-b border-ink/8 px-3 py-2 sm:px-5 md:px-4 md:py-4 ${compactHeader ? "hidden md:flex" : ""}`}>
         <div className="min-w-0">
           {eyebrow ? (
             <div className="mb-1 flex items-center gap-2 text-sm font-semibold text-marine">
@@ -49,7 +51,7 @@ export function SectionCard({
         </div>
         {action ? <div className="shrink-0">{action}</div> : null}
       </div>
-      <div className="px-4 py-4 sm:px-5">{children}</div>
+      <div className="px-0 py-0 sm:px-5 md:px-4 md:py-4">{children}</div>
     </section>
   );
 }
