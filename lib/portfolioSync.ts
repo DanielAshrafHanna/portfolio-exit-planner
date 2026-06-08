@@ -6,21 +6,27 @@ export function portfolioHoldingSymbols(profiles: PortfolioProfile[]) {
   ));
 }
 
-export function shouldPreferLocalPortfolio(
+export function portfolioHasUnsavedSymbols(local: PortfolioProfile[], cloud: PortfolioProfile[]) {
+  const cloudSymbolSet = new Set(portfolioHoldingSymbols(cloud));
+  return portfolioHoldingSymbols(local).some((symbol) => !cloudSymbolSet.has(symbol));
+}
+
+/** Keep local edits only during the active signed-in session before cloud catches up. */
+export function shouldKeepSessionPortfolioEdits(
   local: PortfolioProfile[],
   cloud: PortfolioProfile[],
-  options: {
-    localIsNewer: boolean;
-    userEditedDuringLoad: boolean;
-    localHasUnsavedHoldings: boolean;
-  }
-): boolean {
-  const localHasHoldings = portfolioHoldingSymbols(local).length > 0;
-  const cloudHasHoldings = portfolioHoldingSymbols(cloud).length > 0;
+  sessionPortfolioEdited: boolean
+) {
+  if (!sessionPortfolioEdited) return false;
+  return portfolioHasUnsavedSymbols(local, cloud) || portfolioHoldingSymbols(local).length > 0;
+}
 
-  if (options.localHasUnsavedHoldings) return true;
-  if (options.userEditedDuringLoad) return true;
-  if (cloudHasHoldings && !localHasHoldings) return false;
-  if (options.localIsNewer && localHasHoldings) return true;
-  return false;
+export function shouldSkipEmptyCloudOverwrite(
+  local: PortfolioProfile[],
+  cloudHoldingCount: number,
+  sessionPortfolioEdited: boolean
+) {
+  return cloudHoldingCount > 0
+    && portfolioHoldingSymbols(local).length === 0
+    && !sessionPortfolioEdited;
 }
