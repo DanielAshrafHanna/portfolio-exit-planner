@@ -30,10 +30,20 @@ export function resolveUserPrefsForSync(options: {
   cloudDisplayName?: string | null;
   cloudShareHoldings?: boolean | null;
   localIsNewer: boolean;
+  /** When false, portfolio-only local edits must not downgrade cloud sharing. */
+  shareHoldingsTouched?: boolean;
 }): StoredUserPrefs {
-  if (options.localIsNewer) return options.local;
+  if (options.localIsNewer) {
+    const shareHoldings = options.shareHoldingsTouched
+      ? options.local.shareHoldings
+      : (options.cloudShareHoldings ?? options.local.shareHoldings);
+    return {
+      displayName: options.local.displayName,
+      shareHoldings: Boolean(shareHoldings)
+    };
+  }
   return {
     displayName: options.cloudDisplayName?.trim() || options.local.displayName,
-    shareHoldings: options.cloudShareHoldings ?? options.local.shareHoldings
+    shareHoldings: Boolean(options.cloudShareHoldings ?? options.local.shareHoldings)
   };
 }
