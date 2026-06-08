@@ -12,7 +12,9 @@ import { ProfileSelector } from "@/components/ProfileSelector";
 import { PortfolioSummary } from "@/components/PortfolioSummary";
 import { SettingsPanel } from "@/components/SettingsPanel";
 import { defaultSellTargets } from "@/lib/calculations";
+import { applyAnalyzedHoldingResults, type AnalyzedHoldingResult } from "@/lib/holdingMerge";
 import { DEFAULT_SETTINGS, defaultProfiles, displayMarketSymbol } from "@/lib/profileUtils";
+import { coerceHoldings, coerceProfiles, enrichHolding, loadPortfolioState, migrateSinglePortfolio } from "@/lib/storageMigration";
 import { createSupabaseBrowserClient } from "@/lib/supabaseClient";
 import type { AiAnalysis, EnrichedHolding, FeeSettings, HoldingInput, MarketQuote, NewsItem, PortfolioProfile } from "@/lib/types";
 
@@ -20,11 +22,7 @@ const STORAGE_KEY = "portfolio-exit-planner:v1";
 const SETTINGS_KEY = "portfolio-exit-planner:settings:v1";
 const PROFILES_KEY = "portfolio-exit-planner:profiles:v1";
 const ACTIVE_PROFILE_KEY = "portfolio-exit-planner:active-profile:v1";
-const DEMO_IDS = new Set(["tsm", "ibm", "dram", "nasa"]);
-
-function enrich(holding: HoldingInput): EnrichedHolding {
-  return { ...holding, news: [], selectedStopStyle: "balanced", sellPercent: 100 };
-}
+const EMPTY_HOLDINGS: EnrichedHolding[] = [];
 
 function sameSymbol(a?: string, b?: string) {
   return (a || "").trim().toUpperCase() === (b || "").trim().toUpperCase();
@@ -48,14 +46,6 @@ function normalizeWarning(warning: string) {
   return warning;
 }
 
-function removeLegacyDemoRows(rows: EnrichedHolding[]) {
-  return rows.filter((holding) => {
-    const note = (holding.notes || "").toLowerCase();
-    const isLegacyDemo = DEMO_IDS.has(holding.id) && note.includes("sample");
-    return !isLegacyDemo;
-  });
-}
-
 function mergeExtractedRows(existingRows: EnrichedHolding[], extractedRows: HoldingInput[]) {
   const bySymbol = new Map(existingRows.map((holding) => [holding.symbol.trim().toUpperCase(), holding]));
   const merged = [...existingRows];
@@ -68,7 +58,7 @@ function mergeExtractedRows(existingRows: EnrichedHolding[], extractedRows: Hold
       const next = { ...existing, ...row, id: existing.id, symbol };
       const index = merged.findIndex((holding) => holding.id === existing.id);
       merged[index] = {
-        ...enrich(next),
+        ...enrichHolding(next),
         quote: undefined,
         news: [],
         analysis: undefined,
@@ -77,7 +67,7 @@ function mergeExtractedRows(existingRows: EnrichedHolding[], extractedRows: Hold
       };
       return;
     }
-    merged.push(enrich({ ...row, symbol }));
+    merged.push(enrichHolding({ ...row, symbol }));
   });
 
   return merged;
@@ -87,24 +77,45 @@ function profileNameForCount(count: number) {
   return `Portfolio ${count + 1}`;
 }
 
-function coerceProfiles(value: unknown, fallbackSettings: FeeSettings): PortfolioProfile[] {
-  if (!Array.isArray(value)) return [];
-  return value.filter((item): item is PortfolioProfile => Boolean(item && typeof item === "object" && "holdings" in item)).map((profile: any) => ({
-    id: String(profile.id || crypto.randomUUID()),
-    name: String(profile.name || "Portfolio"),
-    region: profile.region === "EG" ? "EG" : "US",
-    currency: profile.currency === "EGP" || profile.region === "EG" ? "EGP" : "USD",
-    holdings: Array.isArray(profile.holdings) ? removeLegacyDemoRows(profile.holdings) : [],
-    settings: { ...DEFAULT_SETTINGS, ...fallbackSettings, ...(profile.settings || {}) }
-  }));
+function toHoldingInput(holding: EnrichedHolding): HoldingInput {
+  return {
+    id: holding.id,
+    symbol: holding.symbol,
+    name: holding.name,
+    shares: holding.shares,
+    averageCost: holding.averageCost,
+    totalCost: holding.totalCost,
+    brokerCurrentValue: holding.brokerCurrentValue,
+    notes: holding.notes
+  };
 }
 
-function migrateSinglePortfolio(holdings: EnrichedHolding[], settings: FeeSettings): PortfolioProfile[] {
-  const [usProfile, egProfile] = defaultProfiles();
-  return [
-    { ...usProfile, holdings: removeLegacyDemoRows(holdings), settings: { ...DEFAULT_SETTINGS, ...settings } },
-    egProfile
-  ];
+type MarketApiRow = {
+  symbol: string;
+  quote?: MarketQuote;
+  news?: NewsItem[];
+  warnings?: string[];
+};
+
+type MarketApiResponse = {
+  rows?: MarketApiRow[];
+  error?: string;
+};
+
+type AnalysisApiResponse = {
+  analysis?: AiAnalysis;
+  warning?: string;
+  error?: string;
+};
+
+type AnalyzedHoldingResponse = AnalyzedHoldingResult & { warning?: string };
+
+async function readJsonResponse<T>(response: Response): Promise<T> {
+  try {
+    return await response.json() as T;
+  } catch {
+    throw new Error(`Server returned an unreadable response (${response.status}).`);
+  }
 }
 
 export default function Home() {
@@ -121,27 +132,21 @@ export default function Home() {
   const [cloudLoadedUserId, setCloudLoadedUserId] = useState<string | null>(null);
   const [isHydrated, setIsHydrated] = useState(false);
   const latestSyncPayload = useRef("");
+  const marketRequestId = useRef(0);
+  const analysisRequestId = useRef(0);
+  const activeProfileIdRef = useRef(activeProfileId);
+  const holdingInputKeyRef = useRef("");
 
   useEffect(() => {
-    const storedProfiles = localStorage.getItem(PROFILES_KEY);
-    const stored = localStorage.getItem(STORAGE_KEY);
-    const storedSettings = localStorage.getItem(SETTINGS_KEY);
-    const parsedSettings = storedSettings ? { ...DEFAULT_SETTINGS, ...(JSON.parse(storedSettings) as Partial<FeeSettings>) } : DEFAULT_SETTINGS;
-    let nextProfiles = storedProfiles ? coerceProfiles(JSON.parse(storedProfiles), parsedSettings) : [];
-
-    if (!nextProfiles.length) {
-      const parsedRows = stored ? JSON.parse(stored) as EnrichedHolding[] : [];
-      const storedRows = removeLegacyDemoRows(parsedRows);
-      nextProfiles = migrateSinglePortfolio(storedRows, parsedSettings);
-      if (stored) setWarnings((existing) => [...existing, "Existing portfolio data was moved into the US Portfolio profile."]);
-      if (stored && storedRows.length !== parsedRows.length) {
-        setWarnings((existing) => [...existing, "Old demo tickers were removed from local storage."]);
-      }
-    }
-
-    setProfiles(nextProfiles.length ? nextProfiles : defaultProfiles());
-    const storedActiveProfileId = localStorage.getItem(ACTIVE_PROFILE_KEY);
-    setActiveProfileId(nextProfiles.some((profile) => profile.id === storedActiveProfileId) ? storedActiveProfileId! : nextProfiles[0]?.id || "us-portfolio");
+    const restored = loadPortfolioState({
+      storedProfiles: localStorage.getItem(PROFILES_KEY),
+      storedHoldings: localStorage.getItem(STORAGE_KEY),
+      storedSettings: localStorage.getItem(SETTINGS_KEY),
+      storedActiveProfileId: localStorage.getItem(ACTIVE_PROFILE_KEY)
+    });
+    setProfiles(restored.profiles);
+    setActiveProfileId(restored.activeProfileId);
+    if (restored.warnings.length) setWarnings((existing) => [...existing, ...restored.warnings]);
     setIsHydrated(true);
   }, []);
 
@@ -178,7 +183,7 @@ export default function Home() {
   }, [user]);
 
   const activeProfile = useMemo(() => profiles.find((profile) => profile.id === activeProfileId) || profiles[0], [profiles, activeProfileId]);
-  const holdings = activeProfile?.holdings || [];
+  const holdings = activeProfile?.holdings ?? EMPTY_HOLDINGS;
   const settings = activeProfile?.settings || DEFAULT_SETTINGS;
   const currency = activeProfile?.currency || "USD";
   const region = activeProfile?.region || "US";
@@ -198,6 +203,11 @@ export default function Home() {
     ].join(":")).join("|")
   ), [holdings]);
 
+  useEffect(() => {
+    activeProfileIdRef.current = activeProfile?.id || activeProfileId;
+    holdingInputKeyRef.current = holdingInputKey;
+  }, [activeProfile?.id, activeProfileId, holdingInputKey]);
+
   const updateActiveProfile = (updater: (profile: PortfolioProfile) => PortfolioProfile) => {
     setProfiles((items) => items.map((profile) => profile.id === activeProfile?.id ? updater(profile) : profile));
   };
@@ -213,7 +223,7 @@ export default function Home() {
     updateActiveProfile((profile) => ({ ...profile, settings: nextSettings }));
   };
 
-  const inputRows = useMemo(() => holdings.map(({ quote, news, analysis, selectedStopStyle, selectedTargetPrice, targetPriceEdited, sellPercent, ...holding }) => holding), [holdings]);
+  const inputRows = useMemo(() => holdings.map(toHoldingInput), [holdings]);
 
   const setInputRows = (rows: HoldingInput[]) => {
     setHoldings(rows.map((row) => {
@@ -225,7 +235,7 @@ export default function Home() {
         ? existing.selectedTargetPrice
         : quote ? defaultSellTargets(quote.currentPrice)[1].price : undefined;
       return {
-        ...enrich(row),
+        ...enrichHolding(row),
         quote,
         news: symbolUnchanged ? existing?.news || [] : [],
         analysis: symbolUnchanged && !costOrShareChanged ? existing?.analysis : undefined,
@@ -242,38 +252,53 @@ export default function Home() {
   };
 
   const refreshMarketData = async (options: { showLoading?: boolean; showWarnings?: boolean } = {}) => {
-    const symbols = holdings.map((holding) => displayMarketSymbol(holding.symbol, region)).filter(Boolean);
+    const requestId = marketRequestId.current + 1;
+    marketRequestId.current = requestId;
+    const profileIdAtStart = activeProfile?.id || activeProfileId;
+    const holdingsSnapshot = holdings;
+    const regionAtStart = region;
+    const isLatestRequest = () => marketRequestId.current === requestId && activeProfileIdRef.current === profileIdAtStart;
+    const symbols = holdingsSnapshot.map((holding) => displayMarketSymbol(holding.symbol, regionAtStart)).filter(Boolean);
     if (!symbols.length) return holdings;
     if (options.showLoading) setIsRefreshingMarket(true);
     try {
-      const analysisHoldings = holdings.map((holding) => ({ symbol: displayMarketSymbol(holding.symbol, region), region })).filter((holding) => holding.symbol);
+      const analysisHoldings = holdingsSnapshot.map((holding) => ({ symbol: displayMarketSymbol(holding.symbol, regionAtStart), region: regionAtStart })).filter((holding) => holding.symbol);
       const marketResponse = await fetch("/api/market", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ holdings: analysisHoldings, region })
+        body: JSON.stringify({ holdings: analysisHoldings, region: regionAtStart })
       });
-      const marketData = await marketResponse.json();
+      const marketData = await readJsonResponse<MarketApiResponse>(marketResponse);
+      if (!marketResponse.ok) throw new Error(marketData.error || "Market refresh failed");
       if (marketData.error) throw new Error(marketData.error);
       const bySymbol = new Map<string, { quote: MarketQuote; news: NewsItem[]; warnings: string[] }>();
-      marketData.rows.forEach((row: any) => bySymbol.set(row.symbol, row));
-      const withMarket = holdings.map((holding) => {
-        const row = bySymbol.get(displayMarketSymbol(holding.symbol, region).toUpperCase());
+      (marketData.rows || []).forEach((row) => {
+        if (row.quote) bySymbol.set(row.symbol.trim().toUpperCase(), { quote: row.quote, news: row.news || [], warnings: row.warnings || [] });
+      });
+      const withMarket = holdingsSnapshot.map((holding) => {
+        const row = bySymbol.get(displayMarketSymbol(holding.symbol, regionAtStart).toUpperCase());
         const quote = row?.quote;
         const selectedTargetPrice = quote && !holding.targetPriceEdited ? defaultSellTargets(quote.currentPrice)[1].price : holding.selectedTargetPrice;
         return { ...holding, quote, news: row?.news || holding.news || [], selectedTargetPrice };
       });
-      if (options.showWarnings) {
-        setWarnings((existing) => [...existing, ...marketData.rows.flatMap((row: any) => row.warnings || []).map(normalizeWarning)]);
+      if (options.showWarnings && isLatestRequest()) {
+        setWarnings((existing) => [...existing, ...(marketData.rows || []).flatMap((row) => row.warnings || []).map(normalizeWarning)]);
       }
-      setHoldings(withMarket);
+      if (!isLatestRequest()) return undefined;
+      setHoldings((currentItems) => currentItems.map((holding) => {
+        const row = bySymbol.get(displayMarketSymbol(holding.symbol, regionAtStart).toUpperCase());
+        if (!row) return holding;
+        const selectedTargetPrice = !holding.targetPriceEdited ? defaultSellTargets(row.quote.currentPrice)[1].price : holding.selectedTargetPrice;
+        return { ...holding, quote: row.quote, news: row.news, selectedTargetPrice };
+      }));
       return withMarket;
     } catch (error) {
-      if (options.showWarnings) {
+      if (options.showWarnings && isLatestRequest()) {
         setWarnings((existing) => [...existing, error instanceof Error ? error.message : "Market refresh failed"]);
       }
-      return holdings;
+      return holdingsSnapshot;
     } finally {
-      if (options.showLoading) setIsRefreshingMarket(false);
+      if (options.showLoading && marketRequestId.current === requestId) setIsRefreshingMarket(false);
     }
   };
 
@@ -283,6 +308,8 @@ export default function Home() {
       void refreshMarketData({ showLoading: true, showWarnings: false });
     }, 500);
     return () => window.clearTimeout(timeout);
+    // Keyed by symbol/profile fingerprint so quote-only updates do not trigger another refresh.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isHydrated, activeProfileId, region, marketSymbolKey]);
 
   useEffect(() => {
@@ -291,29 +318,46 @@ export default function Home() {
       void refreshMarketData({ showLoading: true, showWarnings: false });
     }, 60_000);
     return () => window.clearInterval(interval);
+    // Keyed by input fingerprint so quote-only updates do not reset the polling interval.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isHydrated, activeProfileId, region, marketSymbolKey, holdingInputKey]);
 
   const analyze = async () => {
+    const requestId = analysisRequestId.current + 1;
+    analysisRequestId.current = requestId;
+    const profileIdAtStart = activeProfile?.id || activeProfileId;
+    const inputKeyAtStart = holdingInputKeyRef.current;
+    const isLatestAnalysis = () => analysisRequestId.current === requestId && activeProfileIdRef.current === profileIdAtStart && holdingInputKeyRef.current === inputKeyAtStart;
     setIsAnalyzing(true);
     setWarnings(["Refreshing market data, news, and analysis. Uploaded screenshots are not sent unless you use image extraction."]);
     try {
       const withMarket = await refreshMarketData({ showLoading: true, showWarnings: true });
-      const analyzed = await Promise.all(withMarket.map(async (holding) => {
-        if (!holding.quote) return holding;
+      if (!withMarket || !isLatestAnalysis()) return;
+      const analyzed = await Promise.all(withMarket.map(async (holding): Promise<AnalyzedHoldingResponse> => {
+        if (!holding.quote) return { id: holding.id, quote: holding.quote, news: holding.news };
         const response = await fetch("/api/analyzeHolding", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ holding, quote: holding.quote, news: holding.news })
         });
-        const data = await response.json();
-        if (data.warning) setWarnings((existing) => [...existing, normalizeWarning(data.warning)]);
-        return { ...holding, analysis: data.analysis as AiAnalysis };
+        const data = await readJsonResponse<AnalysisApiResponse>(response);
+        if (!response.ok) throw new Error(data.error || `Analysis failed for ${holding.symbol}`);
+        return {
+          id: holding.id,
+          quote: holding.quote,
+          news: holding.news,
+          analysis: data.analysis,
+          warning: data.warning
+        };
       }));
-      setHoldings(analyzed);
+      if (!isLatestAnalysis()) return;
+      const warningsToAdd = analyzed.map((item) => item.warning).filter((warning): warning is string => Boolean(warning)).map(normalizeWarning);
+      if (warningsToAdd.length) setWarnings((existing) => [...existing, ...warningsToAdd]);
+      setHoldings((currentItems) => applyAnalyzedHoldingResults(currentItems, analyzed));
     } catch (error) {
       setWarnings((existing) => [...existing, error instanceof Error ? error.message : "Analysis failed"]);
     } finally {
-      setIsAnalyzing(false);
+      if (analysisRequestId.current === requestId) setIsAnalyzing(false);
     }
   };
 
@@ -358,7 +402,14 @@ export default function Home() {
     if (!supabase || !user) return false;
     setCloudSyncStatus("saving");
     setCloudSyncMessage("Saving changes to cloud...");
-    const parsedPayload = JSON.parse(payload) as { profiles: PortfolioProfile[]; activeProfileId: string };
+    let parsedPayload: { profiles: PortfolioProfile[]; activeProfileId: string };
+    try {
+      parsedPayload = JSON.parse(payload) as { profiles: PortfolioProfile[]; activeProfileId: string };
+    } catch {
+      setCloudSyncStatus("error");
+      setCloudSyncMessage("Cloud save failed: portfolio payload could not be serialized.");
+      return false;
+    }
     const { error } = await supabase.from("user_portfolios").upsert({
       user_id: user.id,
       holdings: parsedPayload.profiles,
@@ -394,13 +445,15 @@ export default function Home() {
       setCloudSyncMessage("No cloud portfolio yet. Local changes will save automatically.");
       return;
     }
-    const cloudSettings = data.settings as { activeProfileId?: string } & Partial<FeeSettings>;
+    const cloudSettings = data.settings && typeof data.settings === "object"
+      ? data.settings as { activeProfileId?: string } & Partial<FeeSettings>
+      : {};
     const loadedProfiles = coerceProfiles(data.holdings, DEFAULT_SETTINGS);
     if (loadedProfiles.length) {
       setProfiles(loadedProfiles);
       setActiveProfileId(loadedProfiles.some((profile) => profile.id === cloudSettings?.activeProfileId) ? cloudSettings.activeProfileId! : loadedProfiles[0].id);
     } else {
-      const legacyHoldings = Array.isArray(data.holdings) ? data.holdings as EnrichedHolding[] : [];
+      const legacyHoldings = coerceHoldings(data.holdings);
       const migratedProfiles = migrateSinglePortfolio(legacyHoldings, { ...DEFAULT_SETTINGS, ...cloudSettings });
       setProfiles(migratedProfiles);
       setActiveProfileId(migratedProfiles[0].id);
@@ -413,6 +466,8 @@ export default function Home() {
   useEffect(() => {
     if (!supabase || !user || !isHydrated) return;
     void loadCloudPortfolio();
+    // loadCloudPortfolio is guarded by cloudLoadedUserId and should run once per signed-in user.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [supabase, user, isHydrated, cloudLoadedUserId]);
 
   useEffect(() => {
@@ -424,6 +479,8 @@ export default function Home() {
       void saveCloudPortfolio(payload);
     }, 1200);
     return () => window.clearTimeout(timeout);
+    // saveCloudPortfolio consumes the serialized payload captured for this debounce tick.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [supabase, user, isHydrated, cloudLoadedUserId, profiles, activeProfileId]);
 
   const addProfile = () => {

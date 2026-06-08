@@ -10,22 +10,42 @@ type Props = {
   setWarning: (warning: string) => void;
 };
 
+const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+const ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+
+type ExtractImageResponse = {
+  rows?: Array<Partial<HoldingInput>>;
+  warnings?: string[];
+  warning?: string;
+  unavailable?: boolean;
+  error?: string;
+};
+
 export function ImageImport({ onExtracted, setWarning }: Props) {
   const [isExtracting, setIsExtracting] = useState(false);
 
   const extract = async (file?: File) => {
     if (!file) return;
+    if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
+      setWarning("Unsupported image type. Please upload a JPEG, PNG, or WebP screenshot.");
+      return;
+    }
+    if (file.size > MAX_IMAGE_BYTES) {
+      setWarning("Image is too large. Please upload a screenshot under 8 MB.");
+      return;
+    }
     const form = new FormData();
     form.append("image", file);
     setIsExtracting(true);
     setWarning("Sending screenshot to external AI/OCR because you clicked Extract from image.");
     try {
       const response = await fetch("/api/extractImage", { method: "POST", body: form });
-      const data = await response.json();
+      const data = await readJsonResponse<ExtractImageResponse>(response);
+      if (!response.ok) throw new Error(data.error || data.warning || "OCR extraction failed");
       if (data.warning) setWarning(data.warning);
       if (data.unavailable) return;
       if (Array.isArray(data.warnings)) data.warnings.forEach((warning: string) => setWarning(warning));
-      const rows = (data.rows || []).map((row: any) => {
+      const rows = (data.rows || []).map((row) => {
         const shares = Number(row.shares || 0);
         const averageCost = Number(row.averageCost || 0);
         return {
@@ -41,6 +61,8 @@ export function ImageImport({ onExtracted, setWarning }: Props) {
       });
       if (rows.length) onExtracted(rows);
       else setWarning("No holdings were extracted. Try a sharper full-screen screenshot, or import CSV/manual rows.");
+    } catch (error) {
+      setWarning(error instanceof Error ? error.message : "OCR extraction failed. Please import CSV/manual rows.");
     } finally {
       setIsExtracting(false);
     }
@@ -63,4 +85,12 @@ export function ImageImport({ onExtracted, setWarning }: Props) {
       </div>
     </section>
   );
+}
+
+async function readJsonResponse<T>(response: Response): Promise<T> {
+  try {
+    return await response.json() as T;
+  } catch {
+    throw new Error(`Server returned an unreadable response (${response.status}).`);
+  }
 }
