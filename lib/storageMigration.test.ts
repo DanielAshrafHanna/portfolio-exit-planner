@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { coerceHoldings, loadPortfolioState } from "./storageMigration";
+import { coerceHoldings, emptyPortfolioBootstrap, loadPortfolioState } from "./storageMigration";
 
 describe("portfolio storage migration", () => {
+  it("bootstraps new accounts with empty US and Egypt profiles", () => {
+    const state = emptyPortfolioBootstrap();
+    expect(state.profiles).toHaveLength(2);
+    expect(state.profiles.every((profile) => profile.holdings.length === 0)).toBe(true);
+    expect(state.activeProfileId).toBe("us-portfolio");
+  });
+
   it("ignores corrupted JSON and falls back to default profiles", () => {
     const state = loadPortfolioState({
       storedProfiles: "{bad json",

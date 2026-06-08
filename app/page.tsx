@@ -22,7 +22,7 @@ import { SharedHoldingsViewer } from "@/components/SharedHoldingsViewer";
 import { defaultSellTargets } from "@/lib/calculations";
 import { applyAnalyzedHoldingResults, type AnalyzedHoldingResult } from "@/lib/holdingMerge";
 import { DEFAULT_SETTINGS, defaultProfiles, displayMarketSymbol } from "@/lib/profileUtils";
-import { coerceHoldings, coerceProfiles, enrichHolding, loadPortfolioState, migrateSinglePortfolio } from "@/lib/storageMigration";
+import { coerceHoldings, coerceProfiles, emptyPortfolioBootstrap, enrichHolding, loadPortfolioState, migrateSinglePortfolio } from "@/lib/storageMigration";
 import { createSupabaseBrowserClient } from "@/lib/supabaseClient";
 import { parseStoredUserPrefs, serializeUserPrefs, resolveUserPrefsForSync, USER_PREFS_KEY } from "@/lib/userPrefs";
 import type { AiAnalysis, EnrichedHolding, FeeSettings, HoldingInput, MarketQuote, NewsItem, PortfolioProfile, SharedPortfolioProfile } from "@/lib/types";
@@ -311,6 +311,21 @@ export default function Home() {
     if (typeof window !== "undefined") {
       localStorage.setItem(LOCAL_UPDATED_AT_KEY, new Date().toISOString());
     }
+  };
+
+  const applyEmptyPortfolioBootstrap = () => {
+    const bootstrap = emptyPortfolioBootstrap();
+    userEditRevision.current = 0;
+    latestSyncKey.current = "";
+    setProfiles(bootstrap.profiles);
+    setActiveProfileId(bootstrap.activeProfileId);
+    if (typeof window !== "undefined") {
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.setItem(PROFILES_KEY, JSON.stringify(bootstrap.profiles));
+      localStorage.setItem(ACTIVE_PROFILE_KEY, bootstrap.activeProfileId);
+      localStorage.removeItem(LOCAL_UPDATED_AT_KEY);
+    }
+    return bootstrap;
   };
 
   useEffect(() => {
@@ -681,6 +696,7 @@ export default function Home() {
       setDisplayName(normalizedSignupName);
       setWarnings((existing) => [...existing, "Account created. Check your email to confirm before signing in."]);
     } else {
+      if (mode === "signup") applyEmptyPortfolioBootstrap();
       setWarnings((existing) => [...existing, "Signed in. Cloud sync will load once and then save changes automatically."]);
     }
   };
@@ -802,11 +818,14 @@ export default function Home() {
       return;
     }
     if (!data) {
+      const bootstrap = applyEmptyPortfolioBootstrap();
+      const resolvedName = normalizeDisplayName(friendlyNameForUser(user));
       setCloudLoadedUserId(user.id);
-      setDisplayName(friendlyNameForUser(user));
+      setDisplayName(resolvedName);
       applyShareHoldingsFromCloud(false);
+      latestSyncKey.current = profilesSyncKey(bootstrap.profiles, bootstrap.activeProfileId, resolvedName, false);
       setCloudSyncStatus("saved");
-      setCloudSyncMessage("No cloud portfolio yet. Local changes will save automatically.");
+      setCloudSyncMessage("New account started with empty portfolios. Add holdings to begin.");
       void loadSharedProfiles();
       return;
     }
