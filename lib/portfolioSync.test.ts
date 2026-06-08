@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_SETTINGS } from "./profileUtils";
-import { shouldPreferLocalPortfolio } from "./portfolioSync";
+import {
+  portfolioHasUnsavedSymbols,
+  shouldKeepSessionPortfolioEdits,
+  shouldSkipEmptyCloudOverwrite
+} from "./portfolioSync";
 import type { PortfolioProfile } from "./types";
 
 function profile(id: string, region: "US" | "EG", symbols: string[]): PortfolioProfile {
@@ -24,34 +28,28 @@ function profile(id: string, region: "US" | "EG", symbols: string[]): PortfolioP
   };
 }
 
-describe("shouldPreferLocalPortfolio", () => {
-  it("prefers cloud when local is empty but cloud has holdings", () => {
+describe("portfolio sync policy", () => {
+  it("does not keep local portfolio on fresh load without session edits", () => {
     const local = [profile("us-portfolio", "US", []), profile("eg-portfolio", "EG", [])];
     const cloud = [profile("us-portfolio", "US", ["NASA"]), profile("eg-portfolio", "EG", [])];
-    expect(shouldPreferLocalPortfolio(local, cloud, {
-      localIsNewer: true,
-      userEditedDuringLoad: false,
-      localHasUnsavedHoldings: false
-    })).toBe(false);
+    expect(shouldKeepSessionPortfolioEdits(local, cloud, false)).toBe(false);
   });
 
-  it("keeps local when it has symbols missing from cloud", () => {
+  it("keeps local portfolio during an active editing session", () => {
     const local = [profile("us-portfolio", "US", ["NASA"]), profile("eg-portfolio", "EG", [])];
     const cloud = [profile("us-portfolio", "US", []), profile("eg-portfolio", "EG", [])];
-    expect(shouldPreferLocalPortfolio(local, cloud, {
-      localIsNewer: false,
-      userEditedDuringLoad: false,
-      localHasUnsavedHoldings: true
-    })).toBe(true);
+    expect(shouldKeepSessionPortfolioEdits(local, cloud, true)).toBe(true);
   });
 
-  it("keeps newer local data when local still has holdings", () => {
-    const local = [profile("us-portfolio", "US", ["AAPL"]), profile("eg-portfolio", "EG", [])];
+  it("detects unsaved local symbols", () => {
+    const local = [profile("us-portfolio", "US", ["NASA"]), profile("eg-portfolio", "EG", [])];
     const cloud = [profile("us-portfolio", "US", ["AAPL"]), profile("eg-portfolio", "EG", [])];
-    expect(shouldPreferLocalPortfolio(local, cloud, {
-      localIsNewer: true,
-      userEditedDuringLoad: false,
-      localHasUnsavedHoldings: false
-    })).toBe(true);
+    expect(portfolioHasUnsavedSymbols(local, cloud)).toBe(true);
+  });
+
+  it("blocks empty autosave from overwriting cloud holdings", () => {
+    const local = [profile("us-portfolio", "US", []), profile("eg-portfolio", "EG", [])];
+    expect(shouldSkipEmptyCloudOverwrite(local, 1, false)).toBe(true);
+    expect(shouldSkipEmptyCloudOverwrite(local, 1, true)).toBe(false);
   });
 });

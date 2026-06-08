@@ -1,4 +1,11 @@
 export const USER_PREFS_KEY = "portfolio-exit-planner:user-prefs:v1";
+export const LEGACY_USER_PREFS_KEY = USER_PREFS_KEY;
+
+export function userPrefsStorageKey(userId: string | "guest") {
+  return userId === "guest"
+    ? "portfolio-exit-planner:user-prefs:guest:v1"
+    : `portfolio-exit-planner:user-prefs:v2:user:${userId}`;
+}
 
 export type StoredUserPrefs = {
   displayName: string;

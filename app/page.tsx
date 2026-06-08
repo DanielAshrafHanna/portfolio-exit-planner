@@ -22,17 +22,31 @@ import { SharedHoldingsViewer } from "@/components/SharedHoldingsViewer";
 import { defaultSellTargets } from "@/lib/calculations";
 import { applyAnalyzedHoldingResults, type AnalyzedHoldingResult } from "@/lib/holdingMerge";
 import { DEFAULT_SETTINGS, defaultProfiles, displayMarketSymbol } from "@/lib/profileUtils";
-import { coerceHoldings, coerceProfiles, emptyPortfolioBootstrap, enrichHolding, loadPortfolioState, migrateSinglePortfolio } from "@/lib/storageMigration";
+import {
+  clearLegacyPortfolioKeys,
+  clearPortfolioCache,
+  defaultPortfolioSnapshot,
+  portfolioSnapshotFromProfiles,
+  readGuestPortfolioState,
+  writePortfolioCache,
+  type PortfolioCacheSnapshot
+} from "@/lib/portfolioStorage";
+import { coerceHoldings, coerceProfiles, emptyPortfolioBootstrap, enrichHolding, migrateSinglePortfolio } from "@/lib/storageMigration";
 import { createSupabaseBrowserClient } from "@/lib/supabaseClient";
-import { shouldPreferLocalPortfolio } from "@/lib/portfolioSync";
-import { parseStoredUserPrefs, serializeUserPrefs, resolveUserPrefsForSync, USER_PREFS_KEY } from "@/lib/userPrefs";
+import {
+  portfolioHoldingSymbols,
+  shouldKeepSessionPortfolioEdits,
+  shouldSkipEmptyCloudOverwrite
+} from "@/lib/portfolioSync";
+import {
+  LEGACY_USER_PREFS_KEY,
+  parseStoredUserPrefs,
+  resolveUserPrefsForSync,
+  serializeUserPrefs,
+  userPrefsStorageKey
+} from "@/lib/userPrefs";
 import type { AiAnalysis, EnrichedHolding, FeeSettings, HoldingInput, MarketQuote, NewsItem, PortfolioProfile, SharedPortfolioProfile } from "@/lib/types";
 
-const STORAGE_KEY = "portfolio-exit-planner:v1";
-const SETTINGS_KEY = "portfolio-exit-planner:settings:v1";
-const PROFILES_KEY = "portfolio-exit-planner:profiles:v1";
-const ACTIVE_PROFILE_KEY = "portfolio-exit-planner:active-profile:v1";
-const LOCAL_UPDATED_AT_KEY = "portfolio-exit-planner:local-updated-at:v1";
 const EMPTY_HOLDINGS: EnrichedHolding[] = [];
 const ADMIN_EMAIL = "danielhanna0001@gmail.com";
 const OWN_HOLDINGS_VIEW_ID = "mine";
@@ -202,13 +216,11 @@ function sharedUserViewId(entry: SharedPortfolioProfile) {
   return `shared:${entry.userId || entry.displayName}`;
 }
 
-function holdingSymbols(profiles: PortfolioProfile[]) {
-  return profiles.flatMap((profile) => profile.holdings.map((holding) => holding.symbol.trim().toUpperCase()).filter(Boolean));
-}
-
-function localHasHoldingsNotInCloud(local: PortfolioProfile[], cloud: PortfolioProfile[]) {
-  const cloudSymbolSet = new Set(holdingSymbols(cloud));
-  return holdingSymbols(local).some((symbol) => !cloudSymbolSet.has(symbol));
+function readStoredUserPrefs(userId: string | "guest") {
+  const keyed = parseStoredUserPrefs(localStorage.getItem(userPrefsStorageKey(userId)));
+  if (keyed) return keyed;
+  if (userId !== "guest") return parseStoredUserPrefs(localStorage.getItem(LEGACY_USER_PREFS_KEY));
+  return null;
 }
 
 function profilesSyncKey(profiles: PortfolioProfile[], activeProfileId: string, displayName: string, shareHoldings: boolean) {
@@ -275,6 +287,7 @@ export default function Home() {
   const [selectedSharedProfileId, setSelectedSharedProfileId] = useState(OWN_HOLDINGS_VIEW_ID);
   const [isLoadingSharedProfiles, setIsLoadingSharedProfiles] = useState(false);
   const [isHydrated, setIsHydrated] = useState(false);
+  const [isAuthReady, setIsAuthReady] = useState(false);
   const [quickAddFocusToken, setQuickAddFocusToken] = useState(0);
   const [quickAddExpanded, setQuickAddExpanded] = useState(false);
   const [desktopSettingsOpen, setDesktopSettingsOpen] = useState(false);
@@ -288,6 +301,11 @@ export default function Home() {
   const shareHoldingsRef = useRef(shareHoldings);
   const cloudShareHoldingsRef = useRef(false);
   const shareHoldingsTouchedRef = useRef(false);
+  const sessionPortfolioEditedRef = useRef(false);
+  const cloudPortfolioUpdatedAtRef = useRef<string | null>(null);
+  const cloudHoldingCountRef = useRef(0);
+  const signedInUserIdRef = useRef<string | null>(null);
+  const cloudLoadInFlightRef = useRef(false);
   const marketRequestId = useRef(0);
   const analysisRequestId = useRef(0);
   const activeProfileIdRef = useRef(activeProfileId);
@@ -309,74 +327,129 @@ export default function Home() {
 
   const touchLocalPortfolioTimestamp = () => {
     userEditRevision.current += 1;
-    if (typeof window !== "undefined") {
-      localStorage.setItem(LOCAL_UPDATED_AT_KEY, new Date().toISOString());
-    }
+    sessionPortfolioEditedRef.current = true;
   };
 
   const applyEmptyPortfolioBootstrap = () => {
     const bootstrap = emptyPortfolioBootstrap();
     userEditRevision.current = 0;
+    sessionPortfolioEditedRef.current = false;
     latestSyncKey.current = "";
+    cloudPortfolioUpdatedAtRef.current = null;
+    cloudHoldingCountRef.current = 0;
     setProfiles(bootstrap.profiles);
     setActiveProfileId(bootstrap.activeProfileId);
-    if (typeof window !== "undefined") {
-      localStorage.removeItem(STORAGE_KEY);
-      localStorage.setItem(PROFILES_KEY, JSON.stringify(bootstrap.profiles));
-      localStorage.setItem(ACTIVE_PROFILE_KEY, bootstrap.activeProfileId);
-      localStorage.removeItem(LOCAL_UPDATED_AT_KEY);
-    }
     return bootstrap;
   };
 
-  useEffect(() => {
-    const restored = loadPortfolioState({
-      storedProfiles: localStorage.getItem(PROFILES_KEY),
-      storedHoldings: localStorage.getItem(STORAGE_KEY),
-      storedSettings: localStorage.getItem(SETTINGS_KEY),
-      storedActiveProfileId: localStorage.getItem(ACTIVE_PROFILE_KEY)
-    });
-    setProfiles(restored.profiles);
-    setActiveProfileId(restored.activeProfileId);
-    const storedPrefs = parseStoredUserPrefs(localStorage.getItem(USER_PREFS_KEY));
-    if (storedPrefs) {
-      setDisplayName(storedPrefs.displayName);
-      setShareHoldings(storedPrefs.shareHoldings);
+  const persistSignedInPortfolioCache = (snapshot: PortfolioCacheSnapshot) => {
+    if (!user) return;
+    writePortfolioCache(user.id, snapshot);
+  };
+
+  const applyCloudPortfolioSnapshot = (
+    snapshot: PortfolioCacheSnapshot,
+    options: {
+      displayName: string;
+      shareHoldings: boolean;
+      cloudUpdatedAt?: string | null;
     }
-    if (restored.warnings.length) setWarnings((existing) => [...existing, ...restored.warnings]);
-    setIsHydrated(true);
-  }, []);
+  ) => {
+    const resolvedUpdatedAt = options.cloudUpdatedAt ?? snapshot.cloudUpdatedAt ?? null;
+    sessionPortfolioEditedRef.current = false;
+    cloudPortfolioUpdatedAtRef.current = resolvedUpdatedAt;
+    cloudHoldingCountRef.current = portfolioHoldingSymbols(snapshot.profiles).length;
+    setProfiles(snapshot.profiles);
+    setActiveProfileId(snapshot.activeProfileId);
+    setDisplayName(options.displayName);
+    applyShareHoldingsFromCloud(options.shareHoldings);
+    latestSyncKey.current = profilesSyncKey(
+      snapshot.profiles,
+      snapshot.activeProfileId,
+      options.displayName,
+      options.shareHoldings
+    );
+    persistSignedInPortfolioCache(portfolioSnapshotFromProfiles(
+      snapshot.profiles,
+      snapshot.activeProfileId,
+      resolvedUpdatedAt
+    ));
+  };
 
   useEffect(() => {
-    if (!isHydrated) return;
-    localStorage.setItem(PROFILES_KEY, JSON.stringify(profiles));
-  }, [profiles, isHydrated]);
-
-  useEffect(() => {
-    if (!isHydrated) return;
-    localStorage.setItem(USER_PREFS_KEY, serializeUserPrefs({
-      displayName: normalizeDisplayName(displayName),
-      shareHoldings
-    }));
-  }, [displayName, shareHoldings, isHydrated]);
-
-  useEffect(() => {
-    if (!isHydrated) return;
-    localStorage.setItem(ACTIVE_PROFILE_KEY, activeProfileId);
-  }, [activeProfileId, isHydrated]);
-
-  useEffect(() => {
-    if (!supabase) return;
+    if (!supabase) {
+      setIsAuthReady(true);
+      return;
+    }
     setIsAuthLoading(true);
     supabase.auth.getUser().then(({ data }) => {
       setUser(data.user);
       setIsAuthLoading(false);
+      setIsAuthReady(true);
     });
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
     });
     return () => listener.subscription.unsubscribe();
   }, [supabase]);
+
+  useEffect(() => {
+    if (!isAuthReady) return;
+    if (!user) {
+      signedInUserIdRef.current = null;
+      sessionPortfolioEditedRef.current = false;
+      cloudPortfolioUpdatedAtRef.current = null;
+      cloudHoldingCountRef.current = 0;
+      latestSyncKey.current = "";
+      setCloudLoadedUserId(null);
+      const guest = readGuestPortfolioState();
+      setProfiles(guest.profiles);
+      setActiveProfileId(guest.activeProfileId);
+      const guestPrefs = readStoredUserPrefs("guest");
+      if (guestPrefs) {
+        setDisplayName(guestPrefs.displayName);
+        setShareHoldings(guestPrefs.shareHoldings);
+      }
+      setIsHydrated(true);
+      return;
+    }
+
+    if (signedInUserIdRef.current === user.id && isHydrated) return;
+
+    signedInUserIdRef.current = user.id;
+    sessionPortfolioEditedRef.current = false;
+    cloudPortfolioUpdatedAtRef.current = null;
+    cloudHoldingCountRef.current = 0;
+    latestSyncKey.current = "";
+    setCloudLoadedUserId(null);
+    const bootstrap = defaultPortfolioSnapshot();
+    setProfiles(bootstrap.profiles);
+    setActiveProfileId(bootstrap.activeProfileId);
+    const storedPrefs = readStoredUserPrefs(user.id);
+    if (storedPrefs) {
+      setDisplayName(storedPrefs.displayName);
+      setShareHoldings(storedPrefs.shareHoldings);
+    } else {
+      setDisplayName((existing) => existing === "Friend" ? friendlyNameForUser(user) : existing);
+    }
+    setIsHydrated(true);
+    // Intentionally keyed by user id so token refresh does not reset the signed-in portfolio.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthReady, user?.id, isHydrated]);
+
+  useEffect(() => {
+    if (!isHydrated || user) return;
+    writePortfolioCache("guest", portfolioSnapshotFromProfiles(profiles, activeProfileId, null));
+  }, [profiles, activeProfileId, isHydrated, user]);
+
+  useEffect(() => {
+    if (!isHydrated) return;
+    const prefsKey = user ? userPrefsStorageKey(user.id) : userPrefsStorageKey("guest");
+    localStorage.setItem(prefsKey, serializeUserPrefs({
+      displayName: normalizeDisplayName(displayName),
+      shareHoldings
+    }));
+  }, [displayName, shareHoldings, isHydrated, user]);
 
   const currentProfilesSyncKey = useMemo(
     () => profilesSyncKey(profiles, activeProfileId, displayName, shareHoldings),
@@ -386,27 +459,14 @@ export default function Home() {
   useEffect(() => {
     if (!user) {
       hydratedPrefsUserId.current = null;
-      latestSyncKey.current = "";
       cloudShareHoldingsRef.current = false;
       shareHoldingsTouchedRef.current = false;
-      setCloudLoadedUserId(null);
+      sessionPortfolioEditedRef.current = false;
       setCloudSyncStatus("signed-out");
       setCloudSyncMessage("Sign in to enable cloud sync.");
       setSharedProfiles([]);
       setSelectedSharedProfileId(OWN_HOLDINGS_VIEW_ID);
-      return;
     }
-    if (hydratedPrefsUserId.current === user.id) return;
-    hydratedPrefsUserId.current = user.id;
-    latestSyncKey.current = "";
-    const storedPrefs = parseStoredUserPrefs(localStorage.getItem(USER_PREFS_KEY));
-    if (storedPrefs) {
-      setDisplayName(storedPrefs.displayName);
-      setShareHoldings(storedPrefs.shareHoldings);
-    } else if (user) {
-      setDisplayName((existing) => existing === "Friend" ? friendlyNameForUser(user) : existing);
-    }
-    // Hydrate prefs once per signed-in user id; ignore token refresh object updates.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
@@ -636,12 +696,16 @@ export default function Home() {
   };
 
   const clearStored = () => {
-    localStorage.removeItem(STORAGE_KEY);
-    localStorage.removeItem(SETTINGS_KEY);
-    localStorage.removeItem(PROFILES_KEY);
-    localStorage.removeItem(ACTIVE_PROFILE_KEY);
-    localStorage.removeItem(LOCAL_UPDATED_AT_KEY);
-    localStorage.removeItem(USER_PREFS_KEY);
+    clearLegacyPortfolioKeys();
+    clearPortfolioCache("guest");
+    if (user) clearPortfolioCache(user.id);
+    localStorage.removeItem(LEGACY_USER_PREFS_KEY);
+    localStorage.removeItem(userPrefsStorageKey("guest"));
+    if (user) localStorage.removeItem(userPrefsStorageKey(user.id));
+    sessionPortfolioEditedRef.current = false;
+    cloudPortfolioUpdatedAtRef.current = null;
+    cloudHoldingCountRef.current = 0;
+    latestSyncKey.current = "";
     const nextProfiles = defaultProfiles();
     setProfiles(nextProfiles);
     setActiveProfileId(nextProfiles[0].id);
@@ -753,10 +817,16 @@ export default function Home() {
       setCloudSyncMessage(`Cloud save failed: ${error.message}`);
       return false;
     }
-    if (typeof window !== "undefined") {
-      localStorage.setItem(LOCAL_UPDATED_AT_KEY, new Date().toISOString());
-    }
+    const savedAt = new Date().toISOString();
     cloudShareHoldingsRef.current = cloudSettings.shareHoldings;
+    cloudPortfolioUpdatedAtRef.current = savedAt;
+    cloudHoldingCountRef.current = portfolioHoldingSymbols(parsedPayload.profiles).length;
+    sessionPortfolioEditedRef.current = false;
+    persistSignedInPortfolioCache(portfolioSnapshotFromProfiles(
+      parsedPayload.profiles,
+      parsedPayload.activeProfileId,
+      savedAt
+    ));
     setCloudSyncStatus("saved");
     setCloudSyncMessage(`Saved to cloud at ${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}.`);
     void loadSharedProfiles();
@@ -796,115 +866,148 @@ export default function Home() {
     setSelectedSharedProfileId((existing) => existing === OWN_HOLDINGS_VIEW_ID || entries.some((entry) => sharedUserViewId(entry) === existing) ? existing : OWN_HOLDINGS_VIEW_ID);
   };
 
-  const loadCloudPortfolio = async () => {
-    if (!supabase || !user || cloudLoadedUserId === user.id) return;
-    const revisionAtLoadStart = userEditRevision.current;
-    setIsAuthLoading(true);
-    setCloudSyncStatus("loading");
-    setCloudSyncMessage("Loading cloud portfolio...");
-    const initialResult = await supabase.from("user_portfolios").select("holdings, settings, display_name, share_holdings, updated_at").eq("user_id", user.id).maybeSingle();
-    let data = initialResult.data as CloudPortfolioRow | null;
-    let error = initialResult.error;
-    if (isMissingSharedColumnsError(error)) {
-      const fallback = await supabase.from("user_portfolios").select("holdings, settings, updated_at").eq("user_id", user.id).maybeSingle();
-      data = fallback.data as CloudPortfolioRow | null;
-      error = fallback.error;
-      setWarnings((existing) => [...existing, "Shared holdings need the updated Supabase SQL/schema cache. Cloud sync will keep working privately for now."]);
-    }
-    setIsAuthLoading(false);
-    if (error) {
-      setCloudLoadedUserId(user.id);
-      setCloudSyncStatus("error");
-      setCloudSyncMessage(isAdmin ? `Cloud load failed: ${error.message}` : "Cloud load failed. Ask the admin to check setup.");
-      return;
-    }
-    if (!data) {
-      const bootstrap = applyEmptyPortfolioBootstrap();
-      const resolvedName = normalizeDisplayName(friendlyNameForUser(user));
-      setCloudLoadedUserId(user.id);
-      setDisplayName(resolvedName);
-      applyShareHoldingsFromCloud(false);
-      latestSyncKey.current = profilesSyncKey(bootstrap.profiles, bootstrap.activeProfileId, resolvedName, false);
-      setCloudSyncStatus("saved");
-      setCloudSyncMessage("New account started with empty portfolios. Add holdings to begin.");
-      void loadSharedProfiles();
-      return;
-    }
-    const row = data as CloudPortfolioRow;
+  const resolveCloudPortfolioRow = (row: CloudPortfolioRow) => {
     const cloudSettings: CloudSettings = row.settings && typeof row.settings === "object"
-      ? data.settings as CloudSettings
+      ? row.settings as CloudSettings
       : {};
     const loadedProfiles = coerceProfiles(row.holdings, DEFAULT_SETTINGS);
     const resolvedProfiles = loadedProfiles.length
       ? loadedProfiles
-      : migrateSinglePortfolio(coerceHoldings(data.holdings), { ...DEFAULT_SETTINGS, ...cloudSettings });
+      : migrateSinglePortfolio(coerceHoldings(row.holdings), { ...DEFAULT_SETTINGS, ...cloudSettings });
     const resolvedActiveProfileId = loadedProfiles.length
       ? (loadedProfiles.some((profile) => profile.id === cloudSettings?.activeProfileId) ? cloudSettings.activeProfileId! : loadedProfiles[0].id)
       : resolvedProfiles[0].id;
-    const localUpdatedAt = localStorage.getItem(LOCAL_UPDATED_AT_KEY);
-    const cloudUpdatedAt = row.updated_at || undefined;
-    const localIsNewer = Boolean(localUpdatedAt && cloudUpdatedAt && new Date(localUpdatedAt) > new Date(cloudUpdatedAt));
-    const userEditedDuringLoad = revisionAtLoadStart !== userEditRevision.current;
-    const localHasUnsavedHoldings = localHasHoldingsNotInCloud(profilesRef.current, resolvedProfiles);
-    const keepLocalPortfolio = shouldPreferLocalPortfolio(profilesRef.current, resolvedProfiles, {
-      localIsNewer,
-      userEditedDuringLoad,
-      localHasUnsavedHoldings
-    });
+    const resolvedDisplayName = normalizeDisplayName(row.display_name || cloudSettings.displayName || friendlyNameForUser(user!));
+    const resolvedShareHoldings = Boolean(row.share_holdings ?? cloudSettings.shareHoldings);
+    return {
+      snapshot: portfolioSnapshotFromProfiles(resolvedProfiles, resolvedActiveProfileId, row.updated_at || null),
+      resolvedDisplayName,
+      resolvedShareHoldings,
+      cloudSettings
+    };
+  };
 
-    if (keepLocalPortfolio) {
+  const loadCloudPortfolio = async (options?: { force?: boolean }) => {
+    if (!supabase || !user) return;
+    if (!options?.force && cloudLoadedUserId === user.id) return;
+    if (cloudLoadInFlightRef.current) return;
+    cloudLoadInFlightRef.current = true;
+    setIsAuthLoading(true);
+    setCloudSyncStatus("loading");
+    setCloudSyncMessage("Loading cloud portfolio...");
+    try {
+      const initialResult = await supabase.from("user_portfolios").select("holdings, settings, display_name, share_holdings, updated_at").eq("user_id", user.id).maybeSingle();
+      let data = initialResult.data as CloudPortfolioRow | null;
+      let error = initialResult.error;
+      if (isMissingSharedColumnsError(error)) {
+        const fallback = await supabase.from("user_portfolios").select("holdings, settings, updated_at").eq("user_id", user.id).maybeSingle();
+        data = fallback.data as CloudPortfolioRow | null;
+        error = fallback.error;
+        setWarnings((existing) => [...existing, "Shared holdings need the updated Supabase SQL/schema cache. Cloud sync will keep working privately for now."]);
+      }
+      if (error) {
+        setCloudLoadedUserId(user.id);
+        setCloudSyncStatus("error");
+        setCloudSyncMessage(isAdmin ? `Cloud load failed: ${error.message}` : "Cloud load failed. Ask the admin to check setup.");
+        return;
+      }
+      if (!data) {
+        const bootstrap = applyEmptyPortfolioBootstrap();
+        const resolvedName = normalizeDisplayName(friendlyNameForUser(user));
+        setCloudLoadedUserId(user.id);
+        setDisplayName(resolvedName);
+        applyShareHoldingsFromCloud(false);
+        latestSyncKey.current = profilesSyncKey(bootstrap.profiles, bootstrap.activeProfileId, resolvedName, false);
+        persistSignedInPortfolioCache(portfolioSnapshotFromProfiles(bootstrap.profiles, bootstrap.activeProfileId, null));
+        setCloudSyncStatus("saved");
+        setCloudSyncMessage("New account started with empty portfolios. Add holdings to begin.");
+        void loadSharedProfiles();
+        return;
+      }
+
+      const { snapshot, resolvedDisplayName, resolvedShareHoldings, cloudSettings } = resolveCloudPortfolioRow(data);
       const resolvedPrefs = resolveUserPrefsForSync({
         local: {
           displayName: normalizeDisplayName(displayNameRef.current),
           shareHoldings: shareHoldingsRef.current
         },
-        cloudDisplayName: row.display_name ?? cloudSettings.displayName,
-        cloudShareHoldings: row.share_holdings ?? cloudSettings.shareHoldings,
-        localIsNewer,
+        cloudDisplayName: data.display_name ?? cloudSettings.displayName,
+        cloudShareHoldings: data.share_holdings ?? cloudSettings.shareHoldings,
+        localIsNewer: false,
         shareHoldingsTouched: shareHoldingsTouchedRef.current
       });
-      setDisplayName(resolvedPrefs.displayName);
-      cloudShareHoldingsRef.current = resolvedPrefs.shareHoldings;
-      if (!shareHoldingsTouchedRef.current) setShareHoldings(resolvedPrefs.shareHoldings);
-      setCloudLoadedUserId(user.id);
-      setCloudSyncStatus("saving");
-      setCloudSyncMessage(userEditedDuringLoad ? "Keeping your recent edits and syncing to cloud." : "Keeping newer local portfolio and syncing to cloud.");
-      const payload = buildCloudPayload(
+      const keepLocalPortfolio = shouldKeepSessionPortfolioEdits(
         profilesRef.current,
-        activeProfileIdRef.current,
-        resolvedPrefs.displayName,
-        resolvedPrefs.shareHoldings
+        snapshot.profiles,
+        sessionPortfolioEditedRef.current
       );
-      const syncKey = profilesSyncKey(
-        profilesRef.current,
-        activeProfileIdRef.current,
-        resolvedPrefs.displayName,
-        resolvedPrefs.shareHoldings
-      );
-      void saveCloudPortfolio(payload).then((saved) => {
-        if (saved) latestSyncKey.current = syncKey;
-      });
-      void loadSharedProfiles();
-      return;
-    }
 
-    setDisplayName(normalizeDisplayName(row.display_name || cloudSettings.displayName || friendlyNameForUser(user)));
-    applyShareHoldingsFromCloud(Boolean(row.share_holdings ?? cloudSettings.shareHoldings));
-    setProfiles(resolvedProfiles);
-    setActiveProfileId(resolvedActiveProfileId);
-    setCloudLoadedUserId(user.id);
-    latestSyncKey.current = profilesSyncKey(
-      resolvedProfiles,
-      resolvedActiveProfileId,
-      normalizeDisplayName(row.display_name || cloudSettings.displayName || friendlyNameForUser(user)),
-      Boolean(row.share_holdings ?? cloudSettings.shareHoldings)
-    );
-    if (cloudUpdatedAt && typeof window !== "undefined") {
-      localStorage.setItem(LOCAL_UPDATED_AT_KEY, cloudUpdatedAt);
+      if (keepLocalPortfolio) {
+        cloudShareHoldingsRef.current = resolvedPrefs.shareHoldings;
+        if (!shareHoldingsTouchedRef.current) setShareHoldings(resolvedPrefs.shareHoldings);
+        setDisplayName(resolvedPrefs.displayName);
+        setCloudLoadedUserId(user.id);
+        setCloudSyncStatus("saving");
+        setCloudSyncMessage("Saving your portfolio changes to cloud...");
+        const payload = buildCloudPayload(
+          profilesRef.current,
+          activeProfileIdRef.current,
+          resolvedPrefs.displayName,
+          resolvedPrefs.shareHoldings
+        );
+        const syncKey = profilesSyncKey(
+          profilesRef.current,
+          activeProfileIdRef.current,
+          resolvedPrefs.displayName,
+          resolvedPrefs.shareHoldings
+        );
+        void saveCloudPortfolio(payload).then((saved) => {
+          if (saved) latestSyncKey.current = syncKey;
+        });
+        void loadSharedProfiles();
+        return;
+      }
+
+      applyCloudPortfolioSnapshot(snapshot, {
+        displayName: resolvedDisplayName,
+        shareHoldings: resolvedShareHoldings,
+        cloudUpdatedAt: data.updated_at || null
+      });
+      if (!shareHoldingsTouchedRef.current) {
+        setDisplayName(resolvedPrefs.displayName);
+        applyShareHoldingsFromCloud(resolvedPrefs.shareHoldings);
+        cloudShareHoldingsRef.current = resolvedPrefs.shareHoldings;
+      }
+      clearLegacyPortfolioKeys();
+      setCloudLoadedUserId(user.id);
+      setCloudSyncStatus("saved");
+      setCloudSyncMessage("Cloud portfolio loaded. Changes save automatically.");
+      void loadSharedProfiles();
+    } finally {
+      cloudLoadInFlightRef.current = false;
+      setIsAuthLoading(false);
     }
-    setCloudSyncStatus("saved");
-    setCloudSyncMessage("Cloud portfolio loaded. Changes save automatically.");
-    void loadSharedProfiles();
+  };
+
+  const pullCloudPortfolioIfNewer = async () => {
+    if (!supabase || !user || cloudLoadedUserId !== user.id || sessionPortfolioEditedRef.current) return;
+    const { data, error } = await supabase
+      .from("user_portfolios")
+      .select("holdings, settings, display_name, share_holdings, updated_at")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (error || !data?.updated_at) return;
+    if (cloudPortfolioUpdatedAtRef.current && new Date(data.updated_at) <= new Date(cloudPortfolioUpdatedAtRef.current)) return;
+
+    const { snapshot, resolvedDisplayName, resolvedShareHoldings } = resolveCloudPortfolioRow(data as CloudPortfolioRow);
+    if (shouldKeepSessionPortfolioEdits(profilesRef.current, snapshot.profiles, sessionPortfolioEditedRef.current)) return;
+
+    applyCloudPortfolioSnapshot(snapshot, {
+      displayName: resolvedDisplayName,
+      shareHoldings: resolvedShareHoldings,
+      cloudUpdatedAt: data.updated_at
+    });
+    setCloudSyncMessage("Loaded newer cloud portfolio.");
   };
 
   useEffect(() => {
@@ -915,9 +1018,29 @@ export default function Home() {
   }, [supabase, user, isHydrated, cloudLoadedUserId]);
 
   useEffect(() => {
+    if (!user || cloudLoadedUserId !== user.id) return;
+    const refresh = () => {
+      if (document.visibilityState === "visible") void pullCloudPortfolioIfNewer();
+    };
+    document.addEventListener("visibilitychange", refresh);
+    window.addEventListener("focus", refresh);
+    return () => {
+      document.removeEventListener("visibilitychange", refresh);
+      window.removeEventListener("focus", refresh);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, cloudLoadedUserId]);
+
+  useEffect(() => {
     if (!supabase || !user || !isHydrated || cloudLoadedUserId !== user.id) return;
     if (currentProfilesSyncKey === latestSyncKey.current) return;
+    if (shouldSkipEmptyCloudOverwrite(profilesRef.current, cloudHoldingCountRef.current, sessionPortfolioEditedRef.current)) {
+      return;
+    }
     const timeout = window.setTimeout(() => {
+      if (shouldSkipEmptyCloudOverwrite(profilesRef.current, cloudHoldingCountRef.current, sessionPortfolioEditedRef.current)) {
+        return;
+      }
       const resolvedShareHoldings = shareHoldingsForCloudSave();
       const payload = buildCloudPayload(
         profilesRef.current,
