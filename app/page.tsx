@@ -24,6 +24,7 @@ const SETTINGS_KEY = "portfolio-exit-planner:settings:v1";
 const PROFILES_KEY = "portfolio-exit-planner:profiles:v1";
 const ACTIVE_PROFILE_KEY = "portfolio-exit-planner:active-profile:v1";
 const EMPTY_HOLDINGS: EnrichedHolding[] = [];
+const ADMIN_EMAIL = "danielhanna0001@gmail.com";
 
 function sameSymbol(a?: string, b?: string) {
   return (a || "").trim().toUpperCase() === (b || "").trim().toUpperCase();
@@ -154,6 +155,11 @@ function normalizeDisplayName(value: string) {
   return trimmed || "Friend";
 }
 
+function isAdminUser(user: User | null) {
+  if (!user) return false;
+  return user.email?.toLowerCase() === ADMIN_EMAIL || user.app_metadata?.is_admin === true || user.app_metadata?.role === "admin";
+}
+
 function isMissingSharedColumnsError(error?: { message?: string } | null) {
   const message = error?.message || "";
   return message.includes("display_name") || message.includes("share_holdings") || message.includes("schema cache");
@@ -238,6 +244,7 @@ export default function Home() {
   const settings = activeProfile?.settings || DEFAULT_SETTINGS;
   const currency = activeProfile?.currency || "USD";
   const region = activeProfile?.region || "US";
+  const isAdmin = isAdminUser(user);
   const marketSymbolKey = useMemo(() => (
     holdings.map((holding) => `${holding.id}:${displayMarketSymbol(holding.symbol, region)}`).join("|")
   ), [holdings, region]);
@@ -559,7 +566,7 @@ export default function Home() {
     if (error) {
       setCloudLoadedUserId(user.id);
       setCloudSyncStatus("error");
-      setCloudSyncMessage(`Cloud load failed: ${error.message}`);
+      setCloudSyncMessage(isAdmin ? `Cloud load failed: ${error.message}` : "Cloud load failed. Ask the admin to check setup.");
       return;
     }
     if (!data) {
@@ -650,6 +657,7 @@ export default function Home() {
       </header>
       <AuthPanel
         user={user}
+        isAdmin={isAdmin}
         isLoading={isAuthLoading}
         syncStatus={cloudSyncStatus}
         syncMessage={cloudSyncMessage}
@@ -658,19 +666,28 @@ export default function Home() {
         onSignIn={signIn}
         onSignOut={signOut}
       />
-      <ProfileSelector profiles={profiles} activeProfileId={activeProfile?.id || activeProfileId} onActiveChange={setActiveProfileId} onAdd={addProfile} onDelete={deleteProfile} onUpdate={updateProfile} />
-      <SettingsPanel settings={settings} currency={currency} onChange={setSettings} onClear={clearStored} />
       {user ? (
-        <SharedHoldingsViewer
-          entries={sharedProfiles}
-          selectedId={selectedSharedProfileId}
-          isLoading={isLoadingSharedProfiles}
-          shareHoldings={shareHoldings}
-          onSelectedIdChange={setSelectedSharedProfileId}
-          onShareHoldingsChange={setShareHoldings}
-        />
-      ) : null}
-      {warnings.length ? (
+        <>
+          <ProfileSelector profiles={profiles} activeProfileId={activeProfile?.id || activeProfileId} onActiveChange={setActiveProfileId} onAdd={addProfile} onDelete={deleteProfile} onUpdate={updateProfile} />
+          <SettingsPanel settings={settings} currency={currency} onChange={setSettings} onClear={clearStored} />
+          <SharedHoldingsViewer
+            entries={sharedProfiles}
+            selectedId={selectedSharedProfileId}
+            isLoading={isLoadingSharedProfiles}
+            shareHoldings={shareHoldings}
+            onSelectedIdChange={setSelectedSharedProfileId}
+            onShareHoldingsChange={setShareHoldings}
+          />
+        </>
+      ) : (
+        <section className="mx-auto max-w-7xl px-4 py-8">
+          <div className="border border-ink/10 bg-white p-5 shadow-soft">
+            <h2 className="text-lg font-semibold">Sign in to view portfolios</h2>
+            <p className="mt-1 text-sm text-ink/65">Stock holdings, profiles, shared portfolios, and analysis tables are only visible after login.</p>
+          </div>
+        </section>
+      )}
+      {isAdmin && warnings.length ? (
         <section className="mx-auto max-w-7xl px-4 pt-5">
           <div className="space-y-2 border border-amber/40 bg-amber/10 p-3 text-sm">
             {[...new Set(warnings)].map((warning) => (
@@ -679,21 +696,25 @@ export default function Home() {
           </div>
         </section>
       ) : null}
-      <ImageImport
-        onExtracted={(rows) => {
-          setHoldings((existing) => mergeExtractedRows(existing, rows));
-          setWarnings((existing) => [...existing, `${rows.length} image row${rows.length === 1 ? "" : "s"} added or updated. Confirm every field before analysis.`]);
-        }}
-        setWarning={(warning) => setWarnings((existing) => [...existing, warning])}
-      />
-      <PortfolioInput holdings={inputRows} onChange={setInputRows} onAnalyze={analyze} isAnalyzing={isAnalyzing} isRefreshingMarket={isRefreshingMarket} />
-      {isAnalyzing ? (
-        <section className="mx-auto grid max-w-7xl gap-3 px-4 pb-8 sm:grid-cols-3">
-          {[0, 1, 2].map((item) => <div className="h-24 animate-pulse bg-white" key={item} />)}
-        </section>
+      {user ? (
+        <>
+          <ImageImport
+            onExtracted={(rows) => {
+              setHoldings((existing) => mergeExtractedRows(existing, rows));
+              setWarnings((existing) => [...existing, `${rows.length} image row${rows.length === 1 ? "" : "s"} added or updated. Confirm every field before analysis.`]);
+            }}
+            setWarning={(warning) => setWarnings((existing) => [...existing, warning])}
+          />
+          <PortfolioInput holdings={inputRows} onChange={setInputRows} onAnalyze={analyze} isAnalyzing={isAnalyzing} isRefreshingMarket={isRefreshingMarket} />
+          {isAnalyzing ? (
+            <section className="mx-auto grid max-w-7xl gap-3 px-4 pb-8 sm:grid-cols-3">
+              {[0, 1, 2].map((item) => <div className="h-24 animate-pulse bg-white" key={item} />)}
+            </section>
+          ) : null}
+          <PortfolioSummary holdings={holdings} settings={settings} currency={currency} />
+          <HoldingsTable holdings={holdings} settings={settings} currency={currency} onChange={updateHolding} />
+        </>
       ) : null}
-      <PortfolioSummary holdings={holdings} settings={settings} currency={currency} />
-      <HoldingsTable holdings={holdings} settings={settings} currency={currency} onChange={updateHolding} />
     </main>
   );
 }

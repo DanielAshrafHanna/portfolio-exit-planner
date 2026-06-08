@@ -61,6 +61,8 @@ Profit/loss calculations:
 
 - Holdings and settings are stored locally with `localStorage`.
 - If Supabase is configured, signed-in users can save/load a private cloud portfolio row protected by Row Level Security.
+- Holdings, profiles, shared portfolios, and analysis tables are hidden until a user signs in.
+- Detailed warnings and cloud setup/error messages are shown only to the admin account.
 - Screenshots are not sent anywhere until the user clicks `Extract from image`.
 - The UI warns when tickers or images are sent to external APIs.
 - `Clear stored portfolio` removes local holdings and fee settings.
@@ -81,6 +83,7 @@ The schema includes:
 
 - `display_name`: friendly user name shown in shared portfolio selectors; emails are not shown in the shared view.
 - `share_holdings`: opt-in toggle for whether other signed-in users can read that user's US and Egypt portfolio profiles.
+- Admin metadata for `danielhanna0001@gmail.com`, used by the UI to show setup logs/error details only to the admin.
 
 If Supabase says a new column is missing from the schema cache, rerun the full SQL file. The final `notify pgrst, 'reload schema';` line asks Supabase/PostgREST to refresh the API schema cache.
 

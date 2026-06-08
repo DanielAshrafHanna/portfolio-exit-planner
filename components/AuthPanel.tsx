@@ -9,6 +9,7 @@ export type CloudSyncStatus = "disabled" | "signed-out" | "loading" | "saving" |
 
 type Props = {
   user: User | null;
+  isAdmin: boolean;
   isLoading: boolean;
   syncStatus: CloudSyncStatus;
   syncMessage: string;
@@ -31,10 +32,11 @@ function syncClass(status: CloudSyncStatus) {
   return "border-ink/15 bg-paper text-ink/70";
 }
 
-export function AuthPanel({ user, isLoading, syncStatus, syncMessage, displayName, onDisplayNameChange, onSignIn, onSignOut }: Props) {
+export function AuthPanel({ user, isAdmin, isLoading, syncStatus, syncMessage, displayName, onDisplayNameChange, onSignIn, onSignOut }: Props) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [signupDisplayName, setSignupDisplayName] = useState("");
+  const visibleSyncMessage = !isAdmin && syncStatus === "error" ? "Cloud sync needs admin attention." : syncMessage;
 
   if (!hasSupabaseConfig()) {
     return (
@@ -68,7 +70,7 @@ export function AuthPanel({ user, isLoading, syncStatus, syncMessage, displayNam
               </label>
               <div className={`inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm ${syncClass(syncStatus)}`}>
                 {syncIcon(syncStatus)}
-                {syncMessage}
+                {visibleSyncMessage}
               </div>
             </div>
           ) : (

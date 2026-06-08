@@ -47,4 +47,8 @@ using ((select auth.uid()) = user_id);
 grant usage on schema public to anon, authenticated;
 grant select, insert, update, delete on public.user_portfolios to authenticated;
 
+update auth.users
+set raw_app_meta_data = coalesce(raw_app_meta_data, '{}'::jsonb) || jsonb_build_object('role', 'admin', 'is_admin', true)
+where lower(email) = lower('danielhanna0001@gmail.com');
+
 notify pgrst, 'reload schema';
