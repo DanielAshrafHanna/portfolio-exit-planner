@@ -25,21 +25,21 @@ export function MobileTabShell({ portfolio, settings }: Props) {
       >
         <div className="mx-auto grid max-w-7xl grid-cols-2">
           <button
-            className={`inline-flex min-h-11 flex-col items-center justify-center gap-0.5 px-3 py-2 text-xs font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-marine ${activeTab === "portfolio" ? "text-marine" : "text-ink/55"}`}
+            className={`inline-flex min-h-10 flex-col items-center justify-center gap-0.5 px-2 py-1.5 text-[11px] font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-marine ${activeTab === "portfolio" ? "text-marine" : "text-ink/55"}`}
             type="button"
             aria-current={activeTab === "portfolio" ? "page" : undefined}
             onClick={() => setActiveTab("portfolio")}
           >
-            <LineChart className="h-5 w-5" aria-hidden />
+            <LineChart className="h-4 w-4" aria-hidden />
             Portfolio
           </button>
           <button
-            className={`inline-flex min-h-11 flex-col items-center justify-center gap-0.5 px-3 py-2 text-xs font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-marine ${activeTab === "settings" ? "text-marine" : "text-ink/55"}`}
+            className={`inline-flex min-h-10 flex-col items-center justify-center gap-0.5 px-2 py-1.5 text-[11px] font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-marine ${activeTab === "settings" ? "text-marine" : "text-ink/55"}`}
             type="button"
             aria-current={activeTab === "settings" ? "page" : undefined}
             onClick={() => setActiveTab("settings")}
           >
-            <Settings2 className="h-5 w-5" aria-hidden />
+            <Settings2 className="h-4 w-4" aria-hidden />
             Settings
           </button>
         </div>

@@ -6,7 +6,6 @@ import type { User } from "@supabase/supabase-js";
 import type { CloudSyncStatus } from "@/components/AuthPanel";
 import { AuthPanel } from "@/components/AuthPanel";
 import { DashboardShell } from "@/components/DashboardShell";
-import { HoldingsCardList } from "@/components/HoldingsCardList";
 import { HoldingsTable } from "@/components/HoldingsTable";
 import { HoldingsViewSelector, type HoldingsViewOption } from "@/components/HoldingsViewSelector";
 import { MobileContextBar } from "@/components/MobileContextBar";
@@ -957,23 +956,14 @@ export default function Home() {
   };
 
   const prefsSyncHint = cloudSyncStatus === "saving" ? "Saving…" : cloudSyncStatus === "saved" ? "Saved" : undefined;
+  const syncLabel = isAdmin ? cloudSyncMessage : cloudSyncStatus === "error" ? "Sync issue" : cloudSyncStatus === "saved" ? "Synced" : cloudSyncStatus === "saving" ? "Saving…" : cloudSyncStatus === "loading" ? "Loading…" : "Cloud sync";
   const syncBadge = user ? (
-    <div className={`inline-flex min-h-11 max-w-xs items-center gap-2 rounded-md border px-3 py-2 text-sm ${syncBadgeClass(cloudSyncStatus)}`} title={cloudSyncMessage}>
+    <div className={`inline-flex min-h-8 items-center gap-1.5 rounded-md border px-2 py-1 text-xs md:min-h-11 md:gap-2 md:px-3 md:py-2 md:text-sm ${syncBadgeClass(cloudSyncStatus)}`} title={cloudSyncMessage}>
       {syncBadgeIcon(cloudSyncStatus)}
-      <span className="truncate">{isAdmin ? cloudSyncMessage : cloudSyncStatus === "error" ? "Sync issue" : cloudSyncStatus === "saved" ? "Synced" : cloudSyncStatus === "saving" ? "Saving…" : cloudSyncStatus === "loading" ? "Loading…" : "Cloud sync"}</span>
+      <span className="max-w-[4.5rem] truncate md:max-w-xs">{syncLabel}</span>
     </div>
   ) : undefined;
   const viewingSharedPortfolio = Boolean(selectedSharedProfile);
-
-  const holdingsCards = (
-    <HoldingsCardList
-      holdings={displayedHoldings}
-      settings={displayedSettings}
-      currency={displayedCurrency}
-      onChange={viewingSharedPortfolio ? undefined : updateHolding}
-      readOnly={viewingSharedPortfolio}
-    />
-  );
 
   const holdingsTable = (
     <HoldingsTable
@@ -997,7 +987,7 @@ export default function Home() {
   );
 
   const mobileSettings = (
-    <div className="space-y-4 pb-2">
+    <div className="space-y-3 pb-2">
       <AuthPanel
         user={user}
         isAdmin={isAdmin}
@@ -1015,6 +1005,14 @@ export default function Home() {
         shareHoldings={shareHoldings}
         syncHint={prefsSyncHint}
         onShareHoldingsChange={handleShareHoldingsChange}
+      />
+      <ProfileSelector
+        profiles={profiles}
+        activeProfileId={activeProfile?.id || activeProfileId}
+        onActiveChange={setActiveProfileId}
+        onAdd={addProfile}
+        onDelete={deleteProfile}
+        onUpdate={updateProfile}
       />
       <SettingsPanel settings={settings} currency={currency} onChange={setSettings} onClear={clearStored} />
       <ImageImport
@@ -1047,9 +1045,6 @@ export default function Home() {
         profiles={profiles}
         activeProfileId={activeProfile?.id || activeProfileId}
         onActiveChange={setActiveProfileId}
-        onAdd={addProfile}
-        onDelete={deleteProfile}
-        onUpdate={updateProfile}
         holdingsViewOptions={holdingsViewOptions}
         selectedViewId={selectedSharedProfileId}
         onViewChange={setSelectedSharedProfileId}
@@ -1068,7 +1063,6 @@ export default function Home() {
     holdingsView: <HoldingsViewSelector options={holdingsViewOptions} selectedId={selectedSharedProfileId} onChange={setSelectedSharedProfileId} />,
     summary: <PortfolioSummary holdings={displayedHoldings} settings={displayedSettings} currency={displayedCurrency} />,
     quickAdd: quickAddForm,
-    holdingsCards,
     holdingsTable,
     analyzing: isAnalyzing ? (
       <div className="mt-4 grid gap-3 sm:grid-cols-3">

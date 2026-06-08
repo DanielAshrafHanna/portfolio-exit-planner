@@ -12,7 +12,6 @@ type Props = {
   quickAdd: ReactNode;
   emptyState?: ReactNode;
   holdingsTable: ReactNode;
-  holdingsCards?: ReactNode;
   editHoldings: ReactNode;
   analyzing?: ReactNode;
   hasHoldings: boolean;
@@ -30,7 +29,6 @@ export function PortfolioWorkspace({
   quickAdd,
   emptyState,
   holdingsTable,
-  holdingsCards,
   editHoldings,
   analyzing,
   hasHoldings,
@@ -40,15 +38,17 @@ export function PortfolioWorkspace({
   readOnly = false
 }: Props) {
   return (
-    <div className="space-y-6">
+    <div className="space-y-2 md:space-y-6">
+      {compactProfileBar ? (
+        <div className="md:hidden">{compactProfileBar}</div>
+      ) : null}
       <div
-        className="sticky z-20 -mx-4 border-y border-ink/10 bg-white/95 px-4 py-3 backdrop-blur"
+        className="sticky z-20 hidden border-y border-ink/10 bg-white/95 px-4 py-3 backdrop-blur md:block"
         style={{ top: "var(--app-header-height, 88px)" }}
       >
         <div className="space-y-3">
-          {compactProfileBar ? <div className="md:hidden">{compactProfileBar}</div> : null}
-          <div className="hidden md:block">{profileBar}</div>
-          <div className="hidden md:block">{holdingsView}</div>
+          {profileBar}
+          {holdingsView}
         </div>
       </div>
 
@@ -61,9 +61,10 @@ export function PortfolioWorkspace({
         title="Your portfolio"
         description={readOnly ? "Read-only view of a shared portfolio." : "Add holdings, review analysis, and adjust targets."}
         id="portfolio-workspace"
+        compactHeader
       >
         {!readOnly ? (
-          <div className="space-y-4">
+          <div className="hidden space-y-4 md:block">
             {quickAdd}
             {!hasHoldings ? (
               emptyState ?? (
@@ -84,23 +85,22 @@ export function PortfolioWorkspace({
             ) : null}
           </div>
         ) : null}
-        <div className={!readOnly && hasHoldings ? "mt-4 space-y-4" : readOnly ? "" : "mt-0"}>
-          {holdingsCards}
+        <div className={hasHoldings ? "md:mt-4" : ""}>
           {holdingsTable}
         </div>
         {analyzing}
-        {!readOnly ? <div className="mt-6">{editHoldings}</div> : null}
+        {!readOnly ? <div className="mt-4 md:mt-6">{editHoldings}</div> : null}
       </SectionCard>
 
       {showFab && !readOnly ? (
         <button
-          className="fixed right-4 z-30 inline-flex h-14 w-14 items-center justify-center rounded-full bg-marine text-white shadow-soft-lg md:hidden"
-          style={{ bottom: "calc(4.5rem + env(safe-area-inset-bottom, 0px))" }}
+          className="fixed right-3 z-30 inline-flex h-12 w-12 items-center justify-center rounded-full bg-marine text-white shadow-soft-lg md:hidden"
+          style={{ bottom: "calc(4rem + env(safe-area-inset-bottom, 0px))" }}
           type="button"
           aria-label="Add holding"
           onClick={onFabClick}
         >
-          <Plus className="h-6 w-6" aria-hidden />
+          <Plus className="h-5 w-5" aria-hidden />
         </button>
       ) : null}
     </div>
