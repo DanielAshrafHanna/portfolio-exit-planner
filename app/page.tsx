@@ -24,6 +24,7 @@ import { applyAnalyzedHoldingResults, type AnalyzedHoldingResult } from "@/lib/h
 import { DEFAULT_SETTINGS, defaultProfiles, displayMarketSymbol } from "@/lib/profileUtils";
 import { coerceHoldings, coerceProfiles, emptyPortfolioBootstrap, enrichHolding, loadPortfolioState, migrateSinglePortfolio } from "@/lib/storageMigration";
 import { createSupabaseBrowserClient } from "@/lib/supabaseClient";
+import { shouldPreferLocalPortfolio } from "@/lib/portfolioSync";
 import { parseStoredUserPrefs, serializeUserPrefs, resolveUserPrefsForSync, USER_PREFS_KEY } from "@/lib/userPrefs";
 import type { AiAnalysis, EnrichedHolding, FeeSettings, HoldingInput, MarketQuote, NewsItem, PortfolioProfile, SharedPortfolioProfile } from "@/lib/types";
 
@@ -845,7 +846,11 @@ export default function Home() {
     const localIsNewer = Boolean(localUpdatedAt && cloudUpdatedAt && new Date(localUpdatedAt) > new Date(cloudUpdatedAt));
     const userEditedDuringLoad = revisionAtLoadStart !== userEditRevision.current;
     const localHasUnsavedHoldings = localHasHoldingsNotInCloud(profilesRef.current, resolvedProfiles);
-    const keepLocalPortfolio = userEditedDuringLoad || localIsNewer || localHasUnsavedHoldings;
+    const keepLocalPortfolio = shouldPreferLocalPortfolio(profilesRef.current, resolvedProfiles, {
+      localIsNewer,
+      userEditedDuringLoad,
+      localHasUnsavedHoldings
+    });
 
     if (keepLocalPortfolio) {
       const resolvedPrefs = resolveUserPrefsForSync({
