@@ -26,19 +26,19 @@ export function SettingsPanel({ settings, currency, onChange, onClear }: Props) 
           <div className="grid gap-3 sm:grid-cols-3">
             <label className="text-xs font-medium text-ink/70">
               Fixed trading fee ({currency})
-              <input className="mt-1 w-full rounded-md border border-ink/15 px-3 py-2 text-sm" type="number" min="0" step="0.01" value={settings.fixedTradingFee} onChange={(event) => update("fixedTradingFee", event.target.value)} />
+              <input className="mt-1 min-h-11 w-full rounded-md border border-ink/15 px-3 py-2 text-base sm:text-sm" type="number" min="0" step="0.01" value={settings.fixedTradingFee} onChange={(event) => update("fixedTradingFee", event.target.value)} />
             </label>
             <label className="text-xs font-medium text-ink/70">
               Trading fee %
-              <input className="mt-1 w-full rounded-md border border-ink/15 px-3 py-2 text-sm" type="number" min="0" step="0.01" value={settings.percentTradingFee} onChange={(event) => update("percentTradingFee", event.target.value)} />
+              <input className="mt-1 min-h-11 w-full rounded-md border border-ink/15 px-3 py-2 text-base sm:text-sm" type="number" min="0" step="0.01" value={settings.percentTradingFee} onChange={(event) => update("percentTradingFee", event.target.value)} />
             </label>
             <label className="text-xs font-medium text-ink/70">
               FX fee %
-              <input className="mt-1 w-full rounded-md border border-ink/15 px-3 py-2 text-sm" type="number" min="0" step="0.01" value={settings.fxFeePercent} onChange={(event) => update("fxFeePercent", event.target.value)} />
+              <input className="mt-1 min-h-11 w-full rounded-md border border-ink/15 px-3 py-2 text-base sm:text-sm" type="number" min="0" step="0.01" value={settings.fxFeePercent} onChange={(event) => update("fxFeePercent", event.target.value)} />
             </label>
           </div>
         </div>
-        <button className="inline-flex items-center justify-center gap-2 rounded-md border border-coral px-4 py-2 text-sm font-semibold text-coral hover:bg-coral hover:text-white" onClick={onClear} type="button">
+        <button className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-coral px-4 py-2 text-sm font-semibold text-coral hover:bg-coral hover:text-white" onClick={onClear} type="button">
           <Trash2 className="h-4 w-4" aria-hidden />
           Clear stored portfolio
         </button>

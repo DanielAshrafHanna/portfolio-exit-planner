@@ -1,6 +1,16 @@
 import OpenAI from "openai";
 import { NextResponse } from "next/server";
 
+type OcrRow = {
+  symbol?: unknown;
+  name?: unknown;
+  shares?: unknown;
+  averageCost?: unknown;
+  totalCost?: unknown;
+  brokerCurrentValue?: unknown;
+  notes?: unknown;
+};
+
 export async function POST(request: Request) {
   if (!process.env.OPENAI_API_KEY) {
     return NextResponse.json({
@@ -44,9 +54,9 @@ export async function POST(request: Request) {
       ]
     });
     const parsed = JSON.parse(completion.choices[0]?.message.content || "{\"rows\":[],\"warnings\":[]}");
-    const rows = Array.isArray(parsed.rows) ? parsed.rows : [];
+    const rows: OcrRow[] = Array.isArray(parsed.rows) ? parsed.rows : [];
     return NextResponse.json({
-      rows: rows.map((row: any) => ({
+      rows: rows.map((row) => ({
         symbol: typeof row.symbol === "string" ? row.symbol.trim().toUpperCase() : "",
         name: typeof row.name === "string" ? row.name.trim() : "",
         shares: numberOrNull(row.shares),
@@ -54,7 +64,7 @@ export async function POST(request: Request) {
         totalCost: numberOrNull(row.totalCost),
         brokerCurrentValue: numberOrNull(row.brokerCurrentValue),
         notes: typeof row.notes === "string" ? row.notes : "Extracted from image; confirm fields before analysis."
-      })).filter((row: any) => row.symbol),
+      })).filter((row) => row.symbol),
       warnings: Array.isArray(parsed.warnings) ? parsed.warnings : [],
       rawSymbols: Array.isArray(parsed.rawSymbols) ? parsed.rawSymbols : []
     });

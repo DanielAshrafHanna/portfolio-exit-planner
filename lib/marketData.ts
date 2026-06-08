@@ -12,6 +12,10 @@ type ProviderResult<T> = {
   warning?: string;
 };
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 function providerName() {
   return process.env.MARKET_DATA_PROVIDER || "mock";
 }
@@ -66,15 +70,19 @@ async function alphaQuote(symbol: string): Promise<MarketQuote> {
     fetchAlpha({ function: "GLOBAL_QUOTE", symbol }),
     fetchAlpha({ function: "TIME_SERIES_DAILY_ADJUSTED", symbol, outputsize: "full" })
   ]);
-  const quote = quoteData["Global Quote"];
-  const series = dailyData["Time Series (Daily)"];
+  const quote = isRecord(quoteData) && isRecord(quoteData["Global Quote"]) ? quoteData["Global Quote"] : undefined;
+  const series = isRecord(dailyData) && isRecord(dailyData["Time Series (Daily)"]) ? dailyData["Time Series (Daily)"] : undefined;
   if (!quote?.["05. price"] || !series) throw new Error(`Invalid ticker or unavailable quote for ${symbol}`);
-  const rows = Object.values(series).map((row: any) => ({
-    high: Number(row["2. high"]),
-    low: Number(row["3. low"]),
-    close: Number(row["4. close"]),
-    volume: Number(row["6. volume"])
-  }));
+  const rows = Object.values(series).map((row) => {
+    const dailyRow = isRecord(row) ? row : {};
+    return {
+      high: Number(dailyRow["2. high"]),
+      low: Number(dailyRow["3. low"]),
+      close: Number(dailyRow["4. close"]),
+      volume: Number(dailyRow["6. volume"])
+    };
+  }).filter((row) => Number.isFinite(row.high) && Number.isFinite(row.low) && Number.isFinite(row.close));
+  if (!rows.length) throw new Error(`Invalid daily data for ${symbol}`);
   const closes = rows.map((row) => row.close);
   return {
     symbol,
@@ -190,13 +198,17 @@ export async function getNews(symbol: string, region: MarketRegion = "US"): Prom
   try {
     const data = await fetchAlpha({ function: "NEWS_SENTIMENT", tickers: marketSymbol, sort: "LATEST", limit: "8" });
     const cutoff = Date.now() - 14 * 24 * 60 * 60 * 1000;
-    const items = (data.feed || []).map((item: any) => ({
-      headline: item.title,
-      source: item.source,
-      date: item.time_published,
-      url: item.url,
-      summary: item.summary || "No summary provided."
-    })).filter((item: NewsItem) => {
+    const feed = isRecord(data) && Array.isArray(data.feed) ? data.feed : [];
+    const items = feed.map((item) => {
+      const newsItem = isRecord(item) ? item : {};
+      return {
+        headline: typeof newsItem.title === "string" ? newsItem.title : "",
+        source: typeof newsItem.source === "string" ? newsItem.source : "",
+        date: typeof newsItem.time_published === "string" ? newsItem.time_published : "",
+        url: typeof newsItem.url === "string" ? newsItem.url : "",
+        summary: typeof newsItem.summary === "string" && newsItem.summary ? newsItem.summary : "No summary provided."
+      };
+    }).filter((item: NewsItem) => {
       const parsed = Date.parse(item.date);
       return Number.isNaN(parsed) || parsed >= cutoff;
     });

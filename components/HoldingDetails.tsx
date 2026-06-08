@@ -33,14 +33,14 @@ export function HoldingDetails({ holding, settings, currency, onChange }: Props)
   const maxPrice = holding.quote.currentPrice * 1.75;
 
   return (
-    <div className="grid gap-5 bg-paper p-4 lg:grid-cols-[1fr_420px]">
-      <div className="space-y-5">
+    <div className="grid min-w-0 gap-4 bg-paper p-3 sm:p-4 lg:grid-cols-[minmax(0,1fr)_420px] lg:gap-5">
+      <div className="min-w-0 space-y-4 lg:space-y-5">
         <div className="bg-white p-3 text-sm text-ink/70">
           Compare your exit choices here: choose how much downside you can tolerate, then set a target sell price or desired profit/loss. Nothing is traded automatically.
         </div>
         <StopLossSelector stops={stops} selected={holding.selectedStopStyle} currency={currency} onChange={(style) => onChange({ ...holding, selectedStopStyle: style })} />
         <div className="grid gap-4 md:grid-cols-2">
-          <section className="bg-white p-4">
+          <section className="min-w-0 bg-white p-4">
             <h3 className="mb-2 font-semibold">AI decision engine</h3>
             {holding.analysis ? (
               <div className="space-y-3 text-sm">
@@ -62,47 +62,47 @@ export function HoldingDetails({ holding, settings, currency, onChange }: Props)
               </div>
             ) : <p className="text-sm text-ink/60">AI analysis unavailable.</p>}
           </section>
-          <section className="bg-white p-4">
+          <section className="min-w-0 bg-white p-4">
             <h3 className="mb-2 font-semibold">Technical indicators</h3>
             <dl className="grid grid-cols-2 gap-2 text-sm">
-              <dt className="text-ink/55">20-day MA</dt><dd>{holding.quote.ma20 ? formatMoney(holding.quote.ma20, currency) : "N/A"}</dd>
-              <dt className="text-ink/55">50-day MA</dt><dd>{holding.quote.ma50 ? formatMoney(holding.quote.ma50, currency) : "N/A"}</dd>
-              <dt className="text-ink/55">200-day MA</dt><dd>{holding.quote.ma200 ? formatMoney(holding.quote.ma200, currency) : "N/A"}</dd>
-              <dt className="text-ink/55">RSI</dt><dd>{holding.quote.rsi ?? "N/A"}</dd>
-              <dt className="text-ink/55">ATR</dt><dd>{holding.quote.atr ? formatMoney(holding.quote.atr, currency) : "N/A"}</dd>
-              <dt className="text-ink/55">52W high/low</dt><dd>{holding.quote.week52High ? formatMoney(holding.quote.week52High, currency) : "N/A"} / {holding.quote.week52Low ? formatMoney(holding.quote.week52Low, currency) : "N/A"}</dd>
-              <dt className="text-ink/55">Volume</dt><dd>{holding.quote.volume?.toLocaleString() ?? "N/A"}</dd>
-              <dt className="text-ink/55">Provider</dt><dd>{holding.quote.provider}</dd>
+              <dt className="text-ink/55">20-day MA</dt><dd className="min-w-0 break-words">{holding.quote.ma20 ? formatMoney(holding.quote.ma20, currency) : "N/A"}</dd>
+              <dt className="text-ink/55">50-day MA</dt><dd className="min-w-0 break-words">{holding.quote.ma50 ? formatMoney(holding.quote.ma50, currency) : "N/A"}</dd>
+              <dt className="text-ink/55">200-day MA</dt><dd className="min-w-0 break-words">{holding.quote.ma200 ? formatMoney(holding.quote.ma200, currency) : "N/A"}</dd>
+              <dt className="text-ink/55">RSI</dt><dd className="min-w-0 break-words">{holding.quote.rsi ?? "N/A"}</dd>
+              <dt className="text-ink/55">ATR</dt><dd className="min-w-0 break-words">{holding.quote.atr ? formatMoney(holding.quote.atr, currency) : "N/A"}</dd>
+              <dt className="text-ink/55">52W high/low</dt><dd className="min-w-0 break-words">{holding.quote.week52High ? formatMoney(holding.quote.week52High, currency) : "N/A"} / {holding.quote.week52Low ? formatMoney(holding.quote.week52Low, currency) : "N/A"}</dd>
+              <dt className="text-ink/55">Volume</dt><dd className="min-w-0 break-words">{holding.quote.volume?.toLocaleString() ?? "N/A"}</dd>
+              <dt className="text-ink/55">Provider</dt><dd className="min-w-0 break-words">{holding.quote.provider}</dd>
             </dl>
           </section>
         </div>
-        <section className="bg-white p-4">
+        <section className="min-w-0 bg-white p-4">
           <h3 className="mb-3 font-semibold">Recent news</h3>
           {holding.news.length ? (
             <div className="grid gap-3">
               {holding.news.map((item) => (
-                <a className="block border-l-4 border-mint pl-3 text-sm hover:text-marine" href={item.url} target="_blank" rel="noreferrer" key={`${item.headline}-${item.date}`}>
-                  <span className="font-semibold">{item.headline}</span>
+                <a className="block min-w-0 border-l-4 border-mint pl-3 text-sm hover:text-marine" href={item.url} target="_blank" rel="noreferrer" key={`${item.headline}-${item.date}`}>
+                  <span className="break-words font-semibold">{item.headline}</span>
                   <span className="ml-2 inline-flex items-center gap-1 text-xs text-ink/55">{item.source} <ExternalLink className="h-3 w-3" aria-hidden /></span>
                   <span className="block text-xs text-ink/50">{item.date}</span>
-                  <span className="block text-ink/70">{item.summary}</span>
+                  <span className="block break-words text-ink/70">{item.summary}</span>
                 </a>
               ))}
             </div>
           ) : <p className="text-sm text-ink/60">No recent news found.</p>}
         </section>
       </div>
-      <aside className="space-y-4 bg-white p-4">
+      <aside className="min-w-0 space-y-4 bg-white p-4">
         <div>
           <label className="text-sm font-semibold">Manual target sell price: {formatMoney(roundMoney(targetPrice), currency)}</label>
           <input className="mt-2 w-full accent-marine" type="range" min={minPrice} max={maxPrice} step="0.01" value={targetPrice} onChange={(event) => onChange({ ...holding, selectedTargetPrice: Number(event.target.value), targetPriceEdited: true })} />
-          <input className="mt-2 w-full rounded-md border border-ink/15 px-3 py-2" type="number" value={roundMoney(targetPrice)} onChange={(event) => onChange({ ...holding, selectedTargetPrice: Number(event.target.value) || targetPrice, targetPriceEdited: true })} />
+          <input className="mt-2 min-h-11 w-full rounded-md border border-ink/15 px-3 py-2 text-base" type="number" value={roundMoney(targetPrice)} onChange={(event) => onChange({ ...holding, selectedTargetPrice: Number(event.target.value) || targetPrice, targetPriceEdited: true })} />
         </div>
         <div className="border border-ink/10 bg-paper p-3">
           <label className="text-sm font-semibold">Desired profit/loss</label>
           <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_auto]">
             <input
-              className="w-full rounded-md border border-ink/15 px-3 py-2"
+              className="min-h-11 w-full rounded-md border border-ink/15 px-3 py-2 text-base"
               type="number"
               step="0.01"
               placeholder="Example: 500 or -100"
@@ -110,7 +110,7 @@ export function HoldingDetails({ holding, settings, currency, onChange }: Props)
               onChange={(event) => setDesiredProfitLoss(event.target.value)}
             />
             <button
-              className="rounded-md bg-marine px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+              className="min-h-11 rounded-md bg-marine px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
               type="button"
               disabled={!requiredSellPrice}
               onClick={() => requiredSellPrice && onChange({ ...holding, selectedTargetPrice: requiredSellPrice, targetPriceEdited: true })}

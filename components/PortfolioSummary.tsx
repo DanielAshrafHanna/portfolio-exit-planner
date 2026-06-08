@@ -35,12 +35,12 @@ export function PortfolioSummary({ holdings, settings, currency }: Props) {
   ];
 
   return (
-    <section className="mx-auto grid max-w-7xl gap-3 px-4 py-5 sm:grid-cols-2 lg:grid-cols-6">
+    <section className="mx-auto grid max-w-7xl grid-cols-1 gap-3 px-4 py-5 min-[380px]:grid-cols-2 lg:grid-cols-6">
       {cards.map(({ label, value, icon: Icon }) => (
-        <div className="border border-ink/10 bg-white p-4 shadow-soft" key={label}>
-          <Icon className="mb-3 h-5 w-5 text-marine" aria-hidden />
+        <div className="min-w-0 border border-ink/10 bg-white p-3 shadow-soft sm:p-4" key={label}>
+          <Icon className="mb-2 h-5 w-5 text-marine sm:mb-3" aria-hidden />
           <p className="text-xs uppercase text-ink/55">{label}</p>
-          <p className="mt-1 text-lg font-semibold">{value}</p>
+          <p className="mt-1 break-words text-base font-semibold sm:text-lg">{value}</p>
         </div>
       ))}
     </section>

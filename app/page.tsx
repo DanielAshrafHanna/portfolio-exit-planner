@@ -21,6 +21,7 @@ const SETTINGS_KEY = "portfolio-exit-planner:settings:v1";
 const PROFILES_KEY = "portfolio-exit-planner:profiles:v1";
 const ACTIVE_PROFILE_KEY = "portfolio-exit-planner:active-profile:v1";
 const DEMO_IDS = new Set(["tsm", "ibm", "dram", "nasa"]);
+const EMPTY_HOLDINGS: EnrichedHolding[] = [];
 
 function enrich(holding: HoldingInput): EnrichedHolding {
   return { ...holding, news: [], selectedStopStyle: "balanced", sellPercent: 100 };
@@ -87,17 +88,46 @@ function profileNameForCount(count: number) {
   return `Portfolio ${count + 1}`;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function toHoldingInput(holding: EnrichedHolding): HoldingInput {
+  return {
+    id: holding.id,
+    symbol: holding.symbol,
+    name: holding.name,
+    shares: holding.shares,
+    averageCost: holding.averageCost,
+    totalCost: holding.totalCost,
+    brokerCurrentValue: holding.brokerCurrentValue,
+    notes: holding.notes
+  };
+}
+
 function coerceProfiles(value: unknown, fallbackSettings: FeeSettings): PortfolioProfile[] {
   if (!Array.isArray(value)) return [];
-  return value.filter((item): item is PortfolioProfile => Boolean(item && typeof item === "object" && "holdings" in item)).map((profile: any) => ({
+  return value.filter((item): item is Record<string, unknown> => isRecord(item) && "holdings" in item).map((profile) => ({
     id: String(profile.id || crypto.randomUUID()),
     name: String(profile.name || "Portfolio"),
     region: profile.region === "EG" ? "EG" : "US",
     currency: profile.currency === "EGP" || profile.region === "EG" ? "EGP" : "USD",
     holdings: Array.isArray(profile.holdings) ? removeLegacyDemoRows(profile.holdings) : [],
-    settings: { ...DEFAULT_SETTINGS, ...fallbackSettings, ...(profile.settings || {}) }
+    settings: { ...DEFAULT_SETTINGS, ...fallbackSettings, ...(isRecord(profile.settings) ? profile.settings : {}) }
   }));
 }
+
+type MarketApiRow = {
+  symbol: string;
+  quote?: MarketQuote;
+  news?: NewsItem[];
+  warnings?: string[];
+};
+
+type MarketApiResponse = {
+  rows?: MarketApiRow[];
+  error?: string;
+};
 
 function migrateSinglePortfolio(holdings: EnrichedHolding[], settings: FeeSettings): PortfolioProfile[] {
   const [usProfile, egProfile] = defaultProfiles();
@@ -178,7 +208,7 @@ export default function Home() {
   }, [user]);
 
   const activeProfile = useMemo(() => profiles.find((profile) => profile.id === activeProfileId) || profiles[0], [profiles, activeProfileId]);
-  const holdings = activeProfile?.holdings || [];
+  const holdings = activeProfile?.holdings ?? EMPTY_HOLDINGS;
   const settings = activeProfile?.settings || DEFAULT_SETTINGS;
   const currency = activeProfile?.currency || "USD";
   const region = activeProfile?.region || "US";
@@ -213,7 +243,7 @@ export default function Home() {
     updateActiveProfile((profile) => ({ ...profile, settings: nextSettings }));
   };
 
-  const inputRows = useMemo(() => holdings.map(({ quote, news, analysis, selectedStopStyle, selectedTargetPrice, targetPriceEdited, sellPercent, ...holding }) => holding), [holdings]);
+  const inputRows = useMemo(() => holdings.map(toHoldingInput), [holdings]);
 
   const setInputRows = (rows: HoldingInput[]) => {
     setHoldings(rows.map((row) => {
@@ -252,10 +282,12 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ holdings: analysisHoldings, region })
       });
-      const marketData = await marketResponse.json();
+      const marketData = await marketResponse.json() as MarketApiResponse;
       if (marketData.error) throw new Error(marketData.error);
       const bySymbol = new Map<string, { quote: MarketQuote; news: NewsItem[]; warnings: string[] }>();
-      marketData.rows.forEach((row: any) => bySymbol.set(row.symbol, row));
+      (marketData.rows || []).forEach((row) => {
+        if (row.quote) bySymbol.set(row.symbol, { quote: row.quote, news: row.news || [], warnings: row.warnings || [] });
+      });
       const withMarket = holdings.map((holding) => {
         const row = bySymbol.get(displayMarketSymbol(holding.symbol, region).toUpperCase());
         const quote = row?.quote;
@@ -263,7 +295,7 @@ export default function Home() {
         return { ...holding, quote, news: row?.news || holding.news || [], selectedTargetPrice };
       });
       if (options.showWarnings) {
-        setWarnings((existing) => [...existing, ...marketData.rows.flatMap((row: any) => row.warnings || []).map(normalizeWarning)]);
+        setWarnings((existing) => [...existing, ...(marketData.rows || []).flatMap((row) => row.warnings || []).map(normalizeWarning)]);
       }
       setHoldings(withMarket);
       return withMarket;
@@ -283,6 +315,8 @@ export default function Home() {
       void refreshMarketData({ showLoading: true, showWarnings: false });
     }, 500);
     return () => window.clearTimeout(timeout);
+    // Keyed by symbol/profile fingerprint so quote-only updates do not trigger another refresh.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isHydrated, activeProfileId, region, marketSymbolKey]);
 
   useEffect(() => {
@@ -291,6 +325,8 @@ export default function Home() {
       void refreshMarketData({ showLoading: true, showWarnings: false });
     }, 60_000);
     return () => window.clearInterval(interval);
+    // Keyed by input fingerprint so quote-only updates do not reset the polling interval.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isHydrated, activeProfileId, region, marketSymbolKey, holdingInputKey]);
 
   const analyze = async () => {
@@ -413,6 +449,8 @@ export default function Home() {
   useEffect(() => {
     if (!supabase || !user || !isHydrated) return;
     void loadCloudPortfolio();
+    // loadCloudPortfolio is guarded by cloudLoadedUserId and should run once per signed-in user.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [supabase, user, isHydrated, cloudLoadedUserId]);
 
   useEffect(() => {
@@ -424,6 +462,8 @@ export default function Home() {
       void saveCloudPortfolio(payload);
     }, 1200);
     return () => window.clearTimeout(timeout);
+    // saveCloudPortfolio consumes the serialized payload captured for this debounce tick.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [supabase, user, isHydrated, cloudLoadedUserId, profiles, activeProfileId]);
 
   const addProfile = () => {
