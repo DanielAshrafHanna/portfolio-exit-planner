@@ -14,6 +14,30 @@ import { useState } from "react";
 import type { HoldingInput } from "@/lib/types";
 import { totalCostFor } from "@/lib/calculations";
 
+type NumericField = "shares" | "averageCost" | "totalCost" | "brokerCurrentValue";
+
+function numericDraftKey(id: string, key: NumericField) {
+  return `${id}:${key}`;
+}
+
+function isIncompleteNumericInput(value: string) {
+  const trimmed = value.trim();
+  return trimmed.endsWith(".") || trimmed === "-" || trimmed === ".";
+}
+
+function parseNumericInput(value: string): number {
+  const trimmed = value.trim();
+  if (trimmed === "" || trimmed === "-" || trimmed === ".") return 0;
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function formatNumericDisplay(holding: HoldingInput, key: NumericField): string {
+  const raw = holding[key];
+  if (raw === undefined || raw === null) return "";
+  return raw === 0 ? "" : String(raw);
+}
+
 type Props = {
   holdings: HoldingInput[];
   onChange: (holdings: HoldingInput[]) => void;
@@ -42,11 +66,21 @@ function inputClassName(extra = "") {
 
 type MobileHoldingCardProps = {
   holding: HoldingInput;
-  onUpdate: (id: string, key: keyof HoldingInput, value: string) => void;
+  getNumericDisplay: (holding: HoldingInput, key: NumericField) => string;
+  onNumericChange: (id: string, key: NumericField, value: string) => void;
+  onNumericBlur: (id: string, key: NumericField) => void;
+  onTextUpdate: (id: string, key: "symbol" | "name" | "notes", value: string) => void;
   onDelete: (id: string) => void;
 };
 
-function MobileHoldingCard({ holding, onUpdate, onDelete }: MobileHoldingCardProps) {
+function MobileHoldingCard({
+  holding,
+  getNumericDisplay,
+  onNumericChange,
+  onNumericBlur,
+  onTextUpdate,
+  onDelete
+}: MobileHoldingCardProps) {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const label = holding.symbol || "New holding";
 
@@ -60,7 +94,7 @@ function MobileHoldingCard({ holding, onUpdate, onDelete }: MobileHoldingCardPro
               aria-label={`Symbol for ${label}`}
               className={`${inputClassName()} font-bold uppercase`}
               value={holding.symbol}
-              onChange={(event) => onUpdate(holding.id, "symbol", event.target.value.toUpperCase())}
+              onChange={(event) => onTextUpdate(holding.id, "symbol", event.target.value.toUpperCase())}
             />
           </label>
         </div>
@@ -82,8 +116,10 @@ function MobileHoldingCard({ holding, onUpdate, onDelete }: MobileHoldingCardPro
             className={inputClassName()}
             type="number"
             inputMode="decimal"
-            value={holding.shares || ""}
-            onChange={(event) => onUpdate(holding.id, "shares", event.target.value)}
+            step="any"
+            value={getNumericDisplay(holding, "shares")}
+            onChange={(event) => onNumericChange(holding.id, "shares", event.target.value)}
+            onBlur={() => onNumericBlur(holding.id, "shares")}
           />
         </label>
         <label>
@@ -93,8 +129,10 @@ function MobileHoldingCard({ holding, onUpdate, onDelete }: MobileHoldingCardPro
             className={inputClassName()}
             type="number"
             inputMode="decimal"
-            value={holding.averageCost || ""}
-            onChange={(event) => onUpdate(holding.id, "averageCost", event.target.value)}
+            step="any"
+            value={getNumericDisplay(holding, "averageCost")}
+            onChange={(event) => onNumericChange(holding.id, "averageCost", event.target.value)}
+            onBlur={() => onNumericBlur(holding.id, "averageCost")}
           />
         </label>
       </div>
@@ -117,7 +155,7 @@ function MobileHoldingCard({ holding, onUpdate, onDelete }: MobileHoldingCardPro
               aria-label={`Company or ETF name for ${label}`}
               className={inputClassName()}
               value={holding.name}
-              onChange={(event) => onUpdate(holding.id, "name", event.target.value)}
+              onChange={(event) => onTextUpdate(holding.id, "name", event.target.value)}
             />
           </label>
           <div className="grid grid-cols-2 gap-3">
@@ -128,8 +166,9 @@ function MobileHoldingCard({ holding, onUpdate, onDelete }: MobileHoldingCardPro
                 className={inputClassName()}
                 type="number"
                 inputMode="decimal"
-                value={holding.totalCost || ""}
-                onChange={(event) => onUpdate(holding.id, "totalCost", event.target.value)}
+                value={getNumericDisplay(holding, "totalCost")}
+                onChange={(event) => onNumericChange(holding.id, "totalCost", event.target.value)}
+                onBlur={() => onNumericBlur(holding.id, "totalCost")}
               />
             </label>
             <label>
@@ -139,8 +178,9 @@ function MobileHoldingCard({ holding, onUpdate, onDelete }: MobileHoldingCardPro
                 className={inputClassName()}
                 type="number"
                 inputMode="decimal"
-                value={holding.brokerCurrentValue ?? ""}
-                onChange={(event) => onUpdate(holding.id, "brokerCurrentValue", event.target.value)}
+                value={getNumericDisplay(holding, "brokerCurrentValue")}
+                onChange={(event) => onNumericChange(holding.id, "brokerCurrentValue", event.target.value)}
+                onBlur={() => onNumericBlur(holding.id, "brokerCurrentValue")}
               />
             </label>
           </div>
@@ -150,7 +190,7 @@ function MobileHoldingCard({ holding, onUpdate, onDelete }: MobileHoldingCardPro
               aria-label={`Notes for ${label}`}
               className={inputClassName()}
               value={holding.notes ?? ""}
-              onChange={(event) => onUpdate(holding.id, "notes", event.target.value)}
+              onChange={(event) => onTextUpdate(holding.id, "notes", event.target.value)}
             />
           </label>
         </div>
@@ -161,15 +201,68 @@ function MobileHoldingCard({ holding, onUpdate, onDelete }: MobileHoldingCardPro
 
 export function PortfolioInput({ holdings, onChange, onAnalyze, isAnalyzing, isRefreshingMarket }: Props) {
   const [expanded, setExpanded] = useState(false);
+  const [numericDrafts, setNumericDrafts] = useState<Record<string, string>>({});
   const holdingCount = holdings.filter((holding) => holding.symbol.trim()).length;
 
-  const update = (id: string, key: keyof HoldingInput, value: string) => {
+  const clearDraftsForHolding = (id: string) => {
+    setNumericDrafts((drafts) => {
+      const next = { ...drafts };
+      for (const key of Object.keys(next)) {
+        if (key.startsWith(`${id}:`)) delete next[key];
+      }
+      return next;
+    });
+  };
+
+  const getNumericDisplay = (holding: HoldingInput, key: NumericField) => {
+    const draftKey = numericDraftKey(holding.id, key);
+    if (draftKey in numericDrafts) return numericDrafts[draftKey];
+    return formatNumericDisplay(holding, key);
+  };
+
+  const applyNumericValue = (id: string, key: NumericField, value: string) => {
     onChange(holdings.map((holding) => {
       if (holding.id !== id) return holding;
-      const next = { ...holding, [key]: ["shares", "averageCost", "totalCost", "brokerCurrentValue"].includes(key) ? Number(value) || 0 : value };
+      const trimmed = value.trim();
+      const parsed = key === "brokerCurrentValue" && trimmed === "" ? undefined : parseNumericInput(value);
+      const next = { ...holding, [key]: parsed };
       if (key === "shares" || key === "averageCost") next.totalCost = totalCostFor(next.shares, next.averageCost);
       return next;
     }));
+  };
+
+  const handleNumericChange = (id: string, key: NumericField, value: string) => {
+    const draftKey = numericDraftKey(id, key);
+    setNumericDrafts((drafts) => ({ ...drafts, [draftKey]: value }));
+    if (!isIncompleteNumericInput(value)) {
+      applyNumericValue(id, key, value);
+      setNumericDrafts((drafts) => {
+        const next = { ...drafts };
+        delete next[draftKey];
+        return next;
+      });
+    }
+  };
+
+  const handleNumericBlur = (id: string, key: NumericField) => {
+    const draftKey = numericDraftKey(id, key);
+    const draft = numericDrafts[draftKey];
+    if (draft === undefined) return;
+    setNumericDrafts((drafts) => {
+      const next = { ...drafts };
+      delete next[draftKey];
+      return next;
+    });
+    applyNumericValue(id, key, draft);
+  };
+
+  const updateText = (id: string, key: "symbol" | "name" | "notes", value: string) => {
+    onChange(holdings.map((holding) => holding.id === id ? { ...holding, [key]: value } : holding));
+  };
+
+  const deleteHolding = (id: string) => {
+    clearDraftsForHolding(id);
+    onChange(holdings.filter((item) => item.id !== id));
   };
 
   const importCsv = (file?: File) => {
@@ -283,8 +376,11 @@ export function PortfolioInput({ holdings, onChange, onAnalyze, isAnalyzing, isR
                 <MobileHoldingCard
                   holding={holding}
                   key={holding.id}
-                  onUpdate={update}
-                  onDelete={(id) => onChange(holdings.filter((item) => item.id !== id))}
+                  getNumericDisplay={getNumericDisplay}
+                  onNumericChange={handleNumericChange}
+                  onNumericBlur={handleNumericBlur}
+                  onTextUpdate={updateText}
+                  onDelete={deleteHolding}
                 />
               )) : (
                 <div className="rounded-lg border border-dashed border-ink/15 bg-white px-4 py-6 text-center text-sm text-ink/60">
@@ -350,14 +446,14 @@ export function PortfolioInput({ holdings, onChange, onAnalyze, isAnalyzing, isR
                 <tbody>
                   {holdings.map((holding) => (
                     <tr className="border-t border-ink/10 even:bg-paper/60" key={holding.id}>
-                      <td className="px-2 py-2 sm:px-3"><input aria-label={`Symbol for ${holding.name || "holding"}`} className="w-20 rounded border border-ink/15 px-2 py-1 font-semibold uppercase sm:w-24" value={holding.symbol} onChange={(event) => update(holding.id, "symbol", event.target.value.toUpperCase())} /></td>
-                      <td className="px-2 py-2 sm:px-3"><input aria-label={`Company or ETF name for ${holding.symbol || "holding"}`} className="w-40 rounded border border-ink/15 px-2 py-1 sm:w-52" value={holding.name} onChange={(event) => update(holding.id, "name", event.target.value)} /></td>
-                      <td className="px-2 py-2 sm:px-3"><input aria-label={`Shares for ${holding.symbol || "holding"}`} className="w-20 rounded border border-ink/15 px-2 py-1 sm:w-24" type="number" value={holding.shares} onChange={(event) => update(holding.id, "shares", event.target.value)} /></td>
-                      <td className="px-2 py-2 sm:px-3"><input aria-label={`Average cost for ${holding.symbol || "holding"}`} className="w-24 rounded border border-ink/15 px-2 py-1 sm:w-28" type="number" value={holding.averageCost} onChange={(event) => update(holding.id, "averageCost", event.target.value)} /></td>
-                      <td className="px-2 py-2 sm:px-3"><input aria-label={`Total cost for ${holding.symbol || "holding"}`} className="w-24 rounded border border-ink/15 px-2 py-1 sm:w-28" type="number" value={holding.totalCost} onChange={(event) => update(holding.id, "totalCost", event.target.value)} /></td>
-                      <td className="px-2 py-2 sm:px-3"><input aria-label={`Broker value for ${holding.symbol || "holding"}`} className="w-24 rounded border border-ink/15 px-2 py-1 sm:w-28" type="number" value={holding.brokerCurrentValue ?? ""} onChange={(event) => update(holding.id, "brokerCurrentValue", event.target.value)} /></td>
-                      <td className="px-2 py-2 sm:px-3"><input aria-label={`Notes for ${holding.symbol || "holding"}`} className="w-44 rounded border border-ink/15 px-2 py-1 sm:w-56" value={holding.notes ?? ""} onChange={(event) => update(holding.id, "notes", event.target.value)} /></td>
-                      <td className="px-2 py-2 sm:px-3"><button className="min-h-9 rounded px-2 text-xs font-semibold text-coral sm:text-sm" type="button" onClick={() => onChange(holdings.filter((item) => item.id !== holding.id))}>Delete</button></td>
+                      <td className="px-2 py-2 sm:px-3"><input aria-label={`Symbol for ${holding.name || "holding"}`} className="w-20 rounded border border-ink/15 px-2 py-1 font-semibold uppercase sm:w-24" value={holding.symbol} onChange={(event) => updateText(holding.id, "symbol", event.target.value.toUpperCase())} /></td>
+                      <td className="px-2 py-2 sm:px-3"><input aria-label={`Company or ETF name for ${holding.symbol || "holding"}`} className="w-40 rounded border border-ink/15 px-2 py-1 sm:w-52" value={holding.name} onChange={(event) => updateText(holding.id, "name", event.target.value)} /></td>
+                      <td className="px-2 py-2 sm:px-3"><input aria-label={`Shares for ${holding.symbol || "holding"}`} className="w-20 rounded border border-ink/15 px-2 py-1 sm:w-24" type="number" inputMode="decimal" step="any" value={getNumericDisplay(holding, "shares")} onChange={(event) => handleNumericChange(holding.id, "shares", event.target.value)} onBlur={() => handleNumericBlur(holding.id, "shares")} /></td>
+                      <td className="px-2 py-2 sm:px-3"><input aria-label={`Average cost for ${holding.symbol || "holding"}`} className="w-24 rounded border border-ink/15 px-2 py-1 sm:w-28" type="number" inputMode="decimal" step="any" value={getNumericDisplay(holding, "averageCost")} onChange={(event) => handleNumericChange(holding.id, "averageCost", event.target.value)} onBlur={() => handleNumericBlur(holding.id, "averageCost")} /></td>
+                      <td className="px-2 py-2 sm:px-3"><input aria-label={`Total cost for ${holding.symbol || "holding"}`} className="w-24 rounded border border-ink/15 px-2 py-1 sm:w-28" type="number" inputMode="decimal" step="any" value={getNumericDisplay(holding, "totalCost")} onChange={(event) => handleNumericChange(holding.id, "totalCost", event.target.value)} onBlur={() => handleNumericBlur(holding.id, "totalCost")} /></td>
+                      <td className="px-2 py-2 sm:px-3"><input aria-label={`Broker value for ${holding.symbol || "holding"}`} className="w-24 rounded border border-ink/15 px-2 py-1 sm:w-28" type="number" inputMode="decimal" step="any" value={getNumericDisplay(holding, "brokerCurrentValue")} onChange={(event) => handleNumericChange(holding.id, "brokerCurrentValue", event.target.value)} onBlur={() => handleNumericBlur(holding.id, "brokerCurrentValue")} /></td>
+                      <td className="px-2 py-2 sm:px-3"><input aria-label={`Notes for ${holding.symbol || "holding"}`} className="w-44 rounded border border-ink/15 px-2 py-1 sm:w-56" value={holding.notes ?? ""} onChange={(event) => updateText(holding.id, "notes", event.target.value)} /></td>
+                      <td className="px-2 py-2 sm:px-3"><button className="min-h-9 rounded px-2 text-xs font-semibold text-coral sm:text-sm" type="button" onClick={() => deleteHolding(holding.id)}>Delete</button></td>
                     </tr>
                   ))}
                 </tbody>
