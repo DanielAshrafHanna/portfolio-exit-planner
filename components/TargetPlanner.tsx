@@ -4,6 +4,7 @@ import { Calculator } from "lucide-react";
 import { useState } from "react";
 import type { CurrencyCode, EnrichedHolding, FeeSettings } from "@/lib/types";
 import { calculateProfitLoss, calculateSellPriceForProfitLoss, defaultSellTargets } from "@/lib/calculations";
+import { profitLossTone } from "@/lib/holdingDisplay";
 import { formatMoney } from "@/lib/profileUtils";
 
 type Props = {
@@ -25,6 +26,11 @@ export function applyDesiredProfitLossTarget(
     settings
   );
   return { ...holding, selectedTargetPrice: requiredSellPrice, targetPriceEdited: true };
+}
+
+function plValueClass(value: number) {
+  const tone = profitLossTone(value);
+  return tone === "loss" ? "text-coral" : tone === "gain" ? "text-marine" : "text-ink";
 }
 
 export function TargetPlanner({ holding, settings, currency, onChange }: Props) {
@@ -62,6 +68,22 @@ export function TargetPlanner({ holding, settings, currency, onChange }: Props) 
         <span className="font-normal text-ink/55">· {holding.symbol}</span>
       </div>
 
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <div className="rounded-md border border-mint/50 bg-white px-3 py-2.5">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-ink/55">Current target</p>
+          <p className="mt-1 text-lg font-bold text-marine">{formatMoney(targetPrice, currency)}</p>
+        </div>
+        <div className="rounded-md border border-mint/50 bg-white px-3 py-2.5">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-ink/55">P/L at target</p>
+          <p className={`mt-1 text-lg font-bold ${plValueClass(targetPl.profitLoss)}`}>
+            {formatMoney(targetPl.profitLoss, currency)}
+          </p>
+          <p className={`text-sm font-semibold ${plValueClass(targetPl.profitLoss)}`}>
+            {targetPl.profitLossPercent}%
+          </p>
+        </div>
+      </div>
+
       <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
         <div className="min-w-0 flex-1 sm:max-w-xs">
           <label className="text-xs font-semibold uppercase tracking-wide text-ink/55" htmlFor={`desired-pl-${holding.id}`}>
@@ -78,28 +100,24 @@ export function TargetPlanner({ holding, settings, currency, onChange }: Props) 
           />
         </div>
         <button
-          className="min-h-11 shrink-0 rounded-md bg-marine px-4 py-2 text-sm font-semibold text-white disabled:opacity-50 sm:min-w-[9rem]"
+          className="min-h-11 w-full shrink-0 rounded-md bg-marine px-4 py-2 text-sm font-semibold text-white disabled:opacity-50 sm:w-auto sm:min-w-[9rem]"
           type="button"
           disabled={!requiredSellPrice}
           onClick={applyTarget}
         >
           Apply to target
         </button>
-        <p className="min-w-0 flex-1 text-sm text-ink/70 sm:pb-2">
-          {requiredSellPrice ? (
-            <>
-              Sell at about <strong className="text-marine">{formatMoney(requiredSellPrice, currency)}</strong>
-              {" "}to target <strong>{formatMoney(requiredPl?.profitLoss || 0, currency)}</strong> P/L after fees.
-            </>
-          ) : (
-            "Enter the P/L you want and the app will calculate the required sell price."
-          )}
-        </p>
       </div>
 
-      <p className="mt-2 text-xs text-ink/55 sm:text-sm">
-        Current target <strong className="text-ink">{formatMoney(targetPrice, currency)}</strong>
-        {" · "}P/L at target <strong className="text-ink">{formatMoney(targetPl.profitLoss, currency)} ({targetPl.profitLossPercent}%)</strong>
+      <p className="mt-3 text-sm text-ink/70">
+        {requiredSellPrice ? (
+          <>
+            Sell at about <strong className="text-marine">{formatMoney(requiredSellPrice, currency)}</strong>
+            {" "}to target <strong>{formatMoney(requiredPl?.profitLoss || 0, currency)}</strong> P/L after fees.
+          </>
+        ) : (
+          "Enter the P/L you want and the app will calculate the required sell price."
+        )}
       </p>
     </section>
   );

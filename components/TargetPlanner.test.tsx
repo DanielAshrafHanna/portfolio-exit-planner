@@ -37,8 +37,12 @@ describe("TargetPlanner", () => {
     );
     expect(html).toContain("Target planner");
     expect(html).toContain("AAPL");
+    expect(html).toContain("Current target");
+    expect(html).toContain("P/L at target");
     expect(html).toContain("Desired P/L");
     expect(html).toContain("Apply to target");
+    expect(html).toContain("$132");
+    expect(html).toContain("$320");
   });
 
   it("renders loading state without a quote", () => {
