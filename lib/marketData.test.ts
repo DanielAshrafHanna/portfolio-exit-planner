@@ -87,6 +87,33 @@ describe("Yahoo chart quote parsing", () => {
     expect(quote?.dailyChangePercent).toBeCloseTo(0.35, 1);
   });
 
+  it("falls back to the latest daily close when regularMarketPrice matches a stale extended-hours quote", () => {
+    const closes = [...Array.from({ length: 23 }, (_, index) => 260 + index), 290.55, 291.58];
+    const quote = parseYahooChartQuote({
+      chart: {
+        result: [{
+          meta: {
+            marketState: "POST",
+            regularMarketPrice: 153.22,
+            postMarketPrice: 153.22,
+            previousClose: 290.55,
+            regularMarketVolume: 50000000
+          },
+          indicators: {
+            quote: [{
+              close: closes,
+              high: closes.map((value) => value + 1),
+              low: closes.map((value) => value - 1),
+              volume: closes.map(() => 900)
+            }]
+          }
+        }]
+      }
+    }, "AAPL");
+
+    expect(quote?.currentPrice).toBe(291.58);
+  });
+
   it("uses regularMarketPrice even when stale extended-hours fields are present", () => {
     const closes = Array.from({ length: 5 }, (_, index) => 280 + index);
     const quote = parseYahooChartQuote({
