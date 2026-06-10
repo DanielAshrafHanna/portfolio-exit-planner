@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { getNews, getQuote } from "@/lib/marketData";
-import { mockQuote } from "@/lib/sampleData";
 import type { MarketRegion } from "@/lib/types";
 import { marketRequestSchema } from "@/lib/validation";
+
+export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
   try {
@@ -42,9 +43,17 @@ async function fetchMarketRow({ symbol, region }: { symbol: string; region: Mark
     const message = error instanceof Error ? error.message : "Unknown error";
     return {
       symbol,
-      quote: { ...mockQuote(symbol), error: message },
+      quote: {
+        symbol,
+        currentPrice: 0,
+        previousClose: 0,
+        dailyChangePercent: 0,
+        provider: "unavailable",
+        error: message,
+        stale: true
+      },
       news: [],
-      warnings: [`Market fetch failed for ${symbol}; showing sample data.`]
+      warnings: [`Market fetch failed for ${symbol}: ${message}`]
     };
   }
 }

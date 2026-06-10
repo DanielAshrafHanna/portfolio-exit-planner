@@ -35,6 +35,16 @@ function mobileMoney(value: number, currency: CurrencyCode) {
   return formatMoney(value, currency);
 }
 
+function isLiveQuote(quote?: EnrichedHolding["quote"]) {
+  return Boolean(quote?.currentPrice && quote.provider !== "mock" && quote.provider !== "unavailable" && !quote.error);
+}
+
+function priceLabel(quote: EnrichedHolding["quote"] | undefined, currency: CurrencyCode) {
+  if (!quote) return "Loading";
+  if (!isLiveQuote(quote)) return "Unavailable";
+  return formatMoney(quote.currentPrice, currency);
+}
+
 function MobileHoldingsColgroup() {
   return (
     <colgroup>
@@ -53,17 +63,17 @@ function DesktopHoldingsColgroup() {
   return (
     <colgroup>
       <col className="w-[2.5%]" />
-      <col className="w-[8%]" />
-      <col className="w-[4.5%]" />
+      <col className="w-[7.5%]" />
       <col className="w-[5.5%]" />
-      <col className="w-[6%]" />
+      <col className="w-[7%]" />
+      <col className="w-[6.5%]" />
       <col className="w-[6.5%]" />
       <col className="w-[7.5%]" />
       <col className="w-[7%]" />
       <col className="w-[5.5%]" />
       <col className="w-[5.5%]" />
       <col className="w-[6.5%]" />
-      <col className="w-[7.5%]" />
+      <col className="w-[7%]" />
       <col className="w-[6.5%]" />
       <col className="w-[7.5%]" />
       <col className="w-[5.5%]" />
@@ -206,7 +216,7 @@ export function HoldingsTable({ holdings, settings, currency, onChange, readOnly
                         </td>
                         <td className="bg-inherit px-1.5 py-2.5 align-middle">{symbolWithActionCell(holding, quote?.stale)}</td>
                         <td className="whitespace-nowrap px-1.5 py-2.5 align-middle font-semibold tabular-nums text-marine">
-                          {quote ? mobileMoney(quote.currentPrice, currency) : "…"}
+                          {priceLabel(quote, currency)}
                         </td>
                         <td className="whitespace-nowrap px-1.5 py-2.5 align-middle tabular-nums">{metrics.current ? mobileMoney(metrics.current.grossValue, currency) : "—"}</td>
                         <td className="px-1.5 py-2.5 align-middle">{stackedPlCell(metrics.current?.profitLoss, metrics.current?.profitLossPercent, currency)}</td>
@@ -273,10 +283,10 @@ export function HoldingsTable({ holdings, settings, currency, onChange, readOnly
                     </span>
                     <span className="block truncate text-[11px] font-normal text-ink/55 lg:text-xs">{holding.name}</span>
                   </td>
-                  <td className="truncate px-1.5 py-2 lg:px-2 lg:py-3">{holding.shares}</td>
-                  <td className="truncate px-1.5 py-2 lg:px-2 lg:py-3">{formatMoney(holding.averageCost, currency)}</td>
-                  <td className="truncate border-l-2 border-ink/15 bg-marine/5 px-1.5 py-2 font-semibold text-marine lg:px-2 lg:py-3">
-                    {quote ? formatMoney(quote.currentPrice, currency) : "Loading"}
+                  <td className="whitespace-nowrap px-1.5 py-2 tabular-nums lg:px-2 lg:py-3">{holding.shares}</td>
+                  <td className="whitespace-nowrap px-1.5 py-2 tabular-nums lg:px-2 lg:py-3">{formatMoney(holding.averageCost, currency)}</td>
+                  <td className="whitespace-nowrap border-l-2 border-ink/15 bg-marine/5 px-1.5 py-2 font-semibold tabular-nums text-marine lg:px-2 lg:py-3">
+                    {priceLabel(quote, currency)}
                   </td>
                   <td className="truncate px-1.5 py-2 lg:px-2 lg:py-3">{metrics.current ? formatMoney(metrics.current.grossValue, currency) : "N/A"}</td>
                   <td className={`truncate bg-marine/5 px-1.5 py-2 font-semibold lg:px-2 lg:py-3 ${valueClass(metrics.current?.profitLoss)}`}>{metrics.current ? `${formatMoney(metrics.current.profitLoss, currency)} (${metrics.current.profitLossPercent}%)` : "N/A"}</td>

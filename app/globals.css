@@ -59,6 +59,11 @@ label:has(input:focus-visible) {
   overflow: visible;
 }
 
+.holdings-desktop-table th,
+.holdings-desktop-table td {
+  overflow: visible;
+}
+
 @keyframes expandPanelIn {
   from {
     opacity: 0;
