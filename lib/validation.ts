@@ -93,6 +93,7 @@ export const aiAnalysisSchema = z.object({
 
 export const marketRequestSchema = z.object({
   region: marketRegionSchema.default("US"),
+  quotesOnly: z.boolean().optional(),
   symbols: z.array(cleanString(24).min(1)).max(50).optional(),
   holdings: z.array(z.object({
     symbol: cleanString(24).min(1),

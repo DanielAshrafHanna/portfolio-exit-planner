@@ -21,6 +21,7 @@ import { SettingsPanel } from "@/components/SettingsPanel";
 import { SharedHoldingsViewer } from "@/components/SharedHoldingsViewer";
 import { defaultSellTargets } from "@/lib/calculations";
 import { applyAnalyzedHoldingResults, type AnalyzedHoldingResult } from "@/lib/holdingMerge";
+import { applyLiveQuotes, getQuoteRefreshIntervalMs, liveQuoteKey } from "@/lib/marketRefresh";
 import { DEFAULT_SETTINGS, defaultProfiles, displayMarketSymbol } from "@/lib/profileUtils";
 import { filterUnsupportedHoldings, getUnsupportedTickerMessage, isUnsupportedTicker } from "@/lib/unsupportedTickers";
 import {
@@ -310,7 +311,9 @@ export default function Home() {
   const cloudHoldingCountRef = useRef(0);
   const signedInUserIdRef = useRef<string | null>(null);
   const cloudLoadInFlightRef = useRef(false);
+  const [liveQuotes, setLiveQuotes] = useState<Record<string, MarketQuote>>({});
   const marketRequestId = useRef(0);
+  const liveQuoteRequestId = useRef(0);
   const analysisRequestId = useRef(0);
   const activeProfileIdRef = useRef(activeProfileId);
   const holdingInputKeyRef = useRef("");
@@ -527,11 +530,15 @@ export default function Home() {
       }))
     ];
   }, [activeProfile?.name, holdings.length, region, sharedProfilesForRegion]);
+  const holdingsWithLiveQuotes = useMemo(
+    () => applyLiveQuotes(holdings, liveQuotes, region),
+    [holdings, liveQuotes, region]
+  );
   const displayedHoldings = useMemo(() => {
-    const source = selectedSharedProfile?.profile.holdings || holdings;
+    const source = selectedSharedProfile?.profile.holdings || holdingsWithLiveQuotes;
     const sourceRegion = selectedSharedProfile?.profile.region || region;
     return filterUnsupportedHoldings(source, sourceRegion);
-  }, [holdings, region, selectedSharedProfile]);
+  }, [holdingsWithLiveQuotes, region, selectedSharedProfile]);
   const displayedSettings = selectedSharedProfile?.profile.settings || settings;
   const displayedCurrency = selectedSharedProfile?.profile.currency || currency;
   const marketSymbolKey = useMemo(() => (
@@ -607,6 +614,57 @@ export default function Home() {
     setHoldings((items) => items.map((item) => item.id === next.id ? next : item));
   };
 
+  const syncLiveQuotesFromRows = (
+    rows: MarketApiRow[],
+    regionAtStart: typeof region,
+    isLatest: () => boolean
+  ) => {
+    if (!isLatest()) return;
+    setLiveQuotes((existing) => {
+      const next = { ...existing };
+      rows.forEach((row) => {
+        if (!row.quote) return;
+        next[liveQuoteKey(regionAtStart, row.symbol)] = row.quote;
+      });
+      return next;
+    });
+  };
+
+  const refreshLiveQuotes = async () => {
+    const requestId = liveQuoteRequestId.current + 1;
+    liveQuoteRequestId.current = requestId;
+    const profileIdAtStart = activeProfile?.id || activeProfileId;
+    const regionAtStart = region;
+    const holdingsSnapshot = holdings;
+    const isLatestRequest = () => (
+      liveQuoteRequestId.current === requestId && activeProfileIdRef.current === profileIdAtStart
+    );
+    const symbols = holdingsSnapshot
+      .map((holding) => displayMarketSymbol(holding.symbol, regionAtStart))
+      .filter(Boolean);
+    if (!symbols.length) return;
+
+    try {
+      const marketResponse = await fetch("/api/market", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          holdings: holdingsSnapshot.map((holding) => ({
+            symbol: displayMarketSymbol(holding.symbol, regionAtStart),
+            region: regionAtStart
+          })),
+          region: regionAtStart,
+          quotesOnly: true
+        })
+      });
+      const marketData = await readJsonResponse<MarketApiResponse>(marketResponse);
+      if (!marketResponse.ok || marketData.error || !isLatestRequest()) return;
+      syncLiveQuotesFromRows(marketData.rows || [], regionAtStart, isLatestRequest);
+    } catch {
+      // Quote polls fail quietly so the rest of the UI stays stable.
+    }
+  };
+
   const refreshMarketData = async (options: { showLoading?: boolean; showWarnings?: boolean } = {}) => {
     const requestId = marketRequestId.current + 1;
     marketRequestId.current = requestId;
@@ -647,6 +705,7 @@ export default function Home() {
         const selectedTargetPrice = !holding.targetPriceEdited ? defaultSellTargets(row.quote.currentPrice)[1].price : holding.selectedTargetPrice;
         return { ...holding, quote: row.quote, news: row.news, selectedTargetPrice };
       }));
+      syncLiveQuotesFromRows(marketData.rows || [], regionAtStart, isLatestRequest);
       return withMarket;
     } catch (error) {
       if (options.showWarnings && isLatestRequest()) {
@@ -657,6 +716,10 @@ export default function Home() {
       if (options.showLoading && marketRequestId.current === requestId) setIsRefreshingMarket(false);
     }
   };
+
+  useEffect(() => {
+    setLiveQuotes({});
+  }, [activeProfileId, marketSymbolKey]);
 
   useEffect(() => {
     if (!isHydrated || !holdings.some((holding) => holding.symbol)) return;
@@ -670,11 +733,34 @@ export default function Home() {
 
   useEffect(() => {
     if (!isHydrated || !holdings.some((holding) => holding.symbol)) return;
-    const interval = window.setInterval(() => {
-      void refreshMarketData({ showLoading: false, showWarnings: false });
-    }, 60_000);
-    return () => window.clearInterval(interval);
-    // Keyed by input fingerprint so quote-only updates do not reset the polling interval.
+    let cancelled = false;
+    let timeoutId = 0;
+
+    const scheduleNext = () => {
+      if (cancelled) return;
+      const hidden = document.visibilityState === "hidden";
+      const delay = getQuoteRefreshIntervalMs(region, { hidden });
+      timeoutId = window.setTimeout(async () => {
+        if (cancelled) return;
+        if (document.visibilityState === "visible") {
+          await refreshLiveQuotes();
+        }
+        scheduleNext();
+      }, delay);
+    };
+
+    scheduleNext();
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void refreshLiveQuotes();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+    // Keyed by holdings fingerprint, not live quote updates.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isHydrated, activeProfileId, region, marketSymbolKey, holdingInputKey]);
 

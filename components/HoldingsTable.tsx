@@ -8,6 +8,7 @@ import { nextSortState, sortHoldings, type HoldingSortKey, type SortDirection } 
 import { formatMoney } from "@/lib/profileUtils";
 import { HoldingsSortControl, HoldingsSortHeader } from "./HoldingsSortControl";
 import { HoldingDetails } from "./HoldingDetails";
+import { ExtendedHoursPriceMarker } from "./ExtendedHoursPriceMarker";
 import { StaleQuoteMarker } from "./StaleQuoteMarker";
 
 type Props = {
@@ -116,7 +117,14 @@ export function HoldingsTable({ holdings, settings, currency, onChange, readOnly
                     {holding.symbol}
                     {quote?.stale ? <StaleQuoteMarker /> : null}
                   </td>
-                  <td className="whitespace-nowrap px-1.5 py-1 font-semibold text-marine">{quote ? shortMoney(quote.currentPrice, currency) : "…"}</td>
+                  <td className="whitespace-nowrap px-1.5 py-1 font-semibold text-marine">
+                    {quote ? (
+                      <span className="inline-flex items-center">
+                        {shortMoney(quote.currentPrice, currency)}
+                        <ExtendedHoursPriceMarker session={quote.priceSession} />
+                      </span>
+                    ) : "…"}
+                  </td>
                   <td className="whitespace-nowrap px-1.5 py-1">{metrics.current ? shortMoney(metrics.current.grossValue, currency) : "—"}</td>
                   <td className={`whitespace-nowrap px-1.5 py-1 font-semibold ${valueClass(metrics.current?.profitLoss)}`}>{metrics.current ? `${shortMoney(metrics.current.profitLoss, currency)} ${metrics.current.profitLossPercent}%` : "—"}</td>
                   <td className={`whitespace-nowrap px-1.5 py-1 font-semibold ${valueClass(metrics.daily?.profitLoss)}`}>{metrics.daily ? `${shortMoney(metrics.daily.profitLoss, currency)} ${metrics.daily.profitLossPercent}%` : "—"}</td>
@@ -183,7 +191,14 @@ export function HoldingsTable({ holdings, settings, currency, onChange, readOnly
                   </td>
                   <td className="px-2 py-2 sm:px-3 sm:py-3">{holding.shares}</td>
                   <td className="px-2 py-2 sm:px-3 sm:py-3">{formatMoney(holding.averageCost, currency)}</td>
-                  <td className="border-l-2 border-ink/15 bg-marine/5 px-2 py-2 font-semibold text-marine sm:px-3 sm:py-3">{quote ? formatMoney(quote.currentPrice, currency) : "Loading"}</td>
+                  <td className="border-l-2 border-ink/15 bg-marine/5 px-2 py-2 font-semibold text-marine sm:px-3 sm:py-3">
+                    {quote ? (
+                      <span className="inline-flex items-center">
+                        {formatMoney(quote.currentPrice, currency)}
+                        <ExtendedHoursPriceMarker session={quote.priceSession} />
+                      </span>
+                    ) : "Loading"}
+                  </td>
                   <td className="px-2 py-2 sm:px-3 sm:py-3">{metrics.current ? formatMoney(metrics.current.grossValue, currency) : "N/A"}</td>
                   <td className={`bg-marine/5 px-2 py-2 font-semibold sm:px-3 sm:py-3 ${valueClass(metrics.current?.profitLoss)}`}>{metrics.current ? `${formatMoney(metrics.current.profitLoss, currency)} (${metrics.current.profitLossPercent}%)` : "N/A"}</td>
                   <td className={`px-2 py-2 font-semibold sm:px-3 sm:py-3 ${valueClass(metrics.daily?.profitLoss)}`}>{metrics.daily ? `${formatMoney(metrics.daily.profitLoss, currency)} (${metrics.daily.profitLossPercent}%)` : "N/A"}</td>
