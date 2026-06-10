@@ -23,6 +23,8 @@ describe("holdingDisplay", () => {
   it("computes row metrics when quote exists", () => {
     const metrics = computeHoldingRowMetrics(baseHolding, { fixedTradingFee: 0, percentTradingFee: 0, fxFeePercent: 0 });
     expect(metrics.current?.profitLoss).toBeGreaterThan(0);
+    expect(metrics.daily?.profitLoss).toBe(20);
+    expect(metrics.daily?.profitLossPercent).toBeGreaterThan(0);
     expect(metrics.stopPrice).toBeGreaterThan(0);
     expect(metrics.targetPrice).toBeGreaterThan(0);
   });

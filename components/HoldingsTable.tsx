@@ -84,7 +84,7 @@ export function HoldingsTable({ holdings, settings, currency, onChange, readOnly
           </div>
         ) : null}
         <div className="table-scroll -mx-4 isolate overflow-x-auto border-b border-ink/10 bg-white">
-        <table className="min-w-[540px] w-full border-collapse text-left text-[10px]">
+        <table className="min-w-[600px] w-full border-collapse text-left text-[10px]">
           <thead className="bg-marine text-[10px] uppercase text-white">
             <tr>
               <th className="w-7 px-1 py-1.5" aria-label="Expand" />
@@ -92,6 +92,7 @@ export function HoldingsTable({ holdings, settings, currency, onChange, readOnly
               <HoldingsSortHeader label="Price" sortKey="currentPrice" activeKey={sortKey} direction={sortDirection} onSort={handleSort} className="px-1.5 py-1.5" />
               <HoldingsSortHeader label="Value" sortKey="currentValue" activeKey={sortKey} direction={sortDirection} onSort={handleSort} className="px-1.5 py-1.5" />
               <HoldingsSortHeader label="P/L" sortKey="currentProfitLoss" activeKey={sortKey} direction={sortDirection} onSort={handleSort} className="px-1.5 py-1.5" />
+              <HoldingsSortHeader label="Day" sortKey="dailyProfitLoss" activeKey={sortKey} direction={sortDirection} onSort={handleSort} className="px-1.5 py-1.5" />
               <HoldingsSortHeader label="Act" sortKey="action" activeKey={sortKey} direction={sortDirection} onSort={handleSort} className="px-1.5 py-1.5" />
               <HoldingsSortHeader label="Stop" sortKey="stopPrice" activeKey={sortKey} direction={sortDirection} onSort={handleSort} className="px-1.5 py-1.5" />
               <HoldingsSortHeader label="Tgt" sortKey="targetPrice" activeKey={sortKey} direction={sortDirection} onSort={handleSort} className="px-1.5 py-1.5" />
@@ -114,11 +115,12 @@ export function HoldingsTable({ holdings, settings, currency, onChange, readOnly
                   <td className="whitespace-nowrap px-1.5 py-1 font-semibold text-marine">{quote ? shortMoney(quote.currentPrice, currency) : "…"}</td>
                   <td className="whitespace-nowrap px-1.5 py-1">{metrics.current ? shortMoney(metrics.current.grossValue, currency) : "—"}</td>
                   <td className={`whitespace-nowrap px-1.5 py-1 font-semibold ${valueClass(metrics.current?.profitLoss)}`}>{metrics.current ? `${shortMoney(metrics.current.profitLoss, currency)} ${metrics.current.profitLossPercent}%` : "—"}</td>
+                  <td className={`whitespace-nowrap px-1.5 py-1 font-semibold ${valueClass(metrics.daily?.profitLoss)}`}>{metrics.daily ? `${shortMoney(metrics.daily.profitLoss, currency)} ${metrics.daily.profitLossPercent}%` : "—"}</td>
                   <td className="px-1.5 py-1">{badge(holding.analysis?.action, true)}</td>
                   <td className="whitespace-nowrap px-1.5 py-1">{metrics.stopPrice ? shortMoney(metrics.stopPrice, currency) : "—"}</td>
                   <td className="whitespace-nowrap px-1.5 py-1 font-semibold text-marine">{metrics.targetPrice ? shortMoney(metrics.targetPrice, currency) : "—"}</td>
                 </tr>,
-                detailRow(holding, 8)
+                detailRow(holding, 9)
               ];
             })}
           </tbody>
@@ -127,11 +129,11 @@ export function HoldingsTable({ holdings, settings, currency, onChange, readOnly
       </div>
 
       <div className="table-scroll -mx-4 hidden isolate overflow-x-auto border-y border-ink/10 bg-white sm:-mx-5 md:block">
-        <table className="min-w-[1120px] w-full border-collapse text-left text-xs sm:min-w-[1320px] sm:text-sm">
+        <table className="min-w-[1220px] w-full border-collapse text-left text-xs sm:min-w-[1420px] sm:text-sm">
           <thead className="bg-marine text-xs uppercase text-white">
             <tr className="hidden border-b border-white/15 sm:table-row">
               <th className="px-3 py-2 text-center" colSpan={4}>Position</th>
-              <th className="border-l-2 border-white/30 px-3 py-2 text-center" colSpan={3}>Market</th>
+              <th className="border-l-2 border-white/30 px-3 py-2 text-center" colSpan={4}>Market</th>
               <th className="border-l-2 border-white/30 px-3 py-2 text-center" colSpan={2}>Analysis</th>
               <th className="border-l-2 border-white/30 px-3 py-2 text-center" colSpan={2}>Stop</th>
               <th className="border-l-2 border-white/30 px-3 py-2 text-center" colSpan={2}>Target</th>
@@ -145,6 +147,7 @@ export function HoldingsTable({ holdings, settings, currency, onChange, readOnly
               <HoldingsSortHeader label="Current price" sortKey="currentPrice" activeKey={sortKey} direction={sortDirection} onSort={handleSort} className="border-l-2 border-white/30 px-2 py-2 sm:px-3 sm:py-3" />
               <HoldingsSortHeader label="Current value" sortKey="currentValue" activeKey={sortKey} direction={sortDirection} onSort={handleSort} className="px-2 py-2 sm:px-3 sm:py-3" />
               <HoldingsSortHeader label="Current P/L" sortKey="currentProfitLoss" activeKey={sortKey} direction={sortDirection} onSort={handleSort} className="px-2 py-2 sm:px-3 sm:py-3" />
+              <HoldingsSortHeader label="Daily P/L" sortKey="dailyProfitLoss" activeKey={sortKey} direction={sortDirection} onSort={handleSort} className="px-2 py-2 sm:px-3 sm:py-3" />
               <HoldingsSortHeader label="AI action" sortKey="action" activeKey={sortKey} direction={sortDirection} onSort={handleSort} className="border-l-2 border-white/30 px-2 py-2 sm:px-3 sm:py-3" />
               <HoldingsSortHeader label="Confidence" sortKey="confidence" activeKey={sortKey} direction={sortDirection} onSort={handleSort} className="px-2 py-2 sm:px-3 sm:py-3" />
               <HoldingsSortHeader label="Suggested stop-loss" sortKey="stopPrice" activeKey={sortKey} direction={sortDirection} onSort={handleSort} className="border-l-2 border-white/30 px-2 py-2 sm:px-3 sm:py-3" />
@@ -173,6 +176,7 @@ export function HoldingsTable({ holdings, settings, currency, onChange, readOnly
                   <td className="border-l-2 border-ink/15 bg-marine/5 px-2 py-2 font-semibold text-marine sm:px-3 sm:py-3">{quote ? formatMoney(quote.currentPrice, currency) : "Loading"}</td>
                   <td className="px-2 py-2 sm:px-3 sm:py-3">{metrics.current ? formatMoney(metrics.current.grossValue, currency) : "N/A"}</td>
                   <td className={`bg-marine/5 px-2 py-2 font-semibold sm:px-3 sm:py-3 ${valueClass(metrics.current?.profitLoss)}`}>{metrics.current ? `${formatMoney(metrics.current.profitLoss, currency)} (${metrics.current.profitLossPercent}%)` : "N/A"}</td>
+                  <td className={`px-2 py-2 font-semibold sm:px-3 sm:py-3 ${valueClass(metrics.daily?.profitLoss)}`}>{metrics.daily ? `${formatMoney(metrics.daily.profitLoss, currency)} (${metrics.daily.profitLossPercent}%)` : "N/A"}</td>
                   <td className="border-l-2 border-ink/15 px-2 py-2 sm:px-3 sm:py-3">{badge(holding.analysis?.action)}</td>
                   <td className="px-2 py-2 sm:px-3 sm:py-3">{badge(holding.analysis?.confidence)}</td>
                   <td className="border-l-2 border-ink/15 bg-amber/10 px-2 py-2 font-semibold sm:px-3 sm:py-3">{metrics.stopPrice ? formatMoney(metrics.stopPrice, currency) : "N/A"}</td>
@@ -181,7 +185,7 @@ export function HoldingsTable({ holdings, settings, currency, onChange, readOnly
                   <td className={`bg-mint/70 px-2 py-2 font-bold sm:px-3 sm:py-3 ${valueClass(metrics.targetPl?.profitLoss)}`}>{metrics.targetPl ? `${formatMoney(metrics.targetPl.profitLoss, currency)} (${metrics.targetPl.profitLossPercent}%)` : "N/A"}</td>
                   <td className="border-l-2 border-ink/15 px-2 py-2 sm:px-3 sm:py-3">{badge(holding.analysis?.riskLevel)}</td>
                 </tr>,
-                detailRow(holding, 14)
+                detailRow(holding, 15)
               ];
             })}
           </tbody>

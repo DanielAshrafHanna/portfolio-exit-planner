@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calculatePartialSale, calculateProfitLoss, calculateSellPriceForProfitLoss, calculateStopLosses, defaultSellTargets, totalCostFor } from "./calculations";
+import { calculateDailyProfitLoss, calculatePartialSale, calculateProfitLoss, calculateSellPriceForProfitLoss, calculateStopLosses, defaultSellTargets, totalCostFor } from "./calculations";
 
 const holding = {
   id: "1",
@@ -12,6 +12,28 @@ const holding = {
 
 it("calculates total cost from shares and average cost", () => {
   expect(totalCostFor(12.5, 8)).toBe(100);
+});
+
+describe("daily profit/loss", () => {
+  it("calculates gross position change since previous close", () => {
+    const result = calculateDailyProfitLoss(10, 120, 118);
+    expect(result.priorValue).toBe(1180);
+    expect(result.profitLoss).toBe(20);
+    expect(result.profitLossPercent).toBeCloseTo(1.69, 1);
+  });
+
+  it("returns negative daily P/L when price fell", () => {
+    const result = calculateDailyProfitLoss(5, 90, 100);
+    expect(result.profitLoss).toBe(-50);
+    expect(result.profitLossPercent).toBe(-10);
+  });
+
+  it("returns zero daily P/L for zero shares", () => {
+    const result = calculateDailyProfitLoss(0, 120, 118);
+    expect(result.profitLoss).toBe(0);
+    expect(result.profitLossPercent).toBe(0);
+    expect(result.priorValue).toBe(0);
+  });
 });
 
 describe("profit/loss", () => {
