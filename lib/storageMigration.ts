@@ -1,5 +1,6 @@
 import { totalCostFor } from "./calculations";
 import { DEFAULT_SETTINGS, defaultProfiles } from "./profileUtils";
+import { filterUnsupportedHoldings } from "./unsupportedTickers";
 import type { EnrichedHolding, FeeSettings, HoldingInput, PortfolioProfile } from "./types";
 import { aiAnalysisSchema, feeSettingsSchema, marketQuoteSchema, newsItemSchema } from "./validation";
 
@@ -122,7 +123,7 @@ export function coerceProfiles(value: unknown, fallbackSettings: FeeSettings = D
       name: text(item.name, "Portfolio") || "Portfolio",
       region,
       currency: item.currency === "EGP" || region === "EG" ? "EGP" : "USD",
-      holdings: coerceHoldings(item.holdings),
+      holdings: filterUnsupportedHoldings(coerceHoldings(item.holdings), region),
       settings: coerceFeeSettings(item.settings, fallbackSettings)
     };
   }).filter((item): item is PortfolioProfile => Boolean(item));

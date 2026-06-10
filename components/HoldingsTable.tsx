@@ -8,6 +8,7 @@ import { nextSortState, sortHoldings, type HoldingSortKey, type SortDirection } 
 import { formatMoney } from "@/lib/profileUtils";
 import { HoldingsSortControl, HoldingsSortHeader } from "./HoldingsSortControl";
 import { HoldingDetails } from "./HoldingDetails";
+import { StaleQuoteMarker } from "./StaleQuoteMarker";
 
 type Props = {
   holdings: EnrichedHolding[];
@@ -111,7 +112,10 @@ export function HoldingsTable({ holdings, settings, currency, onChange, readOnly
                       </button>
                     ) : null}
                   </td>
-                  <td className="bg-inherit px-1.5 py-1 font-bold">{holding.symbol}</td>
+                  <td className="bg-inherit px-1.5 py-1 font-bold">
+                    {holding.symbol}
+                    {quote?.stale ? <StaleQuoteMarker /> : null}
+                  </td>
                   <td className="whitespace-nowrap px-1.5 py-1 font-semibold text-marine">{quote ? shortMoney(quote.currentPrice, currency) : "…"}</td>
                   <td className="whitespace-nowrap px-1.5 py-1">{metrics.current ? shortMoney(metrics.current.grossValue, currency) : "—"}</td>
                   <td className={`whitespace-nowrap px-1.5 py-1 font-semibold ${valueClass(metrics.current?.profitLoss)}`}>{metrics.current ? `${shortMoney(metrics.current.profitLoss, currency)} ${metrics.current.profitLossPercent}%` : "—"}</td>
@@ -170,7 +174,13 @@ export function HoldingsTable({ holdings, settings, currency, onChange, readOnly
                       </button>
                     ) : null}
                   </td>
-                  <td className="bg-inherit px-2 py-2 font-bold sm:px-3 sm:py-3">{holding.symbol}<span className="block max-w-32 truncate text-[11px] font-normal text-ink/55 sm:max-w-44 sm:text-xs">{holding.name}</span></td>
+                  <td className="bg-inherit px-2 py-2 font-bold sm:px-3 sm:py-3">
+                    <span className="inline-flex items-center gap-0.5">
+                      {holding.symbol}
+                      {quote?.stale ? <StaleQuoteMarker /> : null}
+                    </span>
+                    <span className="block max-w-32 truncate text-[11px] font-normal text-ink/55 sm:max-w-44 sm:text-xs">{holding.name}</span>
+                  </td>
                   <td className="px-2 py-2 sm:px-3 sm:py-3">{holding.shares}</td>
                   <td className="px-2 py-2 sm:px-3 sm:py-3">{formatMoney(holding.averageCost, currency)}</td>
                   <td className="border-l-2 border-ink/15 bg-marine/5 px-2 py-2 font-semibold text-marine sm:px-3 sm:py-3">{quote ? formatMoney(quote.currentPrice, currency) : "Loading"}</td>

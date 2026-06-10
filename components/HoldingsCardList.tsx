@@ -5,6 +5,7 @@ import { useState } from "react";
 import type { CurrencyCode, EnrichedHolding, FeeSettings } from "@/lib/types";
 import { computeHoldingRowMetrics, profitLossTone, badgeTone } from "@/lib/holdingDisplay";
 import { formatMoney } from "@/lib/profileUtils";
+import { StaleQuoteMarker } from "./StaleQuoteMarker";
 import { HoldingDetails } from "./HoldingDetails";
 
 type Props = {
@@ -65,7 +66,10 @@ export function HoldingsCardList({ holdings, settings, currency, onChange, readO
               <div className="min-w-0 flex-1">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <p className="font-bold text-ink">{holding.symbol}</p>
+                    <p className="inline-flex items-center font-bold text-ink">
+                      {holding.symbol}
+                      {quote?.stale ? <StaleQuoteMarker /> : null}
+                    </p>
                     {holding.name ? <p className="truncate text-xs text-ink/55">{holding.name}</p> : null}
                   </div>
                   {metrics.current ? (

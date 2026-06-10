@@ -11,8 +11,9 @@ import {
   Trash2
 } from "lucide-react";
 import { useState } from "react";
-import type { HoldingInput } from "@/lib/types";
+import type { HoldingInput, MarketRegion } from "@/lib/types";
 import { totalCostFor } from "@/lib/calculations";
+import { filterUnsupportedHoldings, getUnsupportedTickerMessage } from "@/lib/unsupportedTickers";
 
 type NumericField = "shares" | "averageCost" | "totalCost" | "brokerCurrentValue";
 
@@ -40,10 +41,12 @@ function formatNumericDisplay(holding: HoldingInput, key: NumericField): string 
 
 type Props = {
   holdings: HoldingInput[];
+  region?: MarketRegion;
   onChange: (holdings: HoldingInput[]) => void;
   onAnalyze: () => void;
   isAnalyzing: boolean;
   isRefreshingMarket: boolean;
+  onBlockedTicker?: (message: string) => void;
 };
 
 const emptyHolding = (): HoldingInput => ({
@@ -199,7 +202,7 @@ function MobileHoldingCard({
   );
 }
 
-export function PortfolioInput({ holdings, onChange, onAnalyze, isAnalyzing, isRefreshingMarket }: Props) {
+export function PortfolioInput({ holdings, region = "US", onChange, onAnalyze, isAnalyzing, isRefreshingMarket, onBlockedTicker }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [numericDrafts, setNumericDrafts] = useState<Record<string, string>>({});
   const holdingCount = holdings.filter((holding) => holding.symbol.trim()).length;
@@ -257,6 +260,13 @@ export function PortfolioInput({ holdings, onChange, onAnalyze, isAnalyzing, isR
   };
 
   const updateText = (id: string, key: "symbol" | "name" | "notes", value: string) => {
+    if (key === "symbol") {
+      const message = getUnsupportedTickerMessage(value, region);
+      if (message) {
+        onBlockedTicker?.(message);
+        return;
+      }
+    }
     onChange(holdings.map((holding) => holding.id === id ? { ...holding, [key]: value } : holding));
   };
 
@@ -284,7 +294,12 @@ export function PortfolioInput({ holdings, onChange, onAnalyze, isAnalyzing, isR
             notes: String(row.Notes || row.notes || "")
           };
         });
-        onChange(rows);
+        const blocked = rows.filter((row) => getUnsupportedTickerMessage(row.symbol, region));
+        blocked.forEach((row) => {
+          const message = getUnsupportedTickerMessage(row.symbol, region);
+          if (message) onBlockedTicker?.(message);
+        });
+        onChange(filterUnsupportedHoldings(rows, region));
         setExpanded(true);
       }
     });
