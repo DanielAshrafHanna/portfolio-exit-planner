@@ -1,4 +1,4 @@
-import type { MarketQuote, MarketRegion, NewsItem, PriceSession } from "./types";
+import type { MarketQuote, MarketRegion, NewsItem } from "./types";
 import { normalizeMarketSymbol } from "./profileUtils";
 import { mockNews, mockQuote } from "./sampleData";
 import { getUnsupportedTickerMessage } from "./unsupportedTickers";
@@ -294,37 +294,6 @@ async function getYahooQuote(marketSymbol: string, displaySymbol: string, fresh 
   }
 }
 
-export function yahooMarketSession(meta: Record<string, unknown>): PriceSession {
-  const state = typeof meta.marketState === "string" ? meta.marketState.trim().toUpperCase() : "";
-  if (state === "REGULAR") return "regular";
-  if (state === "PRE" || state === "PREPRE") return "pre";
-  if (state === "POST" || state === "POSTPOST") return "post";
-  return "closed";
-}
-
-export function resolveYahooLivePrice(meta: Record<string, unknown>): {
-  currentPrice: number;
-  priceSession: PriceSession;
-} | undefined {
-  const regularMarketPrice = numberValue(meta.regularMarketPrice);
-  if (!regularMarketPrice) return undefined;
-
-  const session = yahooMarketSession(meta);
-  const preMarketPrice = numberValue(meta.preMarketPrice);
-  const postMarketPrice = numberValue(meta.postMarketPrice);
-
-  if (session === "pre" && preMarketPrice && preMarketPrice > 0) {
-    return { currentPrice: Number(preMarketPrice.toFixed(2)), priceSession: "pre" };
-  }
-  if (session === "post" && postMarketPrice && postMarketPrice > 0) {
-    return { currentPrice: Number(postMarketPrice.toFixed(2)), priceSession: "post" };
-  }
-  if (session === "regular") {
-    return { currentPrice: Number(regularMarketPrice.toFixed(2)), priceSession: "regular" };
-  }
-  return { currentPrice: Number(regularMarketPrice.toFixed(2)), priceSession: "closed" };
-}
-
 function resolveYahooPreviousClose(
   currentPrice: number,
   closes: number[],
@@ -356,9 +325,9 @@ export function parseYahooChartQuote(data: unknown, symbol: string): MarketQuote
   const meta = isRecord(result) && isRecord(result.meta) ? result.meta : undefined;
   const indicators = isRecord(result) && isRecord(result.indicators) ? result.indicators : undefined;
   const quoteRows = indicators && Array.isArray(indicators.quote) && isRecord(indicators.quote[0]) ? indicators.quote[0] : undefined;
-  const livePrice = meta ? resolveYahooLivePrice(meta) : undefined;
+  const regularMarketPrice = meta ? numberValue(meta.regularMarketPrice) : undefined;
   const close = quoteRows ? nullableNumberArray(quoteRows.close) : [];
-  if (!livePrice || !close.length || !quoteRows) return undefined;
+  if (!regularMarketPrice || !close.length || !quoteRows) return undefined;
 
   const high = nullableNumberArray(quoteRows.high);
   const low = nullableNumberArray(quoteRows.low);
@@ -374,29 +343,21 @@ export function parseYahooChartQuote(data: unknown, symbol: string): MarketQuote
   if (!rows.length) return undefined;
 
   const closes = rows.map((row) => row.close);
-  const { currentPrice, priceSession } = livePrice;
+  const currentPrice = Number(regularMarketPrice.toFixed(2));
   const previousClose = Number(resolveYahooPreviousClose(currentPrice, closes, meta).toFixed(2));
   const dailyChangePercent = previousClose > 0 ? Number((((currentPrice - previousClose) / previousClose) * 100).toFixed(2)) : 0;
   const week52High = meta ? numberValue(meta.fiftyTwoWeekHigh) : undefined;
   const week52Low = meta ? numberValue(meta.fiftyTwoWeekLow) : undefined;
   const regularMarketVolume = meta ? numberValue(meta.regularMarketVolume) : undefined;
-  const preMarketVolume = meta ? numberValue(meta.preMarketVolume) : undefined;
-  const postMarketVolume = meta ? numberValue(meta.postMarketVolume) : undefined;
-  const volume = priceSession === "pre"
-    ? (preMarketVolume ?? regularMarketVolume ?? rows[0]?.volume ?? undefined)
-    : priceSession === "post"
-      ? (postMarketVolume ?? regularMarketVolume ?? rows[0]?.volume ?? undefined)
-      : (regularMarketVolume ?? rows[0]?.volume ?? undefined);
 
   return {
     symbol,
     currentPrice,
-    priceSession,
     dailyChangePercent,
     previousClose,
     week52High: week52High !== undefined ? Number(week52High.toFixed(2)) : Math.round(Math.max(...closes.slice(0, 252)) * 100) / 100,
     week52Low: week52Low !== undefined ? Number(week52Low.toFixed(2)) : Math.round(Math.min(...closes.slice(0, 252)) * 100) / 100,
-    volume,
+    volume: regularMarketVolume ?? rows[0]?.volume ?? undefined,
     ma20: movingAverage(closes, 20),
     ma50: movingAverage(closes, 50),
     ma200: movingAverage(closes, 200),
