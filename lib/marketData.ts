@@ -1,6 +1,6 @@
 import type { MarketQuote, MarketRegion, NewsItem } from "./types";
 import { normalizeMarketSymbol } from "./profileUtils";
-import { mockNews, mockQuote } from "./sampleData";
+import { mockNews } from "./sampleData";
 import { getUnsupportedTickerMessage } from "./unsupportedTickers";
 
 const ALPHA_URL = "https://www.alphavantage.co/query";
@@ -11,23 +11,36 @@ const MUBASHER_FETCH_HEADERS = {
   "Accept-Language": "en-US,en;q=0.9"
 };
 
+const YAHOO_FETCH_HEADERS = {
+  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+  Accept: "application/json,text/plain,*/*",
+  "Accept-Language": "en-US,en;q=0.9",
+  Referer: "https://finance.yahoo.com/"
+};
+
 type QuoteFetchOptions = {
   fresh?: boolean;
 };
 
-function providerFetch(url: string, init: RequestInit = {}, fresh = false) {
+function mubasherFetch(url: string, fresh = false) {
   return fetch(url, {
-    ...init,
     ...(fresh ? { cache: "no-store" as const } : { next: { revalidate: 300 } }),
-    headers: { ...MUBASHER_FETCH_HEADERS, ...init.headers }
+    headers: MUBASHER_FETCH_HEADERS
   });
 }
 
-function mubasherFetch(url: string, fresh = false) {
-  return providerFetch(url, {}, fresh);
+function yahooFetch(url: string, fresh = false) {
+  return fetch(url, {
+    ...(fresh ? { cache: "no-store" as const } : { next: { revalidate: 300 } }),
+    headers: YAHOO_FETCH_HEADERS
+  });
 }
+
 const YAHOO_NEWS_RSS = "https://feeds.finance.yahoo.com/rss/2.0/headline";
-const YAHOO_CHART_URL = "https://query1.finance.yahoo.com/v8/finance/chart";
+const YAHOO_CHART_HOSTS = [
+  "https://query1.finance.yahoo.com/v8/finance/chart",
+  "https://query2.finance.yahoo.com/v8/finance/chart"
+];
 
 type ProviderResult<T> = {
   data: T;
@@ -44,6 +57,18 @@ function providerName() {
 
 function apiKey() {
   return process.env.MARKET_DATA_API_KEY || process.env.ALPHA_VANTAGE_API_KEY;
+}
+
+function unavailableQuote(symbol: string, error: string): MarketQuote {
+  return {
+    symbol,
+    currentPrice: 0,
+    previousClose: 0,
+    dailyChangePercent: 0,
+    provider: "unavailable",
+    error,
+    stale: true
+  };
 }
 
 async function fetchAlpha(params: Record<string, string>) {
@@ -174,16 +199,17 @@ export async function getQuote(
       };
     }
     return {
-      data: mockQuote(cleanSymbol),
-      warning: `Market API key is missing and no public quote was found for ${cleanSymbol}. Showing sample market data.`
+      data: unavailableQuote(cleanSymbol, `No live quote was found for ${cleanSymbol}.`),
+      warning: `Live quote fetch failed for ${cleanSymbol}.`
     };
   }
   try {
     return { data: await alphaQuote(marketSymbol) };
   } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed quote fetch";
     return {
-      data: { ...mockQuote(cleanSymbol), error: error instanceof Error ? error.message : "Failed quote fetch" },
-      warning: `Quote fetch failed for ${cleanSymbol}; showing sample data.`
+      data: unavailableQuote(cleanSymbol, message),
+      warning: `Quote fetch failed for ${cleanSymbol}: ${message}`
     };
   }
 }
@@ -281,17 +307,21 @@ export async function getNews(symbol: string, region: MarketRegion = "US"): Prom
 }
 
 async function getYahooQuote(marketSymbol: string, displaySymbol: string, fresh = false): Promise<MarketQuote | undefined> {
-  try {
-    const url = new URL(`${YAHOO_CHART_URL}/${encodeURIComponent(marketSymbol)}`);
-    url.searchParams.set("range", "1y");
-    url.searchParams.set("interval", "1d");
-    const response = await providerFetch(url.toString(), {}, fresh);
-    if (!response.ok) return undefined;
-    const data = await response.json();
-    return parseYahooChartQuote(data, displaySymbol);
-  } catch {
-    return undefined;
+  for (const host of YAHOO_CHART_HOSTS) {
+    try {
+      const url = new URL(`${host}/${encodeURIComponent(marketSymbol)}`);
+      url.searchParams.set("range", "1y");
+      url.searchParams.set("interval", "1d");
+      const response = await yahooFetch(url.toString(), fresh);
+      if (!response.ok) continue;
+      const data = await response.json();
+      const quote = parseYahooChartQuote(data, displaySymbol);
+      if (quote) return quote;
+    } catch {
+      // Try the next Yahoo host.
+    }
   }
+  return undefined;
 }
 
 function resolveYahooCurrentPrice(

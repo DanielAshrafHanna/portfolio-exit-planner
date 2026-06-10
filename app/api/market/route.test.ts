@@ -92,7 +92,7 @@ describe("/api/market", () => {
     expect(response.status).toBe(200);
     expect(rows).toHaveLength(1);
     expect(rows[0].quote.symbol).toBe("IBM");
-    expect(rows[0].quote.provider).toBe("mock");
+    expect(rows[0].quote.provider).toBe("unavailable");
     expect(rows[0].quote.error).toBe("provider down");
     expect(rows[0].warnings[0]).toContain("Market fetch failed for IBM");
   });
