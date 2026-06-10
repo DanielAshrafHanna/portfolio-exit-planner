@@ -1,10 +1,11 @@
 "use client";
 
 import { ChevronDown, ChevronRight } from "lucide-react";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import type { CurrencyCode, EnrichedHolding, FeeSettings } from "@/lib/types";
 import { computeHoldingRowMetrics, profitLossTone, badgeTone } from "@/lib/holdingDisplay";
 import { formatMoney } from "@/lib/profileUtils";
+import { ExtendedHoursPriceMarker } from "./ExtendedHoursPriceMarker";
 import { StaleQuoteMarker } from "./StaleQuoteMarker";
 import { HoldingDetails } from "./HoldingDetails";
 
@@ -22,7 +23,7 @@ function Badge({ value }: { value?: string }) {
   return <span className={`rounded px-2 py-1 text-xs font-semibold ${color}`}>{value || "N/A"}</span>;
 }
 
-function MetricCell({ label, value, tone }: { label: string; value: string; tone?: "loss" | "gain" | "neutral" }) {
+function MetricCell({ label, value, tone }: { label: string; value: ReactNode; tone?: "loss" | "gain" | "neutral" }) {
   const color = tone === "loss" ? "text-coral" : tone === "gain" ? "text-marine" : "text-ink";
   return (
     <div className="min-w-0">
@@ -81,7 +82,15 @@ export function HoldingsCardList({ holdings, settings, currency, onChange, readO
                   )}
                 </div>
                 <div className="mt-3 grid grid-cols-3 gap-2">
-                  <MetricCell label="Price" value={quote ? formatMoney(quote.currentPrice, currency) : "—"} />
+                  <MetricCell
+                    label="Price"
+                    value={quote ? (
+                      <span className="inline-flex items-center">
+                        {formatMoney(quote.currentPrice, currency)}
+                        <ExtendedHoursPriceMarker session={quote.priceSession} />
+                      </span>
+                    ) : "—"}
+                  />
                   <MetricCell label="Value" value={metrics.current ? formatMoney(metrics.current.grossValue, currency) : "—"} />
                   <MetricCell
                     label="P/L %"

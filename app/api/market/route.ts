@@ -11,7 +11,7 @@ export async function POST(request: Request) {
     if (!parsed.success) {
       return NextResponse.json({ error: parsed.error.issues[0]?.message || "Invalid market request" }, { status: 400 });
     }
-    const { symbols, holdings, region } = parsed.data;
+    const { symbols, holdings, region, quotesOnly } = parsed.data;
     const marketRegion: MarketRegion = region === "EG" ? "EG" : "US";
     const rawRows = holdings?.length
       ? holdings.map((holding) => ({
@@ -23,16 +23,20 @@ export async function POST(request: Request) {
     const uniqueRows = Array.from(
       new Map(rawRows.filter((row) => row.symbol).map((row) => [`${row.region}:${row.symbol}`, row])).values()
     );
-    const rows = await Promise.all(uniqueRows.map(fetchMarketRow));
+    const rows = await Promise.all(uniqueRows.map((row) => fetchMarketRow(row, quotesOnly === true)));
     return NextResponse.json({ rows });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Failed market fetch" }, { status: 500 });
   }
 }
 
-async function fetchMarketRow({ symbol, region }: { symbol: string; region: MarketRegion }) {
+async function fetchMarketRow({ symbol, region }: { symbol: string; region: MarketRegion }, quotesOnly = false) {
   try {
-    const [quote, news] = await Promise.all([getQuote(symbol, region), getNews(symbol, region)]);
+    const quote = await getQuote(symbol, region, { fresh: quotesOnly });
+    if (quotesOnly) {
+      return { symbol, quote: quote.data, news: [], warnings: [quote.warning].filter(Boolean) };
+    }
+    const news = await getNews(symbol, region);
     return { symbol, quote: quote.data, news: news.data, warnings: [quote.warning, news.warning].filter(Boolean) };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";

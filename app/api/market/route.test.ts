@@ -71,7 +71,7 @@ describe("/api/market", () => {
 
     expect(response.status).toBe(200);
     expect(mockGetQuote).toHaveBeenCalledTimes(1);
-    expect(mockGetQuote).toHaveBeenCalledWith("AAPL", "US");
+    expect(mockGetQuote).toHaveBeenCalledWith("AAPL", "US", { fresh: false });
     expect(mockGetNews).toHaveBeenCalledWith("AAPL", "US");
     expect(body.rows).toMatchObject([{
       symbol: "AAPL",
@@ -95,6 +95,18 @@ describe("/api/market", () => {
     expect(rows[0].quote.provider).toBe("mock");
     expect(rows[0].quote.error).toBe("provider down");
     expect(rows[0].warnings[0]).toContain("Market fetch failed for IBM");
+  });
+
+  it("skips news when quotesOnly is true", async () => {
+    mockGetQuote.mockResolvedValue({ data: quote });
+
+    const response = await POST(jsonRequest({ symbols: ["AAPL"], quotesOnly: true }));
+    const body = await readJson(response);
+
+    expect(response.status).toBe(200);
+    expect(mockGetQuote).toHaveBeenCalledWith("AAPL", "US", { fresh: true });
+    expect(mockGetNews).not.toHaveBeenCalled();
+    expect(body.rows).toMatchObject([{ symbol: "AAPL", quote, news: [] }]);
   });
 
   it("returns rows with quote, news, and warnings shape", async () => {

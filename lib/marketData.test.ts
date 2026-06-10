@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseMubasherEgxQuote, parseYahooChartQuote } from "./marketData";
+import { parseMubasherEgxQuote, parseYahooChartQuote, resolveYahooLivePrice, yahooMarketSession } from "./marketData";
 
 describe("Mubasher EGX quote parsing", () => {
   it("reads the current price and previous close from stock pages", () => {
@@ -51,6 +51,7 @@ describe("Yahoo chart quote parsing", () => {
       previousClose: 124,
       dailyChangePercent: 0.91,
       volume: 1000,
+      priceSession: "closed",
       provider: "yahoo_finance"
     });
     expect(quote?.ma20).toBeGreaterThan(0);
@@ -85,5 +86,81 @@ describe("Yahoo chart quote parsing", () => {
     expect(quote?.currentPrice).toBe(291.58);
     expect(quote?.previousClose).toBe(290.55);
     expect(quote?.dailyChangePercent).toBeCloseTo(0.35, 1);
+  });
+
+  it("uses pre-market price when Yahoo reports a pre-market session", () => {
+    const closes = Array.from({ length: 5 }, (_, index) => 100 + index);
+    const quote = parseYahooChartQuote({
+      chart: {
+        result: [{
+          meta: {
+            marketState: "PRE",
+            regularMarketPrice: 100,
+            preMarketPrice: 101.75,
+            previousClose: 99,
+            preMarketVolume: 2500
+          },
+          indicators: {
+            quote: [{
+              close: closes,
+              high: closes.map((value) => value + 1),
+              low: closes.map((value) => value - 1),
+              volume: closes.map(() => 900)
+            }]
+          }
+        }]
+      }
+    }, "AAPL");
+
+    expect(quote).toMatchObject({
+      currentPrice: 101.75,
+      priceSession: "pre",
+      previousClose: 99,
+      volume: 2500
+    });
+  });
+
+  it("uses after-hours price when Yahoo reports a post-market session", () => {
+    const closes = Array.from({ length: 5 }, (_, index) => 100 + index);
+    const quote = parseYahooChartQuote({
+      chart: {
+        result: [{
+          meta: {
+            marketState: "POST",
+            regularMarketPrice: 100,
+            postMarketPrice: 98.4,
+            previousClose: 99,
+            postMarketVolume: 1800
+          },
+          indicators: {
+            quote: [{
+              close: closes,
+              high: closes.map((value) => value + 1),
+              low: closes.map((value) => value - 1),
+              volume: closes.map(() => 900)
+            }]
+          }
+        }]
+      }
+    }, "AAPL");
+
+    expect(quote).toMatchObject({
+      currentPrice: 98.4,
+      priceSession: "post",
+      previousClose: 99,
+      volume: 1800
+    });
+  });
+
+  it("falls back to the regular close when extended-hours price is missing", () => {
+    expect(resolveYahooLivePrice({
+      marketState: "POST",
+      regularMarketPrice: 100
+    })).toMatchObject({
+      currentPrice: 100,
+      priceSession: "closed"
+    });
+    expect(yahooMarketSession({ marketState: "PREPRE" })).toBe("pre");
+    expect(yahooMarketSession({ marketState: "POSTPOST" })).toBe("post");
   });
 });
