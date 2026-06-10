@@ -40,6 +40,43 @@ function shortMoney(value: number, currency: CurrencyCode) {
   return formatted;
 }
 
+function MobileHoldingsColgroup() {
+  return (
+    <colgroup>
+      <col className="w-7" />
+      <col className="w-[18%]" />
+      <col className="w-[12%]" />
+      <col className="w-[14%]" />
+      <col className="w-[16%]" />
+      <col className="w-[14%]" />
+      <col className="w-[12%]" />
+      <col className="w-[12%]" />
+    </colgroup>
+  );
+}
+
+function stackedPlCell(profitLoss?: number, profitLossPercent?: number, currency?: CurrencyCode) {
+  if (profitLoss === undefined || profitLossPercent === undefined || !currency) return "—";
+  return (
+    <div className="min-w-0 leading-tight">
+      <div className={`truncate font-semibold ${valueClass(profitLoss)}`}>{shortMoney(profitLoss, currency)}</div>
+      <div className={`text-[9px] ${valueClass(profitLoss)}`}>{profitLossPercent}%</div>
+    </div>
+  );
+}
+
+function symbolWithActionCell(holding: EnrichedHolding, stale?: boolean) {
+  return (
+    <div className="min-w-0 leading-tight">
+      <div className="inline-flex max-w-full items-center font-bold">
+        <span className="truncate">{holding.symbol}</span>
+        {stale ? <StaleQuoteMarker /> : null}
+      </div>
+      <div className="mt-0.5">{badge(holding.analysis?.action, true)}</div>
+    </div>
+  );
+}
+
 export function HoldingsTable({ holdings, settings, currency, onChange, readOnly = false }: Props) {
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [sortKey, setSortKey] = useState<HoldingSortKey>("symbol");
@@ -109,53 +146,59 @@ export function HoldingsTable({ holdings, settings, currency, onChange, readOnly
             />
           </div>
         ) : null}
-        <div className="table-scroll -mx-4 isolate overflow-x-auto border-b border-ink/10 bg-white">
-        <table className="min-w-[600px] w-full border-collapse text-left text-[10px]">
-          <thead className="bg-marine text-[10px] uppercase text-white">
-            <tr>
-              <th className="w-7 px-1 py-1.5" aria-label="Expand" />
-              <HoldingsSortHeader label="Symbol" sortKey="symbol" activeKey={sortKey} direction={sortDirection} onSort={handleSort} className="px-1.5 py-1.5" />
-              <HoldingsSortHeader label="Price" sortKey="currentPrice" activeKey={sortKey} direction={sortDirection} onSort={handleSort} className="px-1.5 py-1.5" />
-              <HoldingsSortHeader label="Value" sortKey="currentValue" activeKey={sortKey} direction={sortDirection} onSort={handleSort} className="px-1.5 py-1.5" />
-              <HoldingsSortHeader label="P/L" sortKey="currentProfitLoss" activeKey={sortKey} direction={sortDirection} onSort={handleSort} className="px-1.5 py-1.5" />
-              <HoldingsSortHeader label="Day" sortKey="dailyProfitLoss" activeKey={sortKey} direction={sortDirection} onSort={handleSort} className="px-1.5 py-1.5" />
-              <HoldingsSortHeader label="Act" sortKey="action" activeKey={sortKey} direction={sortDirection} onSort={handleSort} className="px-1.5 py-1.5" />
-              <HoldingsSortHeader label="Stop" sortKey="stopPrice" activeKey={sortKey} direction={sortDirection} onSort={handleSort} className="px-1.5 py-1.5" />
-              <HoldingsSortHeader label="Tgt" sortKey="targetPrice" activeKey={sortKey} direction={sortDirection} onSort={handleSort} className="px-1.5 py-1.5" />
-            </tr>
-          </thead>
-          <tbody>
-            {sortedHoldings.map((holding) => {
-              const quote = holding.quote;
-              const metrics = computeHoldingRowMetrics(holding, settings);
-              return [
-                <tr className="border-t border-ink/10 even:bg-paper/40" key={`${holding.id}-mobile`}>
-                  <td className="bg-inherit px-0.5 py-1">
-                    {canExpand() ? (
-                      <button className="flex min-h-8 min-w-8 items-center justify-center rounded p-0.5" type="button" onClick={() => toggle(holding.id)} aria-label={`Expand ${holding.symbol}`} aria-expanded={Boolean(open[holding.id])}>
-                        {open[holding.id] ? <ChevronDown className="h-3.5 w-3.5" aria-hidden /> : <ChevronRight className="h-3.5 w-3.5" aria-hidden />}
-                      </button>
-                    ) : null}
-                  </td>
-                  <td className="bg-inherit px-1.5 py-1 font-bold">
-                    {holding.symbol}
-                    {quote?.stale ? <StaleQuoteMarker /> : null}
-                  </td>
-                  <td className="whitespace-nowrap px-1.5 py-1 font-semibold text-marine">
-                    {quote ? shortMoney(quote.currentPrice, currency) : "…"}
-                  </td>
-                  <td className="whitespace-nowrap px-1.5 py-1">{metrics.current ? shortMoney(metrics.current.grossValue, currency) : "—"}</td>
-                  <td className={`whitespace-nowrap px-1.5 py-1 font-semibold ${valueClass(metrics.current?.profitLoss)}`}>{metrics.current ? `${shortMoney(metrics.current.profitLoss, currency)} ${metrics.current.profitLossPercent}%` : "—"}</td>
-                  <td className={`whitespace-nowrap px-1.5 py-1 font-semibold ${valueClass(metrics.daily?.profitLoss)}`}>{metrics.daily ? `${shortMoney(metrics.daily.profitLoss, currency)} ${metrics.daily.profitLossPercent}%` : "—"}</td>
-                  <td className="px-1.5 py-1">{badge(holding.analysis?.action, true)}</td>
-                  <td className="whitespace-nowrap px-1.5 py-1">{metrics.stopPrice ? shortMoney(metrics.stopPrice, currency) : "—"}</td>
-                  <td className="whitespace-nowrap px-1.5 py-1">{targetCell(holding, metrics.targetPrice, true)}</td>
-                </tr>,
-                detailRow(holding, 9)
-              ];
-            })}
-          </tbody>
-        </table>
+        <div className="border-b border-ink/10 bg-white">
+          <table className="holdings-mobile-table w-full table-fixed border-collapse text-left text-[11px]">
+            <MobileHoldingsColgroup />
+            <thead className="bg-marine text-[10px] uppercase text-white">
+              <tr>
+                <th className="px-0.5 py-1.5" aria-label="Expand" />
+                <HoldingsSortHeader label="Symbol" sortKey="symbol" activeKey={sortKey} direction={sortDirection} onSort={handleSort} className="px-1 py-1.5" />
+                <HoldingsSortHeader label="Price" sortKey="currentPrice" activeKey={sortKey} direction={sortDirection} onSort={handleSort} className="px-1 py-1.5" />
+                <HoldingsSortHeader label="Value" sortKey="currentValue" activeKey={sortKey} direction={sortDirection} onSort={handleSort} className="px-1 py-1.5" />
+                <HoldingsSortHeader label="P/L" sortKey="currentProfitLoss" activeKey={sortKey} direction={sortDirection} onSort={handleSort} className="px-1 py-1.5" />
+                <HoldingsSortHeader label="Day" sortKey="dailyProfitLoss" activeKey={sortKey} direction={sortDirection} onSort={handleSort} className="px-1 py-1.5" />
+                <HoldingsSortHeader label="Stop" sortKey="stopPrice" activeKey={sortKey} direction={sortDirection} onSort={handleSort} className="px-1 py-1.5" />
+                <HoldingsSortHeader label="Tgt" sortKey="targetPrice" activeKey={sortKey} direction={sortDirection} onSort={handleSort} className="px-1 py-1.5" />
+              </tr>
+            </thead>
+          </table>
+          {sortedHoldings.map((holding) => {
+            const quote = holding.quote;
+            const metrics = computeHoldingRowMetrics(holding, settings);
+            return (
+              <div className="border-t border-ink/10 even:bg-paper/40" key={holding.id}>
+                <table className="holdings-mobile-table w-full table-fixed border-collapse text-left text-[11px]">
+                  <MobileHoldingsColgroup />
+                  <tbody>
+                    <tr>
+                      <td className="bg-inherit px-0.5 py-1.5 align-top">
+                        {canExpand() ? (
+                          <button className="flex min-h-8 min-w-8 items-center justify-center rounded p-0.5" type="button" onClick={() => toggle(holding.id)} aria-label={`Expand ${holding.symbol}`} aria-expanded={Boolean(open[holding.id])}>
+                            {open[holding.id] ? <ChevronDown className="h-3.5 w-3.5" aria-hidden /> : <ChevronRight className="h-3.5 w-3.5" aria-hidden />}
+                          </button>
+                        ) : null}
+                      </td>
+                      <td className="bg-inherit px-1 py-1.5 align-top">{symbolWithActionCell(holding, quote?.stale)}</td>
+                      <td className="truncate px-1 py-1.5 align-top font-semibold text-marine">
+                        {quote ? shortMoney(quote.currentPrice, currency) : "…"}
+                      </td>
+                      <td className="truncate px-1 py-1.5 align-top">{metrics.current ? shortMoney(metrics.current.grossValue, currency) : "—"}</td>
+                      <td className="px-1 py-1.5 align-top">{stackedPlCell(metrics.current?.profitLoss, metrics.current?.profitLossPercent, currency)}</td>
+                      <td className="px-1 py-1.5 align-top">{stackedPlCell(metrics.daily?.profitLoss, metrics.daily?.profitLossPercent, currency)}</td>
+                      <td className="truncate px-1 py-1.5 align-top">{metrics.stopPrice ? shortMoney(metrics.stopPrice, currency) : "—"}</td>
+                      <td className="px-1 py-1.5 align-top">{targetCell(holding, metrics.targetPrice, true)}</td>
+                    </tr>
+                  </tbody>
+                </table>
+                {canExpand() && onChange && open[holding.id] ? (
+                  <div className="w-full border-t border-ink/10 bg-white">
+                    <TargetPlanner holding={holding} settings={settings} currency={currency} onChange={onChange} />
+                    <HoldingDetails holding={holding} settings={settings} currency={currency} onChange={onChange} />
+                  </div>
+                ) : null}
+              </div>
+            );
+          })}
         </div>
       </div>
 

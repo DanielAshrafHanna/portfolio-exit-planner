@@ -33,6 +33,10 @@ label:has(input:focus-visible) {
   isolation: isolate;
 }
 
+.holdings-mobile-table {
+  table-layout: fixed;
+}
+
 @media (min-width: 768px) {
   .table-scroll::after {
     content: "";
