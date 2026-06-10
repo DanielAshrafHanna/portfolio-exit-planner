@@ -80,14 +80,27 @@ export function HoldingsSortHeader({
   return (
     <th className={className}>
       <button
-        className="inline-flex items-center gap-1 text-left font-inherit uppercase tracking-wide text-white hover:text-white/85"
+        className="group inline-flex w-full min-w-0 items-center gap-1 text-left font-inherit uppercase tracking-wide text-white hover:text-white/85"
         type="button"
         aria-label={`Sort by ${label}`}
         onClick={() => onSort(sortKey)}
       >
-        <span>{label}</span>
-        <DirectionIcon direction={direction} active={active} />
+        <span className="min-w-0 truncate">{label}</span>
+        <span
+          className={`inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-sm ${active ? "bg-white/15" : "bg-transparent"}`}
+          aria-hidden
+        >
+          <DirectionIcon direction={direction} active={active} />
+        </span>
       </button>
+    </th>
+  );
+}
+
+export function HoldingsMobileHeader({ label, className = "" }: { label: string; className?: string }) {
+  return (
+    <th className={`text-[10px] font-semibold uppercase tracking-wide text-white/95 ${className}`}>
+      {label}
     </th>
   );
 }

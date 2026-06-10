@@ -6,7 +6,7 @@ import type { CurrencyCode, EnrichedHolding, FeeSettings } from "@/lib/types";
 import { computeHoldingRowMetrics, profitLossTone, badgeTone } from "@/lib/holdingDisplay";
 import { nextSortState, sortHoldings, type HoldingSortKey, type SortDirection } from "@/lib/holdingSort";
 import { formatMoney } from "@/lib/profileUtils";
-import { HoldingsSortControl, HoldingsSortHeader } from "./HoldingsSortControl";
+import { HoldingsMobileHeader, HoldingsSortControl, HoldingsSortHeader } from "./HoldingsSortControl";
 import { HoldingDetails } from "./HoldingDetails";
 import { TargetPlanner } from "./TargetPlanner";
 import { StaleQuoteMarker } from "./StaleQuoteMarker";
@@ -31,26 +31,20 @@ function valueClass(value?: number) {
   return tone === "loss" ? "text-coral" : tone === "gain" ? "text-marine" : "";
 }
 
-function shortMoney(value: number, currency: CurrencyCode) {
-  const formatted = formatMoney(value, currency);
-  if (formatted.length <= 10) return formatted;
-  if (Math.abs(value) >= 1000) {
-    return `${currency === "EGP" ? "E£" : "$"}${(value / 1000).toFixed(1)}k`;
-  }
-  return formatted;
+function mobileMoney(value: number, currency: CurrencyCode) {
+  return formatMoney(value, currency);
 }
 
 function MobileHoldingsColgroup() {
   return (
     <colgroup>
       <col className="w-8" />
-      <col className="w-[21%]" />
-      <col className="w-[13%]" />
-      <col className="w-[13%]" />
-      <col className="w-[15%]" />
-      <col className="w-[13%]" />
-      <col className="w-[11%]" />
-      <col className="w-[14%]" />
+      <col className="w-[4.5rem]" />
+      <col className="w-[4.75rem]" />
+      <col className="w-[4.75rem]" />
+      <col className="w-[5.25rem]" />
+      <col className="w-[5rem]" />
+      <col className="w-[5.25rem]" />
     </colgroup>
   );
 }
@@ -80,9 +74,9 @@ function DesktopHoldingsColgroup() {
 function stackedPlCell(profitLoss?: number, profitLossPercent?: number, currency?: CurrencyCode) {
   if (profitLoss === undefined || profitLossPercent === undefined || !currency) return "—";
   return (
-    <div className="min-w-0 leading-tight">
-      <div className={`truncate font-semibold ${valueClass(profitLoss)}`}>{shortMoney(profitLoss, currency)}</div>
-      <div className={`text-[10px] ${valueClass(profitLoss)}`}>{profitLossPercent}%</div>
+    <div className="leading-tight">
+      <div className={`whitespace-nowrap font-semibold tabular-nums ${valueClass(profitLoss)}`}>{mobileMoney(profitLoss, currency)}</div>
+      <div className={`whitespace-nowrap text-[10px] tabular-nums ${valueClass(profitLoss)}`}>{profitLossPercent}%</div>
     </div>
   );
 }
@@ -134,13 +128,13 @@ export function HoldingsTable({ holdings, settings, currency, onChange, readOnly
 
   const targetCell = (holding: EnrichedHolding, price?: number, compact = false) => {
     if (!price) return compact ? "—" : "N/A";
-    const label = compact ? shortMoney(price, currency) : formatMoney(price, currency);
+    const label = formatMoney(price, currency);
     if (!canExpand()) {
       return <span className="font-semibold text-marine">{label}</span>;
     }
     return (
       <button
-        className={`block max-w-full truncate text-left font-semibold text-marine underline decoration-marine/35 decoration-dotted underline-offset-2 hover:text-marine/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-marine ${compact ? "text-xs" : "text-sm"}`}
+        className={`block whitespace-nowrap text-left font-semibold tabular-nums text-marine underline decoration-marine/35 decoration-dotted underline-offset-2 hover:text-marine/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-marine ${compact ? "text-xs" : "text-sm"}`}
         type="button"
         aria-label={`Plan target for ${holding.symbol}`}
         aria-expanded={Boolean(open[holding.id])}
@@ -178,54 +172,54 @@ export function HoldingsTable({ holdings, settings, currency, onChange, readOnly
             />
           </div>
         ) : null}
-        <div className="border-b border-ink/10 bg-white">
-          <table className="holdings-mobile-table w-full table-fixed border-collapse text-left text-xs">
-            <MobileHoldingsColgroup />
-            <thead className="bg-marine text-[11px] uppercase text-white">
-              <tr>
-                <th className="px-1 py-2" aria-label="Expand" />
-                <HoldingsSortHeader label="Symbol" sortKey="symbol" activeKey={sortKey} direction={sortDirection} onSort={handleSort} className="px-1.5 py-2" />
-                <HoldingsSortHeader label="Price" sortKey="currentPrice" activeKey={sortKey} direction={sortDirection} onSort={handleSort} className="px-1.5 py-2" />
-                <HoldingsSortHeader label="Value" sortKey="currentValue" activeKey={sortKey} direction={sortDirection} onSort={handleSort} className="px-1.5 py-2" />
-                <HoldingsSortHeader label="P/L" sortKey="currentProfitLoss" activeKey={sortKey} direction={sortDirection} onSort={handleSort} className="px-1.5 py-2" />
-                <HoldingsSortHeader label="Day" sortKey="dailyProfitLoss" activeKey={sortKey} direction={sortDirection} onSort={handleSort} className="px-1.5 py-2" />
-                <HoldingsSortHeader label="Stop" sortKey="stopPrice" activeKey={sortKey} direction={sortDirection} onSort={handleSort} className="px-1.5 py-2" />
-                <HoldingsSortHeader label="Target" sortKey="targetPrice" activeKey={sortKey} direction={sortDirection} onSort={handleSort} className="px-1.5 py-2" />
-              </tr>
-            </thead>
-          </table>
-          {sortedHoldings.map((holding) => {
-            const quote = holding.quote;
-            const metrics = computeHoldingRowMetrics(holding, settings);
-            return (
-              <div className="border-t border-ink/10 even:bg-paper/40" key={holding.id}>
-                <table className="holdings-mobile-table w-full table-fixed border-collapse text-left text-xs">
-                  <MobileHoldingsColgroup />
-                  <tbody>
-                    <tr>
-                      <td className="bg-inherit px-1 py-2.5 align-middle">
-                        {canExpand() ? (
-                          <button className="flex min-h-9 min-w-9 items-center justify-center rounded p-0.5" type="button" onClick={() => toggle(holding.id)} aria-label={`Expand ${holding.symbol}`} aria-expanded={Boolean(open[holding.id])}>
-                            {open[holding.id] ? <ChevronDown className="h-4 w-4" aria-hidden /> : <ChevronRight className="h-4 w-4" aria-hidden />}
-                          </button>
-                        ) : null}
-                      </td>
-                      <td className="bg-inherit px-1.5 py-2.5 align-middle">{symbolWithActionCell(holding, quote?.stale)}</td>
-                      <td className="truncate px-1.5 py-2.5 align-middle font-semibold text-marine">
-                        {quote ? shortMoney(quote.currentPrice, currency) : "…"}
-                      </td>
-                      <td className="truncate px-1.5 py-2.5 align-middle">{metrics.current ? shortMoney(metrics.current.grossValue, currency) : "—"}</td>
-                      <td className="px-1.5 py-2.5 align-middle">{stackedPlCell(metrics.current?.profitLoss, metrics.current?.profitLossPercent, currency)}</td>
-                      <td className="px-1.5 py-2.5 align-middle">{stackedPlCell(metrics.daily?.profitLoss, metrics.daily?.profitLossPercent, currency)}</td>
-                      <td className="truncate px-1.5 py-2.5 align-middle">{metrics.stopPrice ? shortMoney(metrics.stopPrice, currency) : "—"}</td>
-                      <td className="px-1.5 py-2.5 align-middle">{targetCell(holding, metrics.targetPrice, true)}</td>
-                    </tr>
-                  </tbody>
-                </table>
-                {expandPanel(holding)}
-              </div>
-            );
-          })}
+        <div className="table-scroll overflow-x-auto border-b border-ink/10 bg-white">
+          <div className="min-w-[34rem]">
+            <table className="holdings-mobile-table w-full table-fixed border-collapse text-left text-xs">
+              <MobileHoldingsColgroup />
+              <thead className="bg-marine text-white">
+                <tr>
+                  <th className="px-1 py-2" aria-label="Expand" />
+                  <HoldingsMobileHeader label="Symbol" className="px-1.5 py-2" />
+                  <HoldingsMobileHeader label="Price" className="px-1.5 py-2" />
+                  <HoldingsMobileHeader label="Value" className="px-1.5 py-2" />
+                  <HoldingsMobileHeader label="P/L" className="px-1.5 py-2" />
+                  <HoldingsMobileHeader label="Day" className="px-1.5 py-2" />
+                  <HoldingsMobileHeader label="Target" className="px-1.5 py-2" />
+                </tr>
+              </thead>
+            </table>
+            {sortedHoldings.map((holding) => {
+              const quote = holding.quote;
+              const metrics = computeHoldingRowMetrics(holding, settings);
+              return (
+                <div className="border-t border-ink/10 even:bg-paper/40" key={holding.id}>
+                  <table className="holdings-mobile-table w-full table-fixed border-collapse text-left text-xs">
+                    <MobileHoldingsColgroup />
+                    <tbody>
+                      <tr>
+                        <td className="bg-inherit px-1 py-2.5 align-middle">
+                          {canExpand() ? (
+                            <button className="flex min-h-9 min-w-9 items-center justify-center rounded p-0.5" type="button" onClick={() => toggle(holding.id)} aria-label={`Expand ${holding.symbol}`} aria-expanded={Boolean(open[holding.id])}>
+                              {open[holding.id] ? <ChevronDown className="h-4 w-4" aria-hidden /> : <ChevronRight className="h-4 w-4" aria-hidden />}
+                            </button>
+                          ) : null}
+                        </td>
+                        <td className="bg-inherit px-1.5 py-2.5 align-middle">{symbolWithActionCell(holding, quote?.stale)}</td>
+                        <td className="whitespace-nowrap px-1.5 py-2.5 align-middle font-semibold tabular-nums text-marine">
+                          {quote ? mobileMoney(quote.currentPrice, currency) : "…"}
+                        </td>
+                        <td className="whitespace-nowrap px-1.5 py-2.5 align-middle tabular-nums">{metrics.current ? mobileMoney(metrics.current.grossValue, currency) : "—"}</td>
+                        <td className="px-1.5 py-2.5 align-middle">{stackedPlCell(metrics.current?.profitLoss, metrics.current?.profitLossPercent, currency)}</td>
+                        <td className="px-1.5 py-2.5 align-middle">{stackedPlCell(metrics.daily?.profitLoss, metrics.daily?.profitLossPercent, currency)}</td>
+                        <td className="px-1.5 py-2.5 align-middle">{targetCell(holding, metrics.targetPrice, true)}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                  {expandPanel(holding)}
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
 

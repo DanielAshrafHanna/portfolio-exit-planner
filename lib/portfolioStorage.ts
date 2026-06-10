@@ -1,4 +1,4 @@
-import { maybeInvalidatePersistedMarketQuotes } from "./quoteCacheMigration";
+import { sanitizeProfilesForPersistence } from "./quoteCacheMigration";
 import { defaultProfiles } from "./profileUtils";
 import { emptyPortfolioBootstrap, loadPortfolioState } from "./storageMigration";
 import type { PortfolioProfile } from "./types";
@@ -31,9 +31,8 @@ function readLegacyGuestPortfolio(): PortfolioCacheSnapshot {
     storedSettings: safeGetItem(LEGACY_SETTINGS_KEY),
     storedActiveProfileId: safeGetItem(LEGACY_ACTIVE_PROFILE_KEY)
   });
-  const { profiles: sanitizedProfiles } = maybeInvalidatePersistedMarketQuotes(restored.profiles);
   return {
-    profiles: sanitizedProfiles,
+    profiles: sanitizeProfilesForPersistence(restored.profiles),
     activeProfileId: restored.activeProfileId,
     cloudUpdatedAt: safeGetItem(LEGACY_LOCAL_UPDATED_AT_KEY)
   };
@@ -59,9 +58,8 @@ export function readPortfolioCache(userId: string | "guest"): PortfolioCacheSnap
     const activeProfileId = storedActiveProfileId && profiles.some((profile) => profile.id === storedActiveProfileId)
       ? storedActiveProfileId
       : profiles[0].id;
-    const { profiles: sanitizedProfiles } = maybeInvalidatePersistedMarketQuotes(profiles);
     return {
-      profiles: sanitizedProfiles,
+      profiles: sanitizeProfilesForPersistence(profiles),
       activeProfileId,
       cloudUpdatedAt: safeGetItem(keys.cloudUpdatedAt)
     };
@@ -133,7 +131,7 @@ export function portfolioSnapshotFromProfiles(profiles: PortfolioProfile[], acti
     ? activeProfileId
     : profiles[0]?.id || defaultProfiles()[0].id;
   return {
-    profiles,
+    profiles: sanitizeProfilesForPersistence(profiles),
     activeProfileId: resolvedActiveProfileId,
     cloudUpdatedAt: cloudUpdatedAt ?? null
   };
