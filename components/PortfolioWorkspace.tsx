@@ -57,9 +57,10 @@ export function PortfolioWorkspace({
         description={readOnly ? "Read-only view of a shared portfolio." : "Add holdings, review analysis, and adjust targets."}
         id="portfolio-workspace"
         compactHeader
+        flushContent
       >
         {!readOnly ? (
-          <div className="hidden space-y-4 md:block">
+          <div className="hidden space-y-4 px-4 pt-4 md:block md:px-4">
             {quickAdd}
             {!hasHoldings ? (
               emptyState ?? (
@@ -84,7 +85,7 @@ export function PortfolioWorkspace({
           {holdingsTable}
         </div>
         {analyzing}
-        {!readOnly ? <div className="mt-4 md:mt-6">{editHoldings}</div> : null}
+        {!readOnly ? <div className="mt-4 px-4 md:mt-6 md:px-4">{editHoldings}</div> : null}
       </SectionCard>
 
       {showFab && !readOnly ? (

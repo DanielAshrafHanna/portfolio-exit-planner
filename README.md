@@ -118,3 +118,17 @@ We briefly showed Yahoo `preMarketPrice` / `postMarketPrice` during extended ses
 5. **Polling** — if extended hours return, consider faster quote refresh during pre-market (≈4:00–9:30 ET) and after-hours (≈16:00–20:00 ET), not only during regular session.
 
 Relevant code paths: [`lib/marketData.ts`](lib/marketData.ts) (`parseYahooChartQuote`), live quote polling in [`lib/marketRefresh.ts`](lib/marketRefresh.ts) and [`app/page.tsx`](app/page.tsx).
+
+### Mobile motion and app-like navigation (partial)
+
+**Current behavior:** smooth document scrolling (`scroll-behavior: smooth`), touch momentum (`-webkit-overflow-scrolling: touch`), and a light expand-panel animation when opening holding details / Target Planner.
+
+**Future improvements for a more native feel:**
+
+1. **View Transitions API** — animate route/tab changes (portfolio ↔ settings) without full page jumps.
+2. **Shared element transitions** — subtle fade/slide when expanding a holding row.
+3. **Spring-based motion** — consider a small library (e.g. Framer Motion) for row expand/collapse and summary card updates, with `prefers-reduced-motion` fallbacks.
+4. **Scroll containers** — audit nested `overflow-x` wrappers; avoid horizontal scroll chaining on iOS Safari.
+5. **Haptic-friendly targets** — keep 44px minimum tap targets on mobile actions (already targeted in holdings table).
+
+Relevant files: [`app/globals.css`](app/globals.css), [`components/HoldingsTable.tsx`](components/HoldingsTable.tsx), [`components/MobileTabShell.tsx`](components/MobileTabShell.tsx).
