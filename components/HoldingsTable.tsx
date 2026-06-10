@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { Calculator, ChevronDown, ChevronRight } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { CurrencyCode, EnrichedHolding, FeeSettings } from "@/lib/types";
 import { computeHoldingRowMetrics, profitLossTone, badgeTone } from "@/lib/holdingDisplay";
@@ -8,6 +8,7 @@ import { nextSortState, sortHoldings, type HoldingSortKey, type SortDirection } 
 import { formatMoney } from "@/lib/profileUtils";
 import { HoldingsSortControl, HoldingsSortHeader } from "./HoldingsSortControl";
 import { HoldingDetails } from "./HoldingDetails";
+import { TargetPlanner } from "./TargetPlanner";
 import { ExtendedHoursPriceMarker } from "./ExtendedHoursPriceMarker";
 import { StaleQuoteMarker } from "./StaleQuoteMarker";
 
@@ -57,15 +58,39 @@ export function HoldingsTable({ holdings, settings, currency, onChange, readOnly
   };
 
   const toggle = (id: string) => setOpen((prev) => ({ ...prev, [id]: !prev[id] }));
+  const expandRow = (id: string) => setOpen((prev) => ({ ...prev, [id]: true }));
   const canExpand = () => !readOnly && Boolean(onChange);
 
   const detailRow = (holding: EnrichedHolding, colSpan: number) => (
     canExpand() && onChange && open[holding.id] ? (
       <tr className="border-t border-ink/10" key={`${holding.id}-details`}>
-        <td colSpan={colSpan} className="p-0"><HoldingDetails holding={holding} settings={settings} currency={currency} onChange={onChange} /></td>
+        <td colSpan={colSpan} className="p-0">
+          <TargetPlanner holding={holding} settings={settings} currency={currency} onChange={onChange} />
+          <HoldingDetails holding={holding} settings={settings} currency={currency} onChange={onChange} />
+        </td>
       </tr>
     ) : null
   );
+
+  const targetCell = (holding: EnrichedHolding, price?: number, compact = false) => {
+    if (!price) return compact ? "—" : "N/A";
+    const label = formatMoney(price, currency);
+    if (!canExpand()) {
+      return <span className="font-semibold text-marine">{label}</span>;
+    }
+    return (
+      <button
+        className="inline-flex min-h-8 items-center gap-1 rounded font-semibold text-marine hover:bg-mint/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-marine"
+        type="button"
+        aria-label={`Plan target for ${holding.symbol}`}
+        aria-expanded={Boolean(open[holding.id])}
+        onClick={() => expandRow(holding.id)}
+      >
+        {compact ? shortMoney(price, currency) : label}
+        <Calculator className="h-3 w-3 shrink-0 opacity-60" aria-hidden />
+      </button>
+    );
+  };
 
   return (
     <>
@@ -130,7 +155,7 @@ export function HoldingsTable({ holdings, settings, currency, onChange, readOnly
                   <td className={`whitespace-nowrap px-1.5 py-1 font-semibold ${valueClass(metrics.daily?.profitLoss)}`}>{metrics.daily ? `${shortMoney(metrics.daily.profitLoss, currency)} ${metrics.daily.profitLossPercent}%` : "—"}</td>
                   <td className="px-1.5 py-1">{badge(holding.analysis?.action, true)}</td>
                   <td className="whitespace-nowrap px-1.5 py-1">{metrics.stopPrice ? shortMoney(metrics.stopPrice, currency) : "—"}</td>
-                  <td className="whitespace-nowrap px-1.5 py-1 font-semibold text-marine">{metrics.targetPrice ? shortMoney(metrics.targetPrice, currency) : "—"}</td>
+                  <td className="whitespace-nowrap px-1.5 py-1">{targetCell(holding, metrics.targetPrice, true)}</td>
                 </tr>,
                 detailRow(holding, 9)
               ];
@@ -206,7 +231,7 @@ export function HoldingsTable({ holdings, settings, currency, onChange, readOnly
                   <td className="px-2 py-2 sm:px-3 sm:py-3">{badge(holding.analysis?.confidence)}</td>
                   <td className="border-l-2 border-ink/15 bg-amber/10 px-2 py-2 font-semibold sm:px-3 sm:py-3">{metrics.stopPrice ? formatMoney(metrics.stopPrice, currency) : "N/A"}</td>
                   <td className="px-2 py-2 sm:px-3 sm:py-3">{metrics.stopPl ? `${formatMoney(metrics.stopPl.profitLoss, currency)} (${metrics.stopPl.profitLossPercent}%)` : "N/A"}</td>
-                  <td className="border-l-2 border-ink/15 bg-mint/70 px-2 py-2 font-bold text-marine sm:px-3 sm:py-3">{metrics.targetPrice ? formatMoney(metrics.targetPrice, currency) : "N/A"}</td>
+                  <td className="border-l-2 border-ink/15 bg-mint/70 px-2 py-2 sm:px-3 sm:py-3">{targetCell(holding, metrics.targetPrice)}</td>
                   <td className={`bg-mint/70 px-2 py-2 font-bold sm:px-3 sm:py-3 ${valueClass(metrics.targetPl?.profitLoss)}`}>{metrics.targetPl ? `${formatMoney(metrics.targetPl.profitLoss, currency)} (${metrics.targetPl.profitLossPercent}%)` : "N/A"}</td>
                   <td className="border-l-2 border-ink/15 px-2 py-2 sm:px-3 sm:py-3">{badge(holding.analysis?.riskLevel)}</td>
                 </tr>,
