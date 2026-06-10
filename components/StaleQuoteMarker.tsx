@@ -4,7 +4,7 @@ type Props = {
   title?: string;
 };
 
-export function StaleQuoteMarker({ title = "Price may be outdated (fund NAV from an older Mubasher report)" }: Props) {
+export function StaleQuoteMarker({ title = "Price may be outdated" }: Props) {
   return (
     <span
       className="ml-1 inline-flex align-middle text-amber-700"
