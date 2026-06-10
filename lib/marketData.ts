@@ -1,9 +1,28 @@
+import {
+  buildEgxFundQuote,
+  findFundPriceInArticle,
+  getEgxFundConfig,
+  isStaleFundArticle,
+  MUBASHER_FUND_PRICE_ARTICLE_IDS,
+  mubasherFundCsvUrl,
+  parseMubasherFundCsv
+} from "./egxFunds";
 import type { MarketQuote, MarketRegion, NewsItem } from "./types";
 import { normalizeMarketSymbol } from "./profileUtils";
 import { mockNews, mockQuote } from "./sampleData";
+import { getUnsupportedTickerMessage } from "./unsupportedTickers";
 
 const ALPHA_URL = "https://www.alphavantage.co/query";
 const MUBASHER_EGX_URL = "https://english.mubasher.info/markets/EGX/stocks";
+const MUBASHER_FETCH_HEADERS = {
+  "User-Agent": "Mozilla/5.0 (compatible; PortfolioExitPlanner/1.0)",
+  Accept: "text/html,application/xhtml+xml",
+  "Accept-Language": "en-US,en;q=0.9"
+};
+
+function mubasherFetch(url: string) {
+  return fetch(url, { next: { revalidate: 300 }, headers: MUBASHER_FETCH_HEADERS });
+}
 const YAHOO_NEWS_RSS = "https://feeds.finance.yahoo.com/rss/2.0/headline";
 const YAHOO_CHART_URL = "https://query1.finance.yahoo.com/v8/finance/chart";
 
@@ -105,6 +124,20 @@ export async function getQuote(symbol: string, region: MarketRegion = "US"): Pro
   const cleanSymbol = symbol.trim().toUpperCase();
   const marketSymbol = normalizeMarketSymbol(cleanSymbol, region);
   if (!cleanSymbol) throw new Error("Ticker is required");
+  const unsupportedMessage = getUnsupportedTickerMessage(cleanSymbol, region);
+  if (unsupportedMessage) {
+    return {
+      data: {
+        symbol: cleanSymbol,
+        currentPrice: 0,
+        previousClose: 0,
+        dailyChangePercent: 0,
+        provider: "unavailable",
+        error: unsupportedMessage
+      },
+      warning: unsupportedMessage
+    };
+  }
   if (region === "EG") {
     const mubasherQuote = await getMubasherEgxQuote(cleanSymbol);
     if (mubasherQuote) {
@@ -113,6 +146,28 @@ export async function getQuote(symbol: string, region: MarketRegion = "US"): Pro
         warning: "Egypt quotes are fetched from Mubasher EGX pages because Yahoo Finance can return stale EGX prices."
       };
     }
+    const fundQuote = await getMubasherEgxFundQuote(cleanSymbol);
+    if (fundQuote) return fundQuote;
+    if (getEgxFundConfig(cleanSymbol)) {
+      return {
+        data: {
+          symbol: cleanSymbol,
+          currentPrice: 0,
+          previousClose: 0,
+          dailyChangePercent: 0,
+          provider: "unavailable",
+          error: `No current Mubasher fund price was found for ${cleanSymbol}.`
+        },
+        warning: `Could not fetch a live fund price for ${cleanSymbol}. Try refreshing in a few minutes.`
+      };
+    }
+    return {
+      data: {
+        ...mockQuote(cleanSymbol),
+        error: `No EGX stock quote was found for ${cleanSymbol}.`
+      },
+      warning: `${cleanSymbol} is not listed on Mubasher's EGX stock pages. Verify the ticker and try refreshing shortly.`
+    };
   }
   if (providerName() !== "alpha_vantage" || !apiKey()) {
     const yahooQuote = await getYahooQuote(marketSymbol);
@@ -137,9 +192,63 @@ export async function getQuote(symbol: string, region: MarketRegion = "US"): Pro
   }
 }
 
+async function fetchMubasherNewsArticle(articleId: number) {
+  try {
+    const response = await mubasherFetch(`https://english.mubasher.info/news/${articleId}/`);
+    if (!response.ok) return undefined;
+    return await response.text();
+  } catch {
+    return undefined;
+  }
+}
+
+async function getMubasherEgxFundQuote(symbol: string): Promise<ProviderResult<MarketQuote> | undefined> {
+  const config = getEgxFundConfig(symbol);
+  if (!config) return undefined;
+
+  const articleResults = await Promise.all(
+    MUBASHER_FUND_PRICE_ARTICLE_IDS.map(async (articleId) => {
+      const html = await fetchMubasherNewsArticle(articleId);
+      if (!html) return undefined;
+      const price = findFundPriceInArticle(html, config);
+      return price !== undefined ? { articleId, price } : undefined;
+    })
+  );
+  const articlePrices = articleResults.filter((entry): entry is { articleId: number; price: number } => entry !== undefined);
+  articlePrices.sort((left, right) => right.articleId - left.articleId);
+
+  let csvPrices: ReturnType<typeof parseMubasherFundCsv>;
+  if (config.fundId) {
+    try {
+      const csvResponse = await mubasherFetch(mubasherFundCsvUrl(config.fundId));
+      if (csvResponse.ok) csvPrices = parseMubasherFundCsv(await csvResponse.text());
+    } catch {
+      csvPrices = undefined;
+    }
+  }
+
+  const articlePrice = articlePrices[0];
+  const currentPrice = articlePrice?.price ?? csvPrices?.currentPrice;
+  if (currentPrice === undefined) return undefined;
+
+  const previousClose = articlePrices[1]?.price ?? csvPrices?.previousClose ?? currentPrice;
+  const fromCsv = !articlePrice && Boolean(csvPrices);
+  const stale = fromCsv || (articlePrice ? isStaleFundArticle(articlePrice.articleId) : true);
+  const warning = fromCsv
+    ? `Egypt fund quote for ${symbol} is using Mubasher's last published chart price and may be outdated.`
+    : stale
+      ? `Egypt fund quote for ${symbol} is from an older Mubasher fund report and may not reflect the latest NAV.`
+      : `Egypt fund quote for ${symbol} is fetched from Mubasher's latest mutual fund price report.`;
+
+  return {
+    data: buildEgxFundQuote(symbol, currentPrice, previousClose, { stale }),
+    warning
+  };
+}
+
 async function getMubasherEgxQuote(symbol: string): Promise<MarketQuote | undefined> {
   try {
-    const response = await fetch(`${MUBASHER_EGX_URL}/${encodeURIComponent(symbol)}`, { next: { revalidate: 300 } });
+    const response = await mubasherFetch(`${MUBASHER_EGX_URL}/${encodeURIComponent(symbol)}`);
     if (!response.ok) return undefined;
     return parseMubasherEgxQuote(await response.text(), symbol);
   } catch {

@@ -2,8 +2,9 @@
 
 import { Plus } from "lucide-react";
 import { useCallback, useEffect, useImperativeHandle, useRef, useState, forwardRef } from "react";
-import type { HoldingInput } from "@/lib/types";
+import type { HoldingInput, MarketRegion } from "@/lib/types";
 import { totalCostFor } from "@/lib/calculations";
+import { getUnsupportedTickerMessage } from "@/lib/unsupportedTickers";
 
 export type QuickAddHoldingHandle = {
   expand: () => void;
@@ -12,6 +13,7 @@ export type QuickAddHoldingHandle = {
 
 type Props = {
   onAdd: (holding: HoldingInput) => void;
+  region?: MarketRegion;
   disabled?: boolean;
   focusToken?: number;
   expanded?: boolean;
@@ -19,7 +21,7 @@ type Props = {
 };
 
 export const QuickAddHolding = forwardRef<QuickAddHoldingHandle, Props>(function QuickAddHolding(
-  { onAdd, disabled = false, focusToken = 0, expanded: expandedProp, onExpandedChange },
+  { onAdd, region = "US", disabled = false, focusToken = 0, expanded: expandedProp, onExpandedChange },
   ref
 ) {
   const symbolRef = useRef<HTMLInputElement>(null);
@@ -27,6 +29,7 @@ export const QuickAddHolding = forwardRef<QuickAddHoldingHandle, Props>(function
   const [symbol, setSymbol] = useState("");
   const [shares, setShares] = useState("");
   const [averageCost, setAverageCost] = useState("");
+  const [error, setError] = useState("");
   const expanded = expandedProp ?? internalExpanded;
 
   const setExpanded = useCallback((value: boolean) => {
@@ -63,9 +66,16 @@ export const QuickAddHolding = forwardRef<QuickAddHoldingHandle, Props>(function
   const submit = () => {
     const cleanSymbol = symbol.trim().toUpperCase();
     if (!cleanSymbol) {
+      setError("");
       symbolRef.current?.focus();
       return;
     }
+    const blockedMessage = getUnsupportedTickerMessage(cleanSymbol, region);
+    if (blockedMessage) {
+      setError(blockedMessage);
+      return;
+    }
+    setError("");
     const shareCount = Number(shares) || 0;
     const avg = Number(averageCost) || 0;
     onAdd({
@@ -111,9 +121,13 @@ export const QuickAddHolding = forwardRef<QuickAddHoldingHandle, Props>(function
             placeholder="e.g. AAPL"
             value={symbol}
             disabled={disabled}
-            onChange={(event) => setSymbol(event.target.value.toUpperCase())}
+            onChange={(event) => {
+              setSymbol(event.target.value.toUpperCase());
+              setError("");
+            }}
           />
         </label>
+        {error ? <p className="text-xs text-rose-700 md:col-span-4">{error}</p> : null}
         <label className="text-xs font-medium text-ink/70">
           Shares
           <input

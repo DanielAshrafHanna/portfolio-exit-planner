@@ -22,6 +22,7 @@ import { SharedHoldingsViewer } from "@/components/SharedHoldingsViewer";
 import { defaultSellTargets } from "@/lib/calculations";
 import { applyAnalyzedHoldingResults, type AnalyzedHoldingResult } from "@/lib/holdingMerge";
 import { DEFAULT_SETTINGS, defaultProfiles, displayMarketSymbol } from "@/lib/profileUtils";
+import { filterUnsupportedHoldings, getUnsupportedTickerMessage, isUnsupportedTicker } from "@/lib/unsupportedTickers";
 import {
   clearLegacyPortfolioKeys,
   clearPortfolioCache,
@@ -91,13 +92,13 @@ function warningForAudience(warning: string, isAdmin: boolean) {
   return warning;
 }
 
-function mergeExtractedRows(existingRows: EnrichedHolding[], extractedRows: HoldingInput[]) {
+function mergeExtractedRows(existingRows: EnrichedHolding[], extractedRows: HoldingInput[], region: "US" | "EG" = "US") {
   const bySymbol = new Map(existingRows.map((holding) => [holding.symbol.trim().toUpperCase(), holding]));
   const merged = [...existingRows];
 
   extractedRows.forEach((row) => {
     const symbol = row.symbol.trim().toUpperCase();
-    if (!symbol) return;
+    if (!symbol || isUnsupportedTicker(symbol, region)) return;
     const existing = bySymbol.get(symbol);
     if (existing) {
       const next = { ...existing, ...row, id: existing.id, symbol };
@@ -526,7 +527,11 @@ export default function Home() {
       }))
     ];
   }, [activeProfile?.name, holdings.length, region, sharedProfilesForRegion]);
-  const displayedHoldings = selectedSharedProfile?.profile.holdings || holdings;
+  const displayedHoldings = useMemo(() => {
+    const source = selectedSharedProfile?.profile.holdings || holdings;
+    const sourceRegion = selectedSharedProfile?.profile.region || region;
+    return filterUnsupportedHoldings(source, sourceRegion);
+  }, [holdings, region, selectedSharedProfile]);
   const displayedSettings = selectedSharedProfile?.profile.settings || settings;
   const displayedCurrency = selectedSharedProfile?.profile.currency || currency;
   const marketSymbolKey = useMemo(() => (
@@ -561,10 +566,10 @@ export default function Home() {
   };
 
   const setHoldings = (nextHoldings: EnrichedHolding[] | ((existing: EnrichedHolding[]) => EnrichedHolding[])) => {
-    updateActiveProfile((profile) => ({
-      ...profile,
-      holdings: typeof nextHoldings === "function" ? nextHoldings(profile.holdings) : nextHoldings
-    }));
+    updateActiveProfile((profile) => {
+      const resolved = typeof nextHoldings === "function" ? nextHoldings(profile.holdings) : nextHoldings;
+      return { ...profile, holdings: filterUnsupportedHoldings(resolved, profile.region) };
+    });
   };
 
   const setSettings = (nextSettings: FeeSettings) => {
@@ -1173,6 +1178,11 @@ export default function Home() {
   };
 
   const handleQuickAdd = (holding: HoldingInput) => {
+    const message = getUnsupportedTickerMessage(holding.symbol, region);
+    if (message) {
+      setWarnings((existing) => [...existing, message]);
+      return;
+    }
     touchHoldingsEdit();
     setInputRows([...inputRows, holding]);
     setQuickAddFocusToken((token) => token + 1);
@@ -1202,6 +1212,7 @@ export default function Home() {
     <QuickAddHolding
       ref={quickAddRef}
       onAdd={handleQuickAdd}
+      region={region}
       focusToken={quickAddFocusToken}
       disabled={isAuthLoading}
       expanded={quickAddExpanded}
@@ -1234,8 +1245,16 @@ export default function Home() {
       <ImageImport
         onExtracted={(rows) => {
           touchHoldingsEdit();
-          setHoldings((existing) => mergeExtractedRows(existing, rows));
-          setWarnings((existing) => [...existing, `${rows.length} image row${rows.length === 1 ? "" : "s"} added or updated. Confirm every field before analysis.`]);
+          const blocked = rows.filter((row) => isUnsupportedTicker(row.symbol, region));
+          setHoldings((existing) => mergeExtractedRows(existing, rows, region));
+          setWarnings((existing) => {
+            const next = [...existing, `${rows.length} image row${rows.length === 1 ? "" : "s"} added or updated. Confirm every field before analysis.`];
+            blocked.forEach((row) => {
+              const message = getUnsupportedTickerMessage(row.symbol, region);
+              if (message) next.push(message);
+            });
+            return next;
+          });
         }}
         setWarning={(warning) => setWarnings((existing) => [...existing, warning])}
       />
@@ -1275,8 +1294,16 @@ export default function Home() {
       <ImageImport
         onExtracted={(rows) => {
           touchHoldingsEdit();
-          setHoldings((existing) => mergeExtractedRows(existing, rows));
-          setWarnings((existing) => [...existing, `${rows.length} image row${rows.length === 1 ? "" : "s"} added or updated. Confirm every field before analysis.`]);
+          const blocked = rows.filter((row) => isUnsupportedTicker(row.symbol, region));
+          setHoldings((existing) => mergeExtractedRows(existing, rows, region));
+          setWarnings((existing) => {
+            const next = [...existing, `${rows.length} image row${rows.length === 1 ? "" : "s"} added or updated. Confirm every field before analysis.`];
+            blocked.forEach((row) => {
+              const message = getUnsupportedTickerMessage(row.symbol, region);
+              if (message) next.push(message);
+            });
+            return next;
+          });
         }}
         setWarning={(warning) => setWarnings((existing) => [...existing, warning])}
       />
@@ -1329,10 +1356,12 @@ export default function Home() {
     editHoldings: viewingSharedPortfolio ? null : (
       <PortfolioInput
         holdings={inputRows}
+        region={region}
         onChange={setInputRows}
         onAnalyze={analyze}
         isAnalyzing={isAnalyzing}
         isRefreshingMarket={isRefreshingMarket}
+        onBlockedTicker={(message) => setWarnings((existing) => [...existing, message])}
       />
     )
   };
