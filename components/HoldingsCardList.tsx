@@ -5,7 +5,6 @@ import { useState, type ReactNode } from "react";
 import type { CurrencyCode, EnrichedHolding, FeeSettings } from "@/lib/types";
 import { computeHoldingRowMetrics, profitLossTone, badgeTone } from "@/lib/holdingDisplay";
 import { formatMoney } from "@/lib/profileUtils";
-import { ExtendedHoursPriceMarker } from "./ExtendedHoursPriceMarker";
 import { StaleQuoteMarker } from "./StaleQuoteMarker";
 import { HoldingDetails } from "./HoldingDetails";
 
@@ -84,12 +83,7 @@ export function HoldingsCardList({ holdings, settings, currency, onChange, readO
                 <div className="mt-3 grid grid-cols-3 gap-2">
                   <MetricCell
                     label="Price"
-                    value={quote ? (
-                      <span className="inline-flex items-center">
-                        {formatMoney(quote.currentPrice, currency)}
-                        <ExtendedHoursPriceMarker session={quote.priceSession} />
-                      </span>
-                    ) : "—"}
+                    value={quote ? formatMoney(quote.currentPrice, currency) : "—"}
                   />
                   <MetricCell label="Value" value={metrics.current ? formatMoney(metrics.current.grossValue, currency) : "—"} />
                   <MetricCell

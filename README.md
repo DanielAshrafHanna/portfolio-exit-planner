@@ -99,4 +99,22 @@ Recommended Supabase Auth setup:
 
 ## Deployment
 
-This version is saved for review and has not been deployed. For Codex Sites or another Next.js-capable host, configure the environment variables above, build with `npm run build`, then deploy after review.
+Deploy to Vercel (or any Next.js host): configure the environment variables above, build with `npm run build`, and push to `main` for automatic deploys.
+
+## Future update recommendations
+
+### US pre-market and after-hours prices (removed)
+
+We briefly showed Yahoo `preMarketPrice` / `postMarketPrice` during extended sessions, with small **Pre** / **AH** badges in the holdings table. That feature was **removed** because Yahoo’s public chart API often returns **stale or wrong** extended-hours values while `regularMarketPrice` stays correct (for example, AAPL showing ~153 when the real regular price was ~291).
+
+**Current behavior:** US quotes use Yahoo `regularMarketPrice` only — the official regular-session price (last close when the market is closed).
+
+**To add extended hours again later, consider:**
+
+1. **Validate before display** — only use `preMarketPrice` / `postMarketPrice` if they are within a sane band of `regularMarketPrice` (e.g. within ~15% on liquid US stocks); otherwise fall back to regular.
+2. **Prefer a dedicated quote endpoint** — Yahoo chart `meta` on `range=1y&interval=1d` is built for daily bars, not reliable live extended-hours ticks. Evaluate Alpha Vantage `GLOBAL_QUOTE`, a paid market data API, or an intraday chart request (`interval=1m` / `5m` with `range=1d`) and compare against a known-good source (e.g. broker app).
+3. **Session labeling** — reintroduce `priceSession` (`pre` | `regular` | `post` | `closed`) and UI badges only when the chosen price is validated.
+4. **Regression tests** — keep a fixture where `postMarketPrice` is stale but `regularMarketPrice` is correct; assert the app never shows the stale value.
+5. **Polling** — if extended hours return, consider faster quote refresh during pre-market (≈4:00–9:30 ET) and after-hours (≈16:00–20:00 ET), not only during regular session.
+
+Relevant code paths: [`lib/marketData.ts`](lib/marketData.ts) (`parseYahooChartQuote`), live quote polling in [`lib/marketRefresh.ts`](lib/marketRefresh.ts) and [`app/page.tsx`](app/page.tsx).

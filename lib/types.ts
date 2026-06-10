@@ -15,14 +15,11 @@ export type HoldingInput = {
   notes?: string;
 };
 
-export type PriceSession = "regular" | "pre" | "post" | "closed";
-
 export type MarketQuote = {
   symbol: string;
   currentPrice: number;
   dailyChangePercent: number;
   previousClose: number;
-  priceSession?: PriceSession;
   week52High?: number;
   week52Low?: number;
   volume?: number;
