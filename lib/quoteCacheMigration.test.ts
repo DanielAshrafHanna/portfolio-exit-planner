@@ -1,10 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { DEFAULT_SETTINGS } from "./profileUtils";
-import {
-  maybeInvalidatePersistedMarketQuotes,
-  PERSISTED_QUOTE_CACHE_VERSION,
-  PERSISTED_QUOTE_CACHE_VERSION_KEY
-} from "./quoteCacheMigration";
+import { sanitizeProfilesForPersistence } from "./quoteCacheMigration";
 import type { PortfolioProfile } from "./types";
 
 const profileWithQuote: PortfolioProfile[] = [{
@@ -20,7 +16,13 @@ const profileWithQuote: PortfolioProfile[] = [{
     shares: 1,
     averageCost: 100,
     totalCost: 100,
-    news: [],
+    news: [{
+      headline: "Apple update",
+      source: "Test",
+      date: "2026-06-09",
+      url: "https://example.com",
+      summary: "News"
+    }],
     selectedStopStyle: "balanced",
     sellPercent: 100,
     quote: {
@@ -29,39 +31,37 @@ const profileWithQuote: PortfolioProfile[] = [{
       dailyChangePercent: -47,
       previousClose: 290.55,
       provider: "yahoo_finance"
+    },
+    analysis: {
+      symbol: "AAPL",
+      assetType: "Stock",
+      action: "Keep",
+      confidence: "High",
+      riskLevel: "Medium",
+      newsSentiment: "Positive",
+      trendStatus: "Bullish",
+      upcomingCatalysts: [],
+      summary: "Hold",
+      reasonsToHold: [],
+      reasonsToSell: [],
+      riskFlags: [],
+      suggestedActionPlan: {
+        primaryAction: "Keep",
+        suggestedTakeProfit: 300,
+        suggestedStopLoss: 250
+      }
     }
   }]
 }];
 
-function createStorageMock() {
-  const store = new Map<string, string>();
-  return {
-    getItem: (key: string) => store.get(key) ?? null,
-    setItem: (key: string, value: string) => { store.set(key, value); },
-    removeItem: (key: string) => { store.delete(key); },
-    clear: () => { store.clear(); }
-  };
-}
+describe("quote persistence sanitization", () => {
+  it("removes quote and news before profiles are saved or restored", () => {
+    const sanitized = sanitizeProfilesForPersistence(profileWithQuote);
+    const holding = sanitized[0].holdings[0];
 
-describe("quote cache migration", () => {
-  beforeEach(() => {
-    vi.stubGlobal("localStorage", createStorageMock());
-  });
-
-  it("strips persisted quotes once when the cache version is outdated", () => {
-    localStorage.setItem(PERSISTED_QUOTE_CACHE_VERSION_KEY, "1");
-    const result = maybeInvalidatePersistedMarketQuotes(profileWithQuote);
-
-    expect(result.invalidated).toBe(true);
-    expect(result.profiles[0].holdings[0].quote).toBeUndefined();
-    expect(localStorage.getItem(PERSISTED_QUOTE_CACHE_VERSION_KEY)).toBe(String(PERSISTED_QUOTE_CACHE_VERSION));
-  });
-
-  it("keeps persisted quotes after the cache version has been upgraded", () => {
-    localStorage.setItem(PERSISTED_QUOTE_CACHE_VERSION_KEY, String(PERSISTED_QUOTE_CACHE_VERSION));
-    const result = maybeInvalidatePersistedMarketQuotes(profileWithQuote);
-
-    expect(result.invalidated).toBe(false);
-    expect(result.profiles[0].holdings[0].quote?.currentPrice).toBe(153.22);
+    expect(holding.quote).toBeUndefined();
+    expect(holding.news).toEqual([]);
+    expect(holding.analysis?.action).toBe("Keep");
+    expect(holding.symbol).toBe("AAPL");
   });
 });

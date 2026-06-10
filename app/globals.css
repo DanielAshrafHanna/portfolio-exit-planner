@@ -54,6 +54,11 @@ label:has(input:focus-visible) {
   table-layout: fixed;
 }
 
+.holdings-mobile-table th,
+.holdings-mobile-table td {
+  overflow: visible;
+}
+
 @keyframes expandPanelIn {
   from {
     opacity: 0;

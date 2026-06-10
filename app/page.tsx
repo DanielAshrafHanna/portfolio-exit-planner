@@ -22,7 +22,7 @@ import { SharedHoldingsViewer } from "@/components/SharedHoldingsViewer";
 import { defaultSellTargets } from "@/lib/calculations";
 import { applyAnalyzedHoldingResults, type AnalyzedHoldingResult } from "@/lib/holdingMerge";
 import { applyLiveQuotes, getQuoteRefreshIntervalMs, liveQuoteKey } from "@/lib/marketRefresh";
-import { maybeInvalidatePersistedMarketQuotes } from "@/lib/quoteCacheMigration";
+import { sanitizeProfilesForPersistence } from "@/lib/quoteCacheMigration";
 import { DEFAULT_SETTINGS, defaultProfiles, displayMarketSymbol } from "@/lib/profileUtils";
 import { filterUnsupportedHoldings, getUnsupportedTickerMessage, isUnsupportedTicker } from "@/lib/unsupportedTickers";
 import {
@@ -257,7 +257,12 @@ function profilesSyncKey(profiles: PortfolioProfile[], activeProfileId: string, 
 }
 
 function buildCloudPayload(profiles: PortfolioProfile[], activeProfileId: string, displayName: string, shareHoldings: boolean) {
-  return JSON.stringify({ profiles, activeProfileId, displayName, shareHoldings });
+  return JSON.stringify({
+    profiles: sanitizeProfilesForPersistence(profiles),
+    activeProfileId,
+    displayName,
+    shareHoldings
+  });
 }
 
 function syncBadgeClass(status: CloudSyncStatus) {
@@ -375,9 +380,10 @@ export default function Home() {
     sessionPortfolioEditedRef.current = false;
     sessionEditedHoldingsProfileIdsRef.current = new Set();
     cloudPortfolioUpdatedAtRef.current = resolvedUpdatedAt;
-    cloudHoldingCountRef.current = portfolioHoldingSymbols(snapshot.profiles).length;
-    lastCloudProfilesRef.current = snapshot.profiles;
-    setProfiles(snapshot.profiles);
+    const sanitizedProfiles = sanitizeProfilesForPersistence(snapshot.profiles);
+    cloudHoldingCountRef.current = portfolioHoldingSymbols(sanitizedProfiles).length;
+    lastCloudProfilesRef.current = sanitizedProfiles;
+    setProfiles(sanitizedProfiles);
     setActiveProfileId(snapshot.activeProfileId);
     setDisplayName(options.displayName);
     applyShareHoldingsFromCloud(options.shareHoldings);
@@ -388,7 +394,7 @@ export default function Home() {
       options.shareHoldings
     );
     persistSignedInPortfolioCache(portfolioSnapshotFromProfiles(
-      snapshot.profiles,
+      sanitizedProfiles,
       snapshot.activeProfileId,
       resolvedUpdatedAt
     ));
@@ -649,6 +655,7 @@ export default function Home() {
       const marketResponse = await fetch("/api/market", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        cache: "no-store",
         body: JSON.stringify({
           holdings: holdingsSnapshot.map((holding) => ({
             symbol: displayMarketSymbol(holding.symbol, regionAtStart),
@@ -681,6 +688,7 @@ export default function Home() {
       const marketResponse = await fetch("/api/market", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        cache: "no-store",
         body: JSON.stringify({ holdings: analysisHoldings, region: regionAtStart })
       });
       const marketData = await readJsonResponse<MarketApiResponse>(marketResponse);
@@ -900,13 +908,13 @@ export default function Home() {
       .maybeSingle();
     if (!cloudSnapshot.error && cloudSnapshot.data?.holdings) {
       const loadedCloudProfiles = coerceProfiles(cloudSnapshot.data.holdings, DEFAULT_SETTINGS);
-      if (loadedCloudProfiles.length) cloudProfilesForMerge = loadedCloudProfiles;
+      if (loadedCloudProfiles.length) cloudProfilesForMerge = sanitizeProfilesForPersistence(loadedCloudProfiles);
     }
-    const mergedProfiles = mergeProfilesForCloudSave(
+    const mergedProfiles = sanitizeProfilesForPersistence(mergeProfilesForCloudSave(
       parsedPayload.profiles,
       cloudProfilesForMerge,
       sessionEditedHoldingsProfileIdsRef.current
-    );
+    ));
     const cloudSettings = {
       activeProfileId: parsedPayload.activeProfileId,
       profilesVersion: 2,
@@ -1004,7 +1012,7 @@ export default function Home() {
     const rawProfiles = loadedProfiles.length
       ? loadedProfiles
       : migrateSinglePortfolio(coerceHoldings(row.holdings), { ...DEFAULT_SETTINGS, ...cloudSettings });
-    const { profiles: resolvedProfiles } = maybeInvalidatePersistedMarketQuotes(rawProfiles);
+    const resolvedProfiles = sanitizeProfilesForPersistence(rawProfiles);
     const resolvedActiveProfileId = loadedProfiles.length
       ? (loadedProfiles.some((profile) => profile.id === cloudSettings?.activeProfileId) ? cloudSettings.activeProfileId! : loadedProfiles[0].id)
       : resolvedProfiles[0].id;
