@@ -4,6 +4,7 @@ import { AlertTriangle, TrendingDown, TrendingUp, WalletCards } from "lucide-rea
 import type { LucideIcon } from "lucide-react";
 import type { CurrencyCode, EnrichedHolding, FeeSettings } from "@/lib/types";
 import { calculateProfitLoss, calculateStopLosses, defaultSellTargets, roundMoney } from "@/lib/calculations";
+import { computeHoldingRowMetrics } from "@/lib/holdingDisplay";
 import { formatMoney } from "@/lib/profileUtils";
 
 type Props = { holdings: EnrichedHolding[]; settings: FeeSettings; currency: CurrencyCode };
@@ -28,21 +29,38 @@ export function PortfolioSummary({ holdings, settings, currency }: Props) {
   })).sort((a, b) => a.pl - b.pl);
   const highestRisk = rows.find((holding) => holding.analysis?.riskLevel === "Very High") || rows.find((holding) => holding.analysis?.riskLevel === "High");
   const currentPl = roundMoney(totalValue - totalCost);
+  const dailyTotals = rows.reduce((totals, holding) => {
+    const daily = computeHoldingRowMetrics(holding, settings).daily;
+    if (!daily) return totals;
+    return {
+      profitLoss: totals.profitLoss + daily.profitLoss,
+      priorValue: totals.priorValue + daily.priorValue
+    };
+  }, { profitLoss: 0, priorValue: 0 });
+  const totalDailyPl = roundMoney(dailyTotals.profitLoss);
+  const totalDailyPriorValue = roundMoney(dailyTotals.priorValue);
+  const totalDailyPlPercent = totalDailyPriorValue > 0
+    ? roundMoney((totalDailyPl / totalDailyPriorValue) * 100)
+    : 0;
+  const dailyPlLabel = totalDailyPriorValue > 0
+    ? `${formatMoney(totalDailyPl, currency)} (${totalDailyPlPercent}%)`
+    : formatMoney(totalDailyPl, currency);
 
   const cards: SummaryCard[] = [
     { label: "Total value", shortLabel: "Value", value: formatMoney(totalValue, currency), icon: WalletCards },
     { label: "Current P/L", shortLabel: "P/L", value: formatMoney(currentPl, currency), icon: totalValue >= totalCost ? TrendingUp : TrendingDown },
+    { label: "Daily P/L", shortLabel: "Today", value: dailyPlLabel, icon: totalDailyPl >= 0 ? TrendingUp : TrendingDown },
     { label: "Highest risk", shortLabel: "Risk", value: highestRisk?.symbol || "N/A", icon: AlertTriangle },
     { label: "P/L if stops hit", shortLabel: "Stop P/L", value: formatMoney(roundMoney(stopValue - totalCost), currency), icon: AlertTriangle },
     { label: "Best target P/L", shortLabel: "Target P/L", value: formatMoney(roundMoney(targetValue - totalCost), currency), icon: TrendingUp },
     { label: "Biggest loss / gain", shortLabel: "L / G", value: `${sortedByPl[0]?.symbol || "N/A"} / ${sortedByPl.at(-1)?.symbol || "N/A"}`, icon: TrendingUp }
   ];
 
-  const mobilePrimary = cards.slice(0, 3);
+  const mobilePrimary = cards.slice(0, 4);
 
   return (
     <>
-      <div className="grid grid-cols-3 gap-1.5 md:hidden">
+      <div className="grid grid-cols-2 gap-1.5 min-[420px]:grid-cols-4 md:hidden">
         {mobilePrimary.map(({ shortLabel, value }) => (
           <div className="min-w-0 rounded border border-mint/40 bg-surface-muted px-2 py-1.5" key={shortLabel}>
             <p className="text-[10px] uppercase text-ink/50">{shortLabel}</p>
@@ -50,7 +68,7 @@ export function PortfolioSummary({ holdings, settings, currency }: Props) {
           </div>
         ))}
       </div>
-      <div className="hidden grid-cols-1 gap-3 min-[380px]:grid-cols-2 md:grid lg:grid-cols-6">
+      <div className="hidden grid-cols-1 gap-3 min-[380px]:grid-cols-2 md:grid lg:grid-cols-4 xl:grid-cols-7">
         {cards.map(({ label, value, icon: Icon }) => (
           <div className="min-w-0 rounded-md border border-mint/50 bg-surface-muted p-3 sm:p-4" key={label}>
             <Icon className="mb-2 h-5 w-5 text-marine sm:mb-3" aria-hidden />

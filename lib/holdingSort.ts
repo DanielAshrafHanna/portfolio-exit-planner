@@ -10,6 +10,8 @@ export type HoldingSortKey =
   | "currentValue"
   | "currentProfitLoss"
   | "currentProfitLossPercent"
+  | "dailyProfitLoss"
+  | "dailyProfitLossPercent"
   | "action"
   | "confidence"
   | "stopPrice"
@@ -36,6 +38,8 @@ export const HOLDING_SORT_OPTIONS: HoldingSortOption[] = [
   { key: "currentValue", label: "Current value", mobile: true, desktop: true },
   { key: "currentProfitLoss", label: "Current P/L ($)", mobile: true, desktop: true },
   { key: "currentProfitLossPercent", label: "Current P/L (%)", desktop: true },
+  { key: "dailyProfitLoss", label: "Daily P/L ($)", mobile: true, desktop: true },
+  { key: "dailyProfitLossPercent", label: "Daily P/L (%)", desktop: true },
   { key: "action", label: "AI action", mobile: true, desktop: true },
   { key: "confidence", label: "Confidence", desktop: true },
   { key: "stopPrice", label: "Stop price", mobile: true, desktop: true },
@@ -92,6 +96,10 @@ function sortValue(holding: EnrichedHolding, settings: FeeSettings, key: Holding
       return metrics.current?.profitLoss;
     case "currentProfitLossPercent":
       return metrics.current?.profitLossPercent;
+    case "dailyProfitLoss":
+      return metrics.daily?.profitLoss;
+    case "dailyProfitLossPercent":
+      return metrics.daily?.profitLossPercent;
     case "action":
       return holding.analysis?.action;
     case "confidence":

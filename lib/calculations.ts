@@ -17,6 +17,15 @@ export function calculatePositionValue(shares: number, price: number) {
   return roundMoney(Math.max(0, shares) * Math.max(0, price));
 }
 
+export function calculateDailyProfitLoss(shares: number, currentPrice: number, previousClose: number) {
+  const priorValue = calculatePositionValue(shares, previousClose);
+  const profitLoss = roundMoney(shares * (currentPrice - previousClose));
+  const profitLossPercent = priorValue > 0
+    ? roundMoney((profitLoss / priorValue) * 100)
+    : 0;
+  return { profitLoss, profitLossPercent, priorValue };
+}
+
 export function calculateProfitLoss(shares: number, averageCost: number, price: number, settings?: FeeSettings) {
   const grossValue = calculatePositionValue(shares, price);
   const cost = totalCostFor(shares, averageCost);
