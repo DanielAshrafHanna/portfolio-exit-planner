@@ -22,6 +22,7 @@ type Props = {
   className?: string;
   id?: string;
   compactHeader?: boolean;
+  flushContent?: boolean;
 };
 
 export function SectionCard({
@@ -34,7 +35,8 @@ export function SectionCard({
   children,
   className = "",
   id,
-  compactHeader = false
+  compactHeader = false,
+  flushContent = false
 }: Props) {
   return (
     <section className={`rounded-lg ${variantClasses[variant]} ${className}`} id={id}>
@@ -51,7 +53,7 @@ export function SectionCard({
         </div>
         {action ? <div className="shrink-0">{action}</div> : null}
       </div>
-      <div className="px-0 py-0 sm:px-5 md:px-4 md:py-4">{children}</div>
+      <div className={flushContent ? "px-0 py-0" : "px-0 py-0 sm:px-5 md:px-4 md:py-4"}>{children}</div>
     </section>
   );
 }

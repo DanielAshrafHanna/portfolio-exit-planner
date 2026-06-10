@@ -7,10 +7,26 @@
   background: #f7f8f5;
 }
 
+html {
+  scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  .expand-panel-enter {
+    animation: none;
+  }
+}
+
 body {
   min-height: 100vh;
   background: #f7f8f5;
   color: #17212b;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
 }
 
 button, input, textarea, select {
@@ -33,8 +49,24 @@ label:has(input:focus-visible) {
   isolation: isolate;
 }
 
-.holdings-mobile-table {
+.holdings-mobile-table,
+.holdings-desktop-table {
   table-layout: fixed;
+}
+
+@keyframes expandPanelIn {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.expand-panel-enter {
+  animation: expandPanelIn 0.22s ease-out;
 }
 
 @media (min-width: 768px) {
