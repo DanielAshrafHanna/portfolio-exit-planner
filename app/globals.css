@@ -59,6 +59,10 @@ label:has(input:focus-visible) {
   overflow: visible;
 }
 
+.holdings-mobile-table thead th {
+  vertical-align: middle;
+}
+
 .holdings-desktop-table th,
 .holdings-desktop-table td {
   overflow: visible;

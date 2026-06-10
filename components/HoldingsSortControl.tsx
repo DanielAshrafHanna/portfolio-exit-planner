@@ -97,6 +97,25 @@ export function HoldingsSortHeader({
   );
 }
 
+export function HoldingsMobileSectionHeader({
+  label,
+  colSpan,
+  className = ""
+}: {
+  label: string;
+  colSpan: number;
+  className?: string;
+}) {
+  return (
+    <th
+      colSpan={colSpan}
+      className={`px-1.5 py-1 text-center text-[9px] font-semibold uppercase tracking-[0.14em] text-white/80 ${className}`}
+    >
+      {label}
+    </th>
+  );
+}
+
 export function HoldingsMobileHeader({ label, className = "" }: { label: string; className?: string }) {
   return (
     <th className={`text-[10px] font-semibold uppercase tracking-wide text-white/95 ${className}`}>
