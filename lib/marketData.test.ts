@@ -59,4 +59,31 @@ describe("Yahoo chart quote parsing", () => {
   it("returns undefined for malformed chart payloads", () => {
     expect(parseYahooChartQuote({ chart: { result: [{ meta: {}, indicators: {} }] } }, "AAPL")).toBeUndefined();
   });
+
+  it("ignores unreliable chartPreviousClose when daily bars disagree", () => {
+    const closes = [...Array.from({ length: 23 }, (_, index) => 260 + index), 290.55, 291.58];
+    const quote = parseYahooChartQuote({
+      chart: {
+        result: [{
+          meta: {
+            regularMarketPrice: 291.58,
+            chartPreviousClose: 202.67,
+            regularMarketVolume: 1000
+          },
+          indicators: {
+            quote: [{
+              close: closes,
+              high: closes.map((value) => value + 1),
+              low: closes.map((value) => value - 1),
+              volume: closes.map(() => 900)
+            }]
+          }
+        }]
+      }
+    }, "AAPL");
+
+    expect(quote?.currentPrice).toBe(291.58);
+    expect(quote?.previousClose).toBe(290.55);
+    expect(quote?.dailyChangePercent).toBeCloseTo(0.35, 1);
+  });
 });

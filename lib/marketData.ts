@@ -243,6 +243,31 @@ async function getYahooQuote(symbol: string): Promise<MarketQuote | undefined> {
   }
 }
 
+function resolveYahooPreviousClose(
+  currentPrice: number,
+  closes: number[],
+  meta?: Record<string, unknown>
+) {
+  const latestBarClose = closes[0];
+  const priorBarClose = closes.length >= 2 ? closes[1] : undefined;
+  const metaPreviousClose = meta
+    ? numberValue(meta.previousClose) ?? numberValue(meta.chartPreviousClose)
+    : undefined;
+
+  if (priorBarClose === undefined) {
+    return metaPreviousClose ?? latestBarClose ?? currentPrice;
+  }
+
+  const liveNearLatestBar = latestBarClose > 0
+    && Math.abs(currentPrice - latestBarClose) / latestBarClose <= 0.03;
+  const barPreviousClose = liveNearLatestBar ? priorBarClose : latestBarClose;
+
+  if (metaPreviousClose === undefined) return barPreviousClose;
+
+  const deviation = Math.abs(metaPreviousClose - barPreviousClose) / Math.max(barPreviousClose, 0.01);
+  return deviation > 0.05 ? barPreviousClose : metaPreviousClose;
+}
+
 export function parseYahooChartQuote(data: unknown, symbol: string): MarketQuote | undefined {
   const chart = isRecord(data) ? data.chart : undefined;
   const result = isRecord(chart) && Array.isArray(chart.result) ? chart.result[0] : undefined;
@@ -268,8 +293,7 @@ export function parseYahooChartQuote(data: unknown, symbol: string): MarketQuote
 
   const closes = rows.map((row) => row.close);
   const currentPrice = Number(regularMarketPrice.toFixed(2));
-  const previousCloseSource = meta ? numberValue(meta.previousClose) ?? numberValue(meta.chartPreviousClose) : undefined;
-  const previousClose = Number((previousCloseSource ?? closes[1] ?? currentPrice).toFixed(2));
+  const previousClose = Number(resolveYahooPreviousClose(currentPrice, closes, meta).toFixed(2));
   const dailyChangePercent = previousClose > 0 ? Number((((currentPrice - previousClose) / previousClose) * 100).toFixed(2)) : 0;
   const week52High = meta ? numberValue(meta.fiftyTwoWeekHigh) : undefined;
   const week52Low = meta ? numberValue(meta.fiftyTwoWeekLow) : undefined;
