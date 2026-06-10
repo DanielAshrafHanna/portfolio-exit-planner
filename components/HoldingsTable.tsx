@@ -1,10 +1,12 @@
 "use client";
 
 import { ChevronDown, ChevronRight } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { CurrencyCode, EnrichedHolding, FeeSettings } from "@/lib/types";
 import { computeHoldingRowMetrics, profitLossTone, badgeTone } from "@/lib/holdingDisplay";
+import { nextSortState, sortHoldings, type HoldingSortKey, type SortDirection } from "@/lib/holdingSort";
 import { formatMoney } from "@/lib/profileUtils";
+import { HoldingsSortControl, HoldingsSortHeader } from "./HoldingsSortControl";
 import { HoldingDetails } from "./HoldingDetails";
 
 type Props = {
@@ -38,6 +40,19 @@ function shortMoney(value: number, currency: CurrencyCode) {
 
 export function HoldingsTable({ holdings, settings, currency, onChange, readOnly = false }: Props) {
   const [open, setOpen] = useState<Record<string, boolean>>({});
+  const [sortKey, setSortKey] = useState<HoldingSortKey>("symbol");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
+
+  const sortedHoldings = useMemo(
+    () => sortHoldings(holdings, settings, sortKey, sortDirection),
+    [holdings, settings, sortKey, sortDirection]
+  );
+
+  const handleSort = (key: HoldingSortKey) => {
+    const next = nextSortState(sortKey, sortDirection, key);
+    setSortKey(next.sortKey);
+    setSortDirection(next.sortDirection);
+  };
 
   const toggle = (id: string) => setOpen((prev) => ({ ...prev, [id]: !prev[id] }));
   const canExpand = () => !readOnly && Boolean(onChange);
@@ -52,22 +67,38 @@ export function HoldingsTable({ holdings, settings, currency, onChange, readOnly
 
   return (
     <>
-      <div className="table-scroll -mx-4 isolate overflow-x-auto border-y border-ink/10 bg-white md:hidden">
+      <div className="md:hidden">
+        {sortedHoldings.length ? (
+          <div className="flex items-center justify-between gap-3 border-b border-ink/10 bg-paper/50 px-3 py-2">
+            <p className="text-xs font-medium text-ink/60">Sort holdings</p>
+            <HoldingsSortControl
+              variant="mobile"
+              sortKey={sortKey}
+              sortDirection={sortDirection}
+              onSortKeyChange={(key) => {
+                setSortKey(key);
+                setSortDirection("asc");
+              }}
+              onSortDirectionToggle={() => setSortDirection((value) => (value === "asc" ? "desc" : "asc"))}
+            />
+          </div>
+        ) : null}
+        <div className="table-scroll -mx-4 isolate overflow-x-auto border-b border-ink/10 bg-white">
         <table className="min-w-[540px] w-full border-collapse text-left text-[10px]">
           <thead className="bg-marine text-[10px] uppercase text-white">
             <tr>
               <th className="w-7 px-1 py-1.5" aria-label="Expand" />
-              <th className="px-1.5 py-1.5">Symbol</th>
-              <th className="px-1.5 py-1.5">Price</th>
-              <th className="px-1.5 py-1.5">Value</th>
-              <th className="px-1.5 py-1.5">P/L</th>
-              <th className="px-1.5 py-1.5">Act</th>
-              <th className="px-1.5 py-1.5">Stop</th>
-              <th className="px-1.5 py-1.5">Tgt</th>
+              <HoldingsSortHeader label="Symbol" sortKey="symbol" activeKey={sortKey} direction={sortDirection} onSort={handleSort} className="px-1.5 py-1.5" />
+              <HoldingsSortHeader label="Price" sortKey="currentPrice" activeKey={sortKey} direction={sortDirection} onSort={handleSort} className="px-1.5 py-1.5" />
+              <HoldingsSortHeader label="Value" sortKey="currentValue" activeKey={sortKey} direction={sortDirection} onSort={handleSort} className="px-1.5 py-1.5" />
+              <HoldingsSortHeader label="P/L" sortKey="currentProfitLoss" activeKey={sortKey} direction={sortDirection} onSort={handleSort} className="px-1.5 py-1.5" />
+              <HoldingsSortHeader label="Act" sortKey="action" activeKey={sortKey} direction={sortDirection} onSort={handleSort} className="px-1.5 py-1.5" />
+              <HoldingsSortHeader label="Stop" sortKey="stopPrice" activeKey={sortKey} direction={sortDirection} onSort={handleSort} className="px-1.5 py-1.5" />
+              <HoldingsSortHeader label="Tgt" sortKey="targetPrice" activeKey={sortKey} direction={sortDirection} onSort={handleSort} className="px-1.5 py-1.5" />
             </tr>
           </thead>
           <tbody>
-            {holdings.map((holding) => {
+            {sortedHoldings.map((holding) => {
               const quote = holding.quote;
               const metrics = computeHoldingRowMetrics(holding, settings);
               return [
@@ -92,6 +123,7 @@ export function HoldingsTable({ holdings, settings, currency, onChange, readOnly
             })}
           </tbody>
         </table>
+        </div>
       </div>
 
       <div className="table-scroll -mx-4 hidden isolate overflow-x-auto border-y border-ink/10 bg-white sm:-mx-5 md:block">
@@ -107,23 +139,23 @@ export function HoldingsTable({ holdings, settings, currency, onChange, readOnly
             </tr>
             <tr className="bg-marine/95">
               <th className="px-2 py-2 sm:px-3 sm:py-3" aria-label="Expand row" />
-              <th className="px-2 py-2 sm:px-3 sm:py-3">Symbol</th>
-              <th className="px-2 py-2 sm:px-3 sm:py-3">Shares</th>
-              <th className="px-2 py-2 sm:px-3 sm:py-3">Avg cost</th>
-              <th className="border-l-2 border-white/30 px-2 py-2 sm:px-3 sm:py-3">Current price</th>
-              <th className="px-2 py-2 sm:px-3 sm:py-3">Current value</th>
-              <th className="px-2 py-2 sm:px-3 sm:py-3">Current P/L</th>
-              <th className="border-l-2 border-white/30 px-2 py-2 sm:px-3 sm:py-3">AI action</th>
-              <th className="px-2 py-2 sm:px-3 sm:py-3">Confidence</th>
-              <th className="border-l-2 border-white/30 px-2 py-2 sm:px-3 sm:py-3">Suggested stop-loss</th>
-              <th className="px-2 py-2 sm:px-3 sm:py-3">P/L if stop hits</th>
-              <th className="border-l-2 border-white/30 px-2 py-2 sm:px-3 sm:py-3">Target sell price</th>
-              <th className="px-2 py-2 sm:px-3 sm:py-3">P/L at target</th>
-              <th className="border-l-2 border-white/30 px-2 py-2 sm:px-3 sm:py-3">Risk</th>
+              <HoldingsSortHeader label="Symbol" sortKey="symbol" activeKey={sortKey} direction={sortDirection} onSort={handleSort} className="px-2 py-2 sm:px-3 sm:py-3" />
+              <HoldingsSortHeader label="Shares" sortKey="shares" activeKey={sortKey} direction={sortDirection} onSort={handleSort} className="px-2 py-2 sm:px-3 sm:py-3" />
+              <HoldingsSortHeader label="Avg cost" sortKey="averageCost" activeKey={sortKey} direction={sortDirection} onSort={handleSort} className="px-2 py-2 sm:px-3 sm:py-3" />
+              <HoldingsSortHeader label="Current price" sortKey="currentPrice" activeKey={sortKey} direction={sortDirection} onSort={handleSort} className="border-l-2 border-white/30 px-2 py-2 sm:px-3 sm:py-3" />
+              <HoldingsSortHeader label="Current value" sortKey="currentValue" activeKey={sortKey} direction={sortDirection} onSort={handleSort} className="px-2 py-2 sm:px-3 sm:py-3" />
+              <HoldingsSortHeader label="Current P/L" sortKey="currentProfitLoss" activeKey={sortKey} direction={sortDirection} onSort={handleSort} className="px-2 py-2 sm:px-3 sm:py-3" />
+              <HoldingsSortHeader label="AI action" sortKey="action" activeKey={sortKey} direction={sortDirection} onSort={handleSort} className="border-l-2 border-white/30 px-2 py-2 sm:px-3 sm:py-3" />
+              <HoldingsSortHeader label="Confidence" sortKey="confidence" activeKey={sortKey} direction={sortDirection} onSort={handleSort} className="px-2 py-2 sm:px-3 sm:py-3" />
+              <HoldingsSortHeader label="Suggested stop-loss" sortKey="stopPrice" activeKey={sortKey} direction={sortDirection} onSort={handleSort} className="border-l-2 border-white/30 px-2 py-2 sm:px-3 sm:py-3" />
+              <HoldingsSortHeader label="P/L if stop hits" sortKey="stopProfitLoss" activeKey={sortKey} direction={sortDirection} onSort={handleSort} className="px-2 py-2 sm:px-3 sm:py-3" />
+              <HoldingsSortHeader label="Target sell price" sortKey="targetPrice" activeKey={sortKey} direction={sortDirection} onSort={handleSort} className="border-l-2 border-white/30 px-2 py-2 sm:px-3 sm:py-3" />
+              <HoldingsSortHeader label="P/L at target" sortKey="targetProfitLoss" activeKey={sortKey} direction={sortDirection} onSort={handleSort} className="px-2 py-2 sm:px-3 sm:py-3" />
+              <HoldingsSortHeader label="Risk" sortKey="risk" activeKey={sortKey} direction={sortDirection} onSort={handleSort} className="border-l-2 border-white/30 px-2 py-2 sm:px-3 sm:py-3" />
             </tr>
           </thead>
           <tbody>
-            {holdings.map((holding) => {
+            {sortedHoldings.map((holding) => {
               const quote = holding.quote;
               const metrics = computeHoldingRowMetrics(holding, settings);
               return [
