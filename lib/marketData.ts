@@ -294,6 +294,34 @@ async function getYahooQuote(marketSymbol: string, displaySymbol: string, fresh 
   }
 }
 
+function resolveYahooCurrentPrice(
+  regularMarketPrice: number,
+  closes: number[],
+  meta?: Record<string, unknown>
+) {
+  const latestBarClose = closes[0];
+  if (!latestBarClose || latestBarClose <= 0) {
+    return Number(regularMarketPrice.toFixed(2));
+  }
+
+  const extendedPrices = [
+    meta ? numberValue(meta.postMarketPrice) : undefined,
+    meta ? numberValue(meta.preMarketPrice) : undefined
+  ].filter((price): price is number => price !== undefined && price > 0);
+
+  const nearLatestBar = Math.abs(regularMarketPrice - latestBarClose) / latestBarClose <= 0.03;
+  if (nearLatestBar || !extendedPrices.length) {
+    return Number(regularMarketPrice.toFixed(2));
+  }
+
+  const matchesStaleExtended = extendedPrices.some((extendedPrice) => (
+    Math.abs(regularMarketPrice - extendedPrice) / Math.max(extendedPrice, 0.01) <= 0.02
+    && Math.abs(extendedPrice - latestBarClose) / latestBarClose > 0.15
+  ));
+
+  return Number((matchesStaleExtended ? latestBarClose : regularMarketPrice).toFixed(2));
+}
+
 function resolveYahooPreviousClose(
   currentPrice: number,
   closes: number[],
@@ -343,7 +371,7 @@ export function parseYahooChartQuote(data: unknown, symbol: string): MarketQuote
   if (!rows.length) return undefined;
 
   const closes = rows.map((row) => row.close);
-  const currentPrice = Number(regularMarketPrice.toFixed(2));
+  const currentPrice = resolveYahooCurrentPrice(regularMarketPrice, closes, meta);
   const previousClose = Number(resolveYahooPreviousClose(currentPrice, closes, meta).toFixed(2));
   const dailyChangePercent = previousClose > 0 ? Number((((currentPrice - previousClose) / previousClose) * 100).toFixed(2)) : 0;
   const week52High = meta ? numberValue(meta.fiftyTwoWeekHigh) : undefined;

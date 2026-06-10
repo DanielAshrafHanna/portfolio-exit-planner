@@ -71,7 +71,7 @@ describe("/api/market", () => {
 
     expect(response.status).toBe(200);
     expect(mockGetQuote).toHaveBeenCalledTimes(1);
-    expect(mockGetQuote).toHaveBeenCalledWith("AAPL", "US", { fresh: false });
+    expect(mockGetQuote).toHaveBeenCalledWith("AAPL", "US", { fresh: true });
     expect(mockGetNews).toHaveBeenCalledWith("AAPL", "US");
     expect(body.rows).toMatchObject([{
       symbol: "AAPL",

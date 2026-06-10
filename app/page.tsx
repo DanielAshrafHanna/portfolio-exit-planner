@@ -22,6 +22,7 @@ import { SharedHoldingsViewer } from "@/components/SharedHoldingsViewer";
 import { defaultSellTargets } from "@/lib/calculations";
 import { applyAnalyzedHoldingResults, type AnalyzedHoldingResult } from "@/lib/holdingMerge";
 import { applyLiveQuotes, getQuoteRefreshIntervalMs, liveQuoteKey } from "@/lib/marketRefresh";
+import { maybeInvalidatePersistedMarketQuotes } from "@/lib/quoteCacheMigration";
 import { DEFAULT_SETTINGS, defaultProfiles, displayMarketSymbol } from "@/lib/profileUtils";
 import { filterUnsupportedHoldings, getUnsupportedTickerMessage, isUnsupportedTicker } from "@/lib/unsupportedTickers";
 import {
@@ -723,10 +724,8 @@ export default function Home() {
 
   useEffect(() => {
     if (!isHydrated || !holdings.some((holding) => holding.symbol)) return;
-    const timeout = window.setTimeout(() => {
-      void refreshMarketData({ showLoading: false, showWarnings: false });
-    }, 500);
-    return () => window.clearTimeout(timeout);
+    void refreshLiveQuotes();
+    void refreshMarketData({ showLoading: false, showWarnings: false });
     // Keyed by symbol/profile fingerprint so quote-only updates do not trigger another refresh.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isHydrated, activeProfileId, region, marketSymbolKey]);
@@ -1002,9 +1001,10 @@ export default function Home() {
       ? row.settings as CloudSettings
       : {};
     const loadedProfiles = coerceProfiles(row.holdings, DEFAULT_SETTINGS);
-    const resolvedProfiles = loadedProfiles.length
+    const rawProfiles = loadedProfiles.length
       ? loadedProfiles
       : migrateSinglePortfolio(coerceHoldings(row.holdings), { ...DEFAULT_SETTINGS, ...cloudSettings });
+    const { profiles: resolvedProfiles } = maybeInvalidatePersistedMarketQuotes(rawProfiles);
     const resolvedActiveProfileId = loadedProfiles.length
       ? (loadedProfiles.some((profile) => profile.id === cloudSettings?.activeProfileId) ? cloudSettings.activeProfileId! : loadedProfiles[0].id)
       : resolvedProfiles[0].id;

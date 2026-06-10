@@ -1,3 +1,4 @@
+import { maybeInvalidatePersistedMarketQuotes } from "./quoteCacheMigration";
 import { defaultProfiles } from "./profileUtils";
 import { emptyPortfolioBootstrap, loadPortfolioState } from "./storageMigration";
 import type { PortfolioProfile } from "./types";
@@ -30,8 +31,9 @@ function readLegacyGuestPortfolio(): PortfolioCacheSnapshot {
     storedSettings: safeGetItem(LEGACY_SETTINGS_KEY),
     storedActiveProfileId: safeGetItem(LEGACY_ACTIVE_PROFILE_KEY)
   });
+  const { profiles: sanitizedProfiles } = maybeInvalidatePersistedMarketQuotes(restored.profiles);
   return {
-    profiles: restored.profiles,
+    profiles: sanitizedProfiles,
     activeProfileId: restored.activeProfileId,
     cloudUpdatedAt: safeGetItem(LEGACY_LOCAL_UPDATED_AT_KEY)
   };
@@ -57,8 +59,9 @@ export function readPortfolioCache(userId: string | "guest"): PortfolioCacheSnap
     const activeProfileId = storedActiveProfileId && profiles.some((profile) => profile.id === storedActiveProfileId)
       ? storedActiveProfileId
       : profiles[0].id;
+    const { profiles: sanitizedProfiles } = maybeInvalidatePersistedMarketQuotes(profiles);
     return {
-      profiles,
+      profiles: sanitizedProfiles,
       activeProfileId,
       cloudUpdatedAt: safeGetItem(keys.cloudUpdatedAt)
     };

@@ -32,7 +32,7 @@ export async function POST(request: Request) {
 
 async function fetchMarketRow({ symbol, region }: { symbol: string; region: MarketRegion }, quotesOnly = false) {
   try {
-    const quote = await getQuote(symbol, region, { fresh: quotesOnly });
+    const quote = await getQuote(symbol, region, { fresh: true });
     if (quotesOnly) {
       return { symbol, quote: quote.data, news: [], warnings: [quote.warning].filter(Boolean) };
     }
