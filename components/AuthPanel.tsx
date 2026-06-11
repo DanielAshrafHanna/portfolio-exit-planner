@@ -77,6 +77,30 @@ function DisplayNameInput({
 }
 
 type SignInMethod = "email" | "displayName";
+type AuthPanelMode = "signin" | "signup";
+
+function AuthModeToggle({ value, onChange }: { value: AuthPanelMode; onChange: (next: AuthPanelMode) => void }) {
+  return (
+    <div className="inline-flex w-full rounded-md border border-ink/15 bg-paper p-1 sm:w-auto" role="group" aria-label="Account action">
+      <button
+        className={`min-h-9 flex-1 rounded px-3 py-1.5 text-sm font-semibold sm:flex-none ${value === "signin" ? "bg-white text-marine shadow-sm" : "text-ink/65"}`}
+        type="button"
+        aria-pressed={value === "signin"}
+        onClick={() => onChange("signin")}
+      >
+        Sign in
+      </button>
+      <button
+        className={`min-h-9 flex-1 rounded px-3 py-1.5 text-sm font-semibold sm:flex-none ${value === "signup" ? "bg-white text-marine shadow-sm" : "text-ink/65"}`}
+        type="button"
+        aria-pressed={value === "signup"}
+        onClick={() => onChange("signup")}
+      >
+        Create account
+      </button>
+    </div>
+  );
+}
 
 function SignInMethodToggle({ value, onChange }: { value: SignInMethod; onChange: (next: SignInMethod) => void }) {
   return (
@@ -101,11 +125,40 @@ function SignInMethodToggle({ value, onChange }: { value: SignInMethod; onChange
   );
 }
 
+function PasswordInput({
+  value,
+  onChange,
+  autoComplete = "current-password",
+  id
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  autoComplete?: "current-password" | "new-password";
+  id?: string;
+}) {
+  return (
+    <label className="block text-xs font-semibold text-ink/65" htmlFor={id}>
+      Password
+      <input
+        id={id}
+        className="mt-1 min-h-11 w-full rounded-md border border-ink/15 px-3 py-2 text-base sm:text-sm"
+        type="password"
+        autoComplete={autoComplete}
+        placeholder="Password"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      />
+    </label>
+  );
+}
+
 export function AuthPanel({ user, isAdmin, isLoading, syncStatus, syncMessage, displayName, variant = "default", onDisplayNameChange, onDisplayNameCommit, onSignIn, onSignOut }: Props) {
+  const [authPanelMode, setAuthPanelMode] = useState<AuthPanelMode>("signin");
   const [signInMethod, setSignInMethod] = useState<SignInMethod>("email");
   const [signInIdentifier, setSignInIdentifier] = useState("");
   const [signupEmail, setSignupEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [signupPassword, setSignupPassword] = useState("");
   const [signupDisplayName, setSignupDisplayName] = useState("");
   const [authHint, setAuthHint] = useState<string | null>(null);
   const visibleSyncMessage = syncMessageForAudience(syncMessage, syncStatus, isAdmin);
@@ -127,14 +180,106 @@ export function AuthPanel({ user, isAdmin, isLoading, syncStatus, syncMessage, d
 
   const handleSignUp = () => {
     const trimmedEmail = signupEmail.trim();
-    if (!trimmedEmail || !password) return;
+    if (!trimmedEmail || !signupPassword) return;
     if (!trimmedEmail.includes("@")) {
       setAuthHint("Create an account with an email address.");
       return;
     }
     setAuthHint(null);
-    void onSignIn(trimmedEmail, password, "signup", signupDisplayName);
+    void onSignIn(trimmedEmail, signupPassword, "signup", signupDisplayName);
   };
+
+  const signInForm = (
+    <div className="space-y-3">
+      <p className="hidden text-sm font-semibold text-ink lg:block">Sign in</p>
+      <SignInMethodToggle
+        value={signInMethod}
+        onChange={(next) => {
+          setSignInMethod(next);
+          setAuthHint(null);
+        }}
+      />
+      <label className="block text-xs font-semibold text-ink/65">
+        {signInMethod === "email" ? "Email" : "Display name"}
+        <input
+          className="mt-1 min-h-11 w-full rounded-md border border-ink/15 px-3 py-2 text-base sm:text-sm"
+          type="text"
+          autoComplete={signInMethod === "email" ? "username" : "off"}
+          placeholder={signInMethod === "email" ? "you@example.com" : "Example: Chantal"}
+          value={signInIdentifier}
+          onChange={(event) => {
+            setSignInIdentifier(event.target.value);
+            if (authHint) setAuthHint(null);
+          }}
+        />
+      </label>
+      <PasswordInput
+        id="sign-in-password"
+        value={password}
+        onChange={setPassword}
+        autoComplete="current-password"
+      />
+      <button
+        className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-md bg-marine px-4 py-2 text-sm font-semibold text-white disabled:opacity-50 sm:w-auto"
+        type="button"
+        disabled={isLoading || !signInIdentifier.trim() || !password}
+        onClick={handleSignIn}
+      >
+        <LogIn className="h-4 w-4" aria-hidden /> Sign in
+      </button>
+      {signInMethod === "displayName" ? (
+        <p className="text-xs text-ink/55">Use the display name saved to your cloud portfolio. New accounts must sign up with email first.</p>
+      ) : null}
+    </div>
+  );
+
+  const signUpForm = (
+    <div className="space-y-3">
+      <p className="hidden text-sm font-semibold text-ink lg:block">Create account</p>
+      <label className="block text-xs font-semibold text-ink/65">
+        Display name
+        <input
+          className="mt-1 min-h-11 w-full rounded-md border border-ink/15 px-3 py-2 text-base sm:text-sm"
+          type="text"
+          autoComplete="name"
+          placeholder="Example: Daniel"
+          value={signupDisplayName}
+          onChange={(event) => {
+            setSignupDisplayName(event.target.value);
+            if (authHint) setAuthHint(null);
+          }}
+        />
+      </label>
+      <label className="block text-xs font-semibold text-ink/65">
+        Email
+        <input
+          className="mt-1 min-h-11 w-full rounded-md border border-ink/15 px-3 py-2 text-base sm:text-sm"
+          type="email"
+          autoComplete="email"
+          placeholder="you@example.com"
+          value={signupEmail}
+          onChange={(event) => {
+            setSignupEmail(event.target.value);
+            if (authHint) setAuthHint(null);
+          }}
+        />
+      </label>
+      <PasswordInput
+        id="sign-up-password"
+        value={signupPassword}
+        onChange={setSignupPassword}
+        autoComplete="new-password"
+      />
+      <button
+        className="min-h-11 w-full rounded-md border border-ink/15 px-4 py-2 text-sm font-semibold disabled:opacity-50 sm:w-auto"
+        type="button"
+        disabled={isLoading || !signupEmail.trim() || !signupPassword}
+        onClick={handleSignUp}
+      >
+        Create account
+      </button>
+    </div>
+  );
 
   if (!hasSupabaseConfig()) {
     return (
@@ -186,87 +331,26 @@ export function AuthPanel({ user, isAdmin, isLoading, syncStatus, syncMessage, d
               </div>
             </div>
           ) : (
-            <div className="grid gap-5 lg:grid-cols-2">
-              <div className="space-y-3">
-                <p className="text-sm font-semibold text-ink">Sign in</p>
-                <SignInMethodToggle
-                  value={signInMethod}
+            <div className="space-y-4">
+              <div className="lg:hidden">
+                <AuthModeToggle
+                  value={authPanelMode}
                   onChange={(next) => {
-                    setSignInMethod(next);
+                    setAuthPanelMode(next);
                     setAuthHint(null);
                   }}
                 />
-                <label className="block text-xs font-semibold text-ink/65">
-                  {signInMethod === "email" ? "Email" : "Display name"}
-                  <input
-                    className="mt-1 min-h-11 w-full rounded-md border border-ink/15 px-3 py-2 text-base sm:text-sm"
-                    type="text"
-                    autoComplete={signInMethod === "email" ? "username" : "off"}
-                    placeholder={signInMethod === "email" ? "you@example.com" : "Example: Chantal"}
-                    value={signInIdentifier}
-                    onChange={(event) => {
-                      setSignInIdentifier(event.target.value);
-                      if (authHint) setAuthHint(null);
-                    }}
-                  />
-                </label>
-                <label className="block text-xs font-semibold text-ink/65">
-                  Password
-                  <input
-                    className="mt-1 min-h-11 w-full rounded-md border border-ink/15 px-3 py-2 text-base sm:text-sm"
-                    type="password"
-                    autoComplete="current-password"
-                    placeholder="Password"
-                    value={password}
-                    onChange={(event) => setPassword(event.target.value)}
-                  />
-                </label>
-                <button
-                  className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-md bg-marine px-4 py-2 text-sm font-semibold text-white disabled:opacity-50 sm:w-auto"
-                  type="button"
-                  disabled={isLoading || !signInIdentifier.trim() || !password}
-                  onClick={handleSignIn}
-                >
-                  <LogIn className="h-4 w-4" aria-hidden /> Sign in
-                </button>
-                {signInMethod === "displayName" ? (
-                  <p className="text-xs text-ink/55">Use the display name saved to your cloud portfolio. New accounts must sign up with email first.</p>
-                ) : null}
               </div>
-              <div className="space-y-3 border-t border-ink/10 pt-5 lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0">
-                <p className="text-sm font-semibold text-ink">Create account</p>
-                <label className="block text-xs font-semibold text-ink/65">
-                  Display name
-                  <input
-                    className="mt-1 min-h-11 w-full rounded-md border border-ink/15 px-3 py-2 text-base sm:text-sm"
-                    type="text"
-                    placeholder="Example: Daniel"
-                    value={signupDisplayName}
-                    onChange={(event) => setSignupDisplayName(event.target.value)}
-                  />
-                </label>
-                <label className="block text-xs font-semibold text-ink/65">
-                  Email
-                  <input
-                    className="mt-1 min-h-11 w-full rounded-md border border-ink/15 px-3 py-2 text-base sm:text-sm"
-                    type="email"
-                    autoComplete="email"
-                    placeholder="you@example.com"
-                    value={signupEmail}
-                    onChange={(event) => setSignupEmail(event.target.value)}
-                  />
-                </label>
-                <p className="text-xs text-ink/55">Uses the same password entered above.</p>
-                <button
-                  className="min-h-11 w-full rounded-md border border-ink/15 px-4 py-2 text-sm font-semibold disabled:opacity-50 sm:w-auto"
-                  type="button"
-                  disabled={isLoading || !signupEmail.trim() || !password}
-                  onClick={handleSignUp}
-                >
-                  Create account
-                </button>
+              <div className="lg:hidden">
+                {authPanelMode === "signin" ? signInForm : signUpForm}
               </div>
-              {authHint ? <p className="text-sm text-coral lg:col-span-2">{authHint}</p> : null}
+              <div className="hidden gap-5 lg:grid lg:grid-cols-2">
+                {signInForm}
+                <div className="space-y-3 border-l border-ink/10 pl-5">
+                  {signUpForm}
+                </div>
+              </div>
+              {authHint ? <p className="text-sm text-coral">{authHint}</p> : null}
             </div>
           )}
         </div>
