@@ -97,6 +97,27 @@ Recommended Supabase Auth setup:
 - Do not hardcode shared credentials in the app.
 - Add `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` to Vercel project environment variables.
 
+## Install on your phone (PWA)
+
+Portfolio Exit Planner can be installed like an app from the browser. This is a **Progressive Web App (PWA)** — not a downloadable `.apk` from the site.
+
+**Android (Chrome)**
+
+1. Open the deployed site in Chrome.
+2. Tap the menu (⋮) → **Install app**, or use the in-app **Install app** banner when it appears.
+3. The app icon is added to your home screen and opens full-screen.
+
+**iPhone (Safari)**
+
+1. Open the site in Safari (not Chrome).
+2. Tap **Share** → **Add to Home Screen**.
+3. Confirm the name and tap **Add**.
+
+**Notes**
+
+- Quotes, cloud sync, AI analysis, and login still need an internet connection.
+- The service worker is disabled during local `npm run dev`; test install behavior on the production Vercel deploy after `npm run build`.
+
 ## Deployment
 
 Deploy to Vercel (or any Next.js host): configure the environment variables above, build with `npm run build`, and push to `main` for automatic deploys.
