@@ -38,7 +38,9 @@ describe("TargetPlanner", () => {
     expect(html).toContain("Target planner");
     expect(html).toContain("AAPL");
     expect(html).toContain("Current target");
+    expect(html).toContain("Breakeven");
     expect(html).toContain("P/L at target");
+    expect(html).toContain("$100");
     expect(html).toContain("Desired P/L");
     expect(html).toContain("Apply to target");
     expect(html).toContain("$132");

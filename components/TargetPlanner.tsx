@@ -46,6 +46,7 @@ export function TargetPlanner({ holding, settings, currency, onChange }: Props) 
 
   const targetPrice = holding.selectedTargetPrice
     || defaultSellTargets(holding.quote.currentPrice, holding.analysis?.suggestedActionPlan.suggestedTakeProfit)[1].price;
+  const breakevenPrice = calculateSellPriceForProfitLoss(holding.shares, holding.averageCost, 0, settings);
   const targetPl = calculateProfitLoss(holding.shares, holding.averageCost, targetPrice, settings);
   const desiredValue = desiredProfitLoss === "" ? undefined : Number(desiredProfitLoss);
   const requiredSellPrice = desiredValue === undefined || Number.isNaN(desiredValue)
@@ -68,14 +69,19 @@ export function TargetPlanner({ holding, settings, currency, onChange }: Props) 
         <span className="font-normal text-ink/55">· {holding.symbol}</span>
       </div>
 
-      <div className="mt-3 grid grid-cols-2 gap-2">
-        <div className="rounded-md border border-mint/50 bg-white px-3 py-2.5">
+      <div className="mt-3 grid grid-cols-1 gap-2 min-[420px]:grid-cols-3 sm:gap-2">
+        <div className="rounded-md border border-mint/50 bg-white px-3 py-2.5 min-[420px]:px-2.5">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-ink/55">Current target</p>
-          <p className="mt-1 text-lg font-bold text-marine">{formatMoney(targetPrice, currency)}</p>
+          <p className="mt-1 text-base font-bold text-marine min-[420px]:text-lg">{formatMoney(targetPrice, currency)}</p>
         </div>
-        <div className="rounded-md border border-mint/50 bg-white px-3 py-2.5">
+        <div className="rounded-md border border-mint/50 bg-white px-3 py-2.5 min-[420px]:px-2.5">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-ink/55">Breakeven</p>
+          <p className="mt-1 text-base font-bold text-ink min-[420px]:text-lg">{formatMoney(breakevenPrice, currency)}</p>
+          <p className="mt-0.5 text-[11px] leading-snug text-ink/55">Sell price for {formatMoney(0, currency)} P/L after fees</p>
+        </div>
+        <div className="rounded-md border border-mint/50 bg-white px-3 py-2.5 min-[420px]:px-2.5">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-ink/55">P/L at target</p>
-          <p className={`mt-1 text-lg font-bold ${plValueClass(targetPl.profitLoss)}`}>
+          <p className={`mt-1 text-base font-bold min-[420px]:text-lg ${plValueClass(targetPl.profitLoss)}`}>
             {formatMoney(targetPl.profitLoss, currency)}
           </p>
           <p className={`text-sm font-semibold ${plValueClass(targetPl.profitLoss)}`}>
