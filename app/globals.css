@@ -55,17 +55,49 @@ label:has(input:focus-visible) {
 }
 
 .holdings-mobile-table th,
-.holdings-mobile-table td {
-  overflow: visible;
+.holdings-mobile-table td,
+.holdings-desktop-table th,
+.holdings-desktop-table td {
+  overflow: hidden;
+  min-width: 0;
+  vertical-align: middle;
+}
+
+.holdings-mobile-table td,
+.holdings-desktop-table td {
+  container-type: inline-size;
 }
 
 .holdings-mobile-table thead th {
   vertical-align: middle;
 }
 
-.holdings-desktop-table th,
-.holdings-desktop-table td {
-  overflow: visible;
+.holdings-fit-text {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  font-size: clamp(0.5625rem, 8cqi, 0.75rem);
+  line-height: 1.25;
+}
+
+.holdings-fit-text-sm {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  font-size: clamp(0.5rem, 7cqi, 0.625rem);
+  line-height: 1.25;
+}
+
+@media (min-width: 1024px) {
+  .holdings-desktop-table .holdings-fit-text {
+    font-size: clamp(0.625rem, 7cqi, 0.875rem);
+  }
+
+  .holdings-desktop-table .holdings-fit-text-sm {
+    font-size: clamp(0.5625rem, 6cqi, 0.75rem);
+  }
 }
 
 @keyframes expandPanelIn {

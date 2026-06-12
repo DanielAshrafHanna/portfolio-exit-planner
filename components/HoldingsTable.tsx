@@ -83,9 +83,9 @@ function mobileStackedCell(
   options: { primaryClass?: string; secondaryClass?: string } = {}
 ) {
   return (
-    <div className="leading-tight">
-      <div className={`whitespace-nowrap font-semibold tabular-nums ${options.primaryClass || ""}`}>{primary}</div>
-      <div className={`mt-0.5 whitespace-nowrap tabular-nums ${options.secondaryClass || "text-[10px] text-ink/45"}`}>{secondary}</div>
+    <div className="min-w-0 max-w-full leading-tight">
+      <div className={`holdings-fit-text font-semibold tabular-nums ${options.primaryClass || ""}`}>{primary}</div>
+      <div className={`holdings-fit-text-sm mt-0.5 tabular-nums ${options.secondaryClass || "text-ink/45"}`}>{secondary}</div>
     </div>
   );
 }
@@ -198,11 +198,11 @@ export function HoldingsTable({ holdings, settings, currency, onChange, readOnly
     if (!price) return compact ? "—" : "N/A";
     const label = formatMoney(price, currency);
     if (!canExpand()) {
-      return <span className="font-semibold text-marine">{label}</span>;
+      return <span className="holdings-fit-text font-semibold text-marine">{label}</span>;
     }
     return (
       <button
-        className={`block whitespace-nowrap text-left font-semibold tabular-nums text-marine underline decoration-marine/35 decoration-dotted underline-offset-2 hover:text-marine/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-marine ${compact ? "text-xs" : "text-sm"}`}
+        className="holdings-fit-text block w-full max-w-full text-left font-semibold tabular-nums text-marine underline decoration-marine/35 decoration-dotted underline-offset-2 hover:text-marine/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-marine"
         type="button"
         aria-label={`Plan target for ${holding.symbol}`}
         aria-expanded={Boolean(open[holding.id])}
@@ -212,6 +212,10 @@ export function HoldingsTable({ holdings, settings, currency, onChange, readOnly
       </button>
     );
   };
+
+  const fitText = (value: ReactNode, className = "") => (
+    <span className={`holdings-fit-text tabular-nums ${className}`}>{value}</span>
+  );
 
   const mobileDetailRow = (holding: EnrichedHolding) => (
     canExpand() && onChange && open[holding.id] ? (
@@ -337,26 +341,36 @@ export function HoldingsTable({ holdings, settings, currency, onChange, readOnly
                     ) : null}
                   </td>
                   <td className="bg-inherit px-1.5 py-2 font-bold lg:px-2 lg:py-3">
-                    <span className="inline-flex items-center gap-0.5">
-                      {holding.symbol}
+                    <span className="holdings-fit-text inline-flex max-w-full items-center gap-0.5">
+                      <span className="truncate">{holding.symbol}</span>
                       {quote?.stale ? <StaleQuoteMarker /> : null}
                     </span>
-                    <span className="block truncate text-[11px] font-normal text-ink/55 lg:text-xs">{holding.name}</span>
+                    <span className="holdings-fit-text-sm block font-normal text-ink/55">{holding.name}</span>
                   </td>
-                  <td className="whitespace-nowrap px-1.5 py-2 tabular-nums lg:px-2 lg:py-3">{holding.shares}</td>
-                  <td className="whitespace-nowrap px-1.5 py-2 tabular-nums lg:px-2 lg:py-3">{formatMoney(holding.averageCost, currency)}</td>
-                  <td className="whitespace-nowrap border-l-2 border-ink/15 bg-marine/5 px-1.5 py-2 font-semibold tabular-nums text-marine lg:px-2 lg:py-3">
-                    {priceLabel(quote, currency)}
+                  <td className="px-1.5 py-2 lg:px-2 lg:py-3">{fitText(holding.shares)}</td>
+                  <td className="px-1.5 py-2 lg:px-2 lg:py-3">{fitText(formatMoney(holding.averageCost, currency))}</td>
+                  <td className="border-l-2 border-ink/15 bg-marine/5 px-1.5 py-2 lg:px-2 lg:py-3">
+                    {fitText(priceLabel(quote, currency), "font-semibold text-marine")}
                   </td>
-                  <td className="truncate px-1.5 py-2 lg:px-2 lg:py-3">{metrics.current ? formatMoney(metrics.current.grossValue, currency) : "N/A"}</td>
-                  <td className={`truncate bg-marine/5 px-1.5 py-2 font-semibold lg:px-2 lg:py-3 ${valueClass(metrics.current?.profitLoss)}`}>{metrics.current ? `${formatMoney(metrics.current.profitLoss, currency)} (${metrics.current.profitLossPercent}%)` : "N/A"}</td>
-                  <td className={`truncate px-1.5 py-2 font-semibold lg:px-2 lg:py-3 ${valueClass(metrics.daily?.profitLoss)}`}>{metrics.daily ? `${formatMoney(metrics.daily.profitLoss, currency)} (${metrics.daily.profitLossPercent}%)` : "N/A"}</td>
+                  <td className="px-1.5 py-2 lg:px-2 lg:py-3">{fitText(metrics.current ? formatMoney(metrics.current.grossValue, currency) : "N/A")}</td>
+                  <td className={`bg-marine/5 px-1.5 py-2 lg:px-2 lg:py-3 ${valueClass(metrics.current?.profitLoss)}`}>
+                    {fitText(metrics.current ? `${formatMoney(metrics.current.profitLoss, currency)} (${metrics.current.profitLossPercent}%)` : "N/A", "font-semibold")}
+                  </td>
+                  <td className={`px-1.5 py-2 lg:px-2 lg:py-3 ${valueClass(metrics.daily?.profitLoss)}`}>
+                    {fitText(metrics.daily ? `${formatMoney(metrics.daily.profitLoss, currency)} (${metrics.daily.profitLossPercent}%)` : "N/A", "font-semibold")}
+                  </td>
                   <td className="border-l-2 border-ink/15 px-1.5 py-2 lg:px-2 lg:py-3">{badge(holding.analysis?.action)}</td>
                   <td className="px-1.5 py-2 lg:px-2 lg:py-3">{badge(holding.analysis?.confidence)}</td>
-                  <td className="truncate border-l-2 border-ink/15 bg-amber/10 px-1.5 py-2 font-semibold lg:px-2 lg:py-3">{metrics.stopPrice ? formatMoney(metrics.stopPrice, currency) : "N/A"}</td>
-                  <td className="truncate px-1.5 py-2 lg:px-2 lg:py-3">{metrics.stopPl ? `${formatMoney(metrics.stopPl.profitLoss, currency)} (${metrics.stopPl.profitLossPercent}%)` : "N/A"}</td>
-                  <td className="truncate border-l-2 border-ink/15 bg-mint/70 px-1.5 py-2 lg:px-2 lg:py-3">{targetCell(holding, metrics.targetPrice)}</td>
-                  <td className={`truncate bg-mint/70 px-1.5 py-2 font-bold lg:px-2 lg:py-3 ${valueClass(metrics.targetPl?.profitLoss)}`}>{metrics.targetPl ? `${formatMoney(metrics.targetPl.profitLoss, currency)} (${metrics.targetPl.profitLossPercent}%)` : "N/A"}</td>
+                  <td className="border-l-2 border-ink/15 bg-amber/10 px-1.5 py-2 lg:px-2 lg:py-3">
+                    {fitText(metrics.stopPrice ? formatMoney(metrics.stopPrice, currency) : "N/A", "font-semibold")}
+                  </td>
+                  <td className="px-1.5 py-2 lg:px-2 lg:py-3">
+                    {fitText(metrics.stopPl ? `${formatMoney(metrics.stopPl.profitLoss, currency)} (${metrics.stopPl.profitLossPercent}%)` : "N/A")}
+                  </td>
+                  <td className="border-l-2 border-ink/15 bg-mint/70 px-1.5 py-2 lg:px-2 lg:py-3">{targetCell(holding, metrics.targetPrice)}</td>
+                  <td className={`bg-mint/70 px-1.5 py-2 font-bold lg:px-2 lg:py-3 ${valueClass(metrics.targetPl?.profitLoss)}`}>
+                    {fitText(metrics.targetPl ? `${formatMoney(metrics.targetPl.profitLoss, currency)} (${metrics.targetPl.profitLossPercent}%)` : "N/A", "font-bold")}
+                  </td>
                   <td className="border-l-2 border-ink/15 px-1.5 py-2 lg:px-2 lg:py-3">{badge(holding.analysis?.riskLevel)}</td>
                 </tr>,
                 detailRow(holding, 15)
