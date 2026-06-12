@@ -1,22 +1,17 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const { mockOpenAiCreate } = vi.hoisted(() => ({
-  mockOpenAiCreate: vi.fn()
+const { mockGenerateGeminiJson } = vi.hoisted(() => ({
+  mockGenerateGeminiJson: vi.fn()
 }));
 
-vi.mock("openai", () => ({
-  default: class MockOpenAI {
-    chat = {
-      completions: {
-        create: mockOpenAiCreate
-      }
-    };
-  }
+vi.mock("@/lib/geminiClient", () => ({
+  isGeminiConfigured: () => Boolean(process.env.GEMINI_API_KEY?.trim()),
+  generateGeminiJson: mockGenerateGeminiJson
 }));
 
 import { POST } from "./route";
 
-const originalOpenAiKey = process.env.OPENAI_API_KEY;
+const originalGeminiKey = process.env.GEMINI_API_KEY;
 
 function jsonRequest(body: unknown) {
   return new Request("http://localhost/api/analyzeHolding", {
@@ -65,17 +60,9 @@ function validPayload(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function openAiResponse(content: string) {
-  return {
-    choices: [{
-      message: { content }
-    }]
-  };
-}
-
 describe("/api/analyzeHolding", () => {
   afterEach(() => {
-    process.env.OPENAI_API_KEY = originalOpenAiKey;
+    process.env.GEMINI_API_KEY = originalGeminiKey;
     vi.clearAllMocks();
   });
 
@@ -97,23 +84,23 @@ describe("/api/analyzeHolding", () => {
     expect(String(body.error)).toContain("Array must contain at most 12");
   });
 
-  it("falls back when OPENAI_API_KEY is missing", async () => {
-    delete process.env.OPENAI_API_KEY;
+  it("falls back when GEMINI_API_KEY is missing", async () => {
+    delete process.env.GEMINI_API_KEY;
 
     const response = await POST(jsonRequest(validPayload()));
     const body = await readJson(response);
     const analysis = body.analysis as Record<string, unknown>;
 
     expect(response.status).toBe(200);
-    expect(mockOpenAiCreate).not.toHaveBeenCalled();
-    expect(body.warning).toContain("OPENAI_API_KEY is missing");
+    expect(mockGenerateGeminiJson).not.toHaveBeenCalled();
+    expect(body.warning).toContain("GEMINI_API_KEY is missing");
     expect(analysis.confidence).toBe("Low");
     expect(analysis.symbol).toBe("AAPL");
   });
 
-  it("falls back safely when OpenAI returns malformed JSON", async () => {
-    process.env.OPENAI_API_KEY = "test-key";
-    mockOpenAiCreate.mockResolvedValue(openAiResponse("not json"));
+  it("falls back safely when Gemini returns malformed JSON", async () => {
+    process.env.GEMINI_API_KEY = "test-key";
+    mockGenerateGeminiJson.mockResolvedValue("not json");
 
     const response = await POST(jsonRequest(validPayload()));
     const body = await readJson(response);
@@ -126,8 +113,8 @@ describe("/api/analyzeHolding", () => {
   });
 
   it("validates and normalizes AI analysis output before returning it", async () => {
-    process.env.OPENAI_API_KEY = "test-key";
-    mockOpenAiCreate.mockResolvedValue(openAiResponse(JSON.stringify({
+    process.env.GEMINI_API_KEY = "test-key";
+    mockGenerateGeminiJson.mockResolvedValue(JSON.stringify({
       symbol: "aapl",
       assetType: "Stock",
       action: "Watch",
@@ -148,7 +135,7 @@ describe("/api/analyzeHolding", () => {
         reviewAfterCatalyst: false
       },
       sourcesUsed: []
-    })));
+    }));
 
     const response = await POST(jsonRequest(validPayload()));
     const body = await readJson(response);
@@ -161,4 +148,3 @@ describe("/api/analyzeHolding", () => {
     expect(analysis.confidence).toBe("Medium");
   });
 });
-
