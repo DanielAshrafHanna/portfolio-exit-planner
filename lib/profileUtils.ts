@@ -32,6 +32,12 @@ export function formatMoney(value: number, currency: CurrencyCode) {
   return currency === "EGP" ? `EGP ${formatted}` : `$${formatted}`;
 }
 
+/** Table cells omit the EGP prefix — the active portfolio already implies the currency. */
+export function formatMoneyTable(value: number, currency: CurrencyCode) {
+  const formatted = roundForCurrency(value, currency).toLocaleString();
+  return currency === "EGP" ? formatted : `$${formatted}`;
+}
+
 export function roundForCurrency(value: number, currency: CurrencyCode) {
   return currency === "EGP" ? Math.round(value * 100) / 100 : Math.round(value * 100) / 100;
 }

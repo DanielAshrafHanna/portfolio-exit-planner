@@ -6,7 +6,7 @@ import type { CurrencyCode, EnrichedHolding, FeeSettings } from "@/lib/types";
 import { totalCostFor } from "@/lib/calculations";
 import { computeHoldingRowMetrics, profitLossTone, badgeTone } from "@/lib/holdingDisplay";
 import { nextSortState, sortHoldings, type HoldingSortKey, type SortDirection } from "@/lib/holdingSort";
-import { formatMoney } from "@/lib/profileUtils";
+import { formatMoney, formatMoneyTable } from "@/lib/profileUtils";
 import {
   HoldingsMobileHeader,
   HoldingsMobileSectionHeader,
@@ -14,6 +14,7 @@ import {
   HoldingsSortHeader
 } from "./HoldingsSortControl";
 import { HoldingDetails } from "./HoldingDetails";
+import { HoldingsFitText } from "./HoldingsFitText";
 import { TargetPlanner } from "./TargetPlanner";
 import { StaleQuoteMarker } from "./StaleQuoteMarker";
 
@@ -37,8 +38,17 @@ function valueClass(value?: number) {
   return tone === "loss" ? "text-coral" : tone === "gain" ? "text-marine" : "";
 }
 
-function mobileMoney(value: number, currency: CurrencyCode) {
-  return formatMoney(value, currency);
+type FitSizes = { min: number; max: number; minSm: number; maxSm: number };
+
+function tableMoney(value: number, currency: CurrencyCode) {
+  return formatMoneyTable(value, currency);
+}
+
+function fitSizesFor(currency: CurrencyCode): FitSizes {
+  if (currency === "EGP") {
+    return { min: 6, max: 13, minSm: 5.5, maxSm: 9 };
+  }
+  return { min: 8, max: 12, minSm: 7, maxSm: 10 };
 }
 
 function isLiveQuote(quote?: EnrichedHolding["quote"]) {
@@ -48,7 +58,7 @@ function isLiveQuote(quote?: EnrichedHolding["quote"]) {
 function priceLabel(quote: EnrichedHolding["quote"] | undefined, currency: CurrencyCode) {
   if (!quote) return "Loading";
   if (!isLiveQuote(quote)) return "Unavailable";
-  return formatMoney(quote.currentPrice, currency);
+  return tableMoney(quote.currentPrice, currency);
 }
 
 const MOBILE_COLUMN_COUNT = 7;
@@ -57,7 +67,20 @@ const MOBILE_MARKET_SECTION = `${MOBILE_SECTION_BORDER} bg-marine/[0.04]`;
 const MOBILE_TARGET_SECTION = `${MOBILE_SECTION_BORDER} bg-mint/35`;
 const MOBILE_HEADER_SECTION_BORDER = "border-l-2 border-white/30";
 
-function MobileHoldingsColgroup() {
+function MobileHoldingsColgroup({ currency }: { currency: CurrencyCode }) {
+  if (currency === "EGP") {
+    return (
+      <colgroup>
+        <col className="w-7" />
+        <col className="w-[11%]" />
+        <col className="w-[19%]" />
+        <col className="w-[19%]" />
+        <col className="w-[19%]" />
+        <col className="w-[17%]" />
+        <col className="w-[15%]" />
+      </colgroup>
+    );
+  }
   return (
     <colgroup>
       <col className="w-7" />
@@ -80,32 +103,43 @@ function formatShareCount(shares: number) {
 function mobileStackedCell(
   primary: ReactNode,
   secondary: ReactNode,
+  sizes: FitSizes,
   options: { primaryClass?: string; secondaryClass?: string } = {}
 ) {
   return (
     <div className="min-w-0 max-w-full leading-tight">
-      <div className={`holdings-fit-text font-semibold tabular-nums ${options.primaryClass || ""}`}>{primary}</div>
-      <div className={`holdings-fit-text-sm mt-0.5 tabular-nums ${options.secondaryClass || "text-ink/45"}`}>{secondary}</div>
+      <HoldingsFitText minSize={sizes.min} maxSize={sizes.max} className={`font-semibold ${options.primaryClass || ""}`}>
+        {primary}
+      </HoldingsFitText>
+      <HoldingsFitText
+        minSize={sizes.minSm}
+        maxSize={sizes.maxSm}
+        className={`mt-0.5 ${options.secondaryClass || "text-ink/45"}`}
+      >
+        {secondary}
+      </HoldingsFitText>
     </div>
   );
 }
 
-function mobileCostCell(holding: EnrichedHolding, currency: CurrencyCode) {
+function mobileCostCell(holding: EnrichedHolding, currency: CurrencyCode, sizes: FitSizes) {
   const totalCost = holding.totalCost > 0 ? holding.totalCost : totalCostFor(holding.shares, holding.averageCost);
   return mobileStackedCell(
-    mobileMoney(totalCost, currency),
-    `${mobileMoney(holding.averageCost, currency)}/sh`
+    tableMoney(totalCost, currency),
+    `${tableMoney(holding.averageCost, currency)}/sh`,
+    sizes
   );
 }
 
-function mobileValueCell(holding: EnrichedHolding, grossValue: number | undefined, currency: CurrencyCode) {
+function mobileValueCell(holding: EnrichedHolding, grossValue: number | undefined, currency: CurrencyCode, sizes: FitSizes) {
   return mobileStackedCell(
-    grossValue !== undefined ? mobileMoney(grossValue, currency) : "—",
-    formatShareCount(holding.shares)
+    grossValue !== undefined ? tableMoney(grossValue, currency) : "—",
+    formatShareCount(holding.shares),
+    sizes
   );
 }
 
-function mobilePriceCell(quote: EnrichedHolding["quote"] | undefined, currency: CurrencyCode) {
+function mobilePriceCell(quote: EnrichedHolding["quote"] | undefined, currency: CurrencyCode, sizes: FitSizes) {
   const dailyPercent = quote?.dailyChangePercent;
   const dailyLabel = dailyPercent !== undefined
     ? `${dailyPercent > 0 ? "+" : ""}${dailyPercent}%`
@@ -113,11 +147,33 @@ function mobilePriceCell(quote: EnrichedHolding["quote"] | undefined, currency: 
   return mobileStackedCell(
     priceLabel(quote, currency),
     dailyLabel,
-    { primaryClass: "text-marine", secondaryClass: `text-[10px] tabular-nums ${valueClass(dailyPercent)}` }
+    sizes,
+    { primaryClass: "text-marine", secondaryClass: valueClass(dailyPercent) }
   );
 }
 
-function DesktopHoldingsColgroup() {
+function DesktopHoldingsColgroup({ currency }: { currency: CurrencyCode }) {
+  if (currency === "EGP") {
+    return (
+      <colgroup>
+        <col className="w-[2%]" />
+        <col className="w-[6%]" />
+        <col className="w-[5%]" />
+        <col className="w-[7.5%]" />
+        <col className="w-[8%]" />
+        <col className="w-[8%]" />
+        <col className="w-[8%]" />
+        <col className="w-[7%]" />
+        <col className="w-[5%]" />
+        <col className="w-[4.5%]" />
+        <col className="w-[7.5%]" />
+        <col className="w-[7.5%]" />
+        <col className="w-[8%]" />
+        <col className="w-[8%]" />
+        <col className="w-[5%]" />
+      </colgroup>
+    );
+  }
   return (
     <colgroup>
       <col className="w-[2.5%]" />
@@ -139,13 +195,19 @@ function DesktopHoldingsColgroup() {
   );
 }
 
-function stackedPlCell(profitLoss?: number, profitLossPercent?: number, currency?: CurrencyCode) {
-  if (profitLoss === undefined || profitLossPercent === undefined || !currency) return "—";
+function stackedPlCell(
+  profitLoss?: number,
+  profitLossPercent?: number,
+  currency?: CurrencyCode,
+  sizes?: FitSizes
+) {
+  if (profitLoss === undefined || profitLossPercent === undefined || !currency || !sizes) return "—";
   const percentLabel = `${profitLossPercent > 0 ? "+" : ""}${profitLossPercent}%`;
   return mobileStackedCell(
-    mobileMoney(profitLoss, currency),
+    tableMoney(profitLoss, currency),
     percentLabel,
-    { primaryClass: valueClass(profitLoss), secondaryClass: `text-[10px] tabular-nums ${valueClass(profitLoss)}` }
+    sizes,
+    { primaryClass: valueClass(profitLoss), secondaryClass: valueClass(profitLoss) }
   );
 }
 
@@ -165,6 +227,8 @@ export function HoldingsTable({ holdings, settings, currency, onChange, readOnly
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [sortKey, setSortKey] = useState<HoldingSortKey>("symbol");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
+  const fitSizes = fitSizesFor(currency);
+  const tableClass = currency === "EGP" ? "holdings-table-egp" : "";
 
   const sortedHoldings = useMemo(
     () => sortHoldings(holdings, settings, sortKey, sortDirection),
@@ -196,26 +260,51 @@ export function HoldingsTable({ holdings, settings, currency, onChange, readOnly
 
   const targetCell = (holding: EnrichedHolding, price?: number, compact = false) => {
     if (!price) return compact ? "—" : "N/A";
-    const label = formatMoney(price, currency);
+    const label = tableMoney(price, currency);
+    const fullLabel = formatMoney(price, currency);
     if (!canExpand()) {
-      return <span className="holdings-fit-text font-semibold text-marine">{label}</span>;
+      return (
+        <HoldingsFitText minSize={fitSizes.min} maxSize={fitSizes.max} className="font-semibold text-marine" title={fullLabel}>
+          {label}
+        </HoldingsFitText>
+      );
     }
     return (
       <button
-        className="holdings-fit-text block w-full max-w-full text-left font-semibold tabular-nums text-marine underline decoration-marine/35 decoration-dotted underline-offset-2 hover:text-marine/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-marine"
+        className="block w-full max-w-full text-left font-semibold text-marine underline decoration-marine/35 decoration-dotted underline-offset-2 hover:text-marine/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-marine"
         type="button"
+        title={fullLabel}
         aria-label={`Plan target for ${holding.symbol}`}
         aria-expanded={Boolean(open[holding.id])}
         onClick={() => expandRow(holding.id)}
       >
-        {label}
+        <HoldingsFitText minSize={fitSizes.min} maxSize={fitSizes.max}>{label}</HoldingsFitText>
       </button>
     );
   };
 
-  const fitText = (value: ReactNode, className = "") => (
-    <span className={`holdings-fit-text tabular-nums ${className}`}>{value}</span>
+  const fitText = (value: ReactNode, className = "", title?: string) => (
+    <HoldingsFitText minSize={fitSizes.min} maxSize={fitSizes.max} className={className} title={title}>
+      {value}
+    </HoldingsFitText>
   );
+
+  const desktopPlCell = (
+    profitLoss?: number,
+    profitLossPercent?: number,
+    className = ""
+  ) => {
+    if (profitLoss === undefined || profitLossPercent === undefined) {
+      return fitText("N/A", className);
+    }
+    if (currency === "EGP") {
+      return stackedPlCell(profitLoss, profitLossPercent, currency, fitSizes);
+    }
+    return fitText(
+      `${tableMoney(profitLoss, currency)} (${profitLossPercent > 0 ? "+" : ""}${profitLossPercent}%)`,
+      className
+    );
+  };
 
   const mobileDetailRow = (holding: EnrichedHolding) => (
     canExpand() && onChange && open[holding.id] ? (
@@ -249,8 +338,8 @@ export function HoldingsTable({ holdings, settings, currency, onChange, readOnly
           </div>
         ) : null}
         <div className="border-b border-ink/10 bg-white">
-          <table className="holdings-mobile-table w-full table-fixed border-collapse text-left text-xs">
-            <MobileHoldingsColgroup />
+          <table className={`holdings-mobile-table ${tableClass} w-full table-fixed border-collapse text-left text-xs`}>
+            <MobileHoldingsColgroup currency={currency} />
             <thead className="bg-marine text-white">
               <tr className="border-b border-white/15">
                 <th className="px-1 py-1.5" aria-label="Expand" />
@@ -283,10 +372,10 @@ export function HoldingsTable({ holdings, settings, currency, onChange, readOnly
                       ) : null}
                     </td>
                     <td className="bg-inherit px-1.5 py-3 align-middle">{symbolWithActionCell(holding, quote?.stale)}</td>
-                    <td className="bg-inherit px-1.5 py-3 align-middle">{mobileCostCell(holding, currency)}</td>
-                    <td className="bg-inherit px-1.5 py-3 align-middle">{mobileValueCell(holding, metrics.current?.grossValue, currency)}</td>
-                    <td className={`px-1.5 py-3 align-middle ${MOBILE_MARKET_SECTION}`}>{stackedPlCell(metrics.current?.profitLoss, metrics.current?.profitLossPercent, currency)}</td>
-                    <td className={`px-1.5 py-3 align-middle ${MOBILE_MARKET_SECTION}`}>{mobilePriceCell(quote, currency)}</td>
+                    <td className="bg-inherit px-1.5 py-3 align-middle">{mobileCostCell(holding, currency, fitSizes)}</td>
+                    <td className="bg-inherit px-1.5 py-3 align-middle">{mobileValueCell(holding, metrics.current?.grossValue, currency, fitSizes)}</td>
+                    <td className={`px-1.5 py-3 align-middle ${MOBILE_MARKET_SECTION}`}>{stackedPlCell(metrics.current?.profitLoss, metrics.current?.profitLossPercent, currency, fitSizes)}</td>
+                    <td className={`px-1.5 py-3 align-middle ${MOBILE_MARKET_SECTION}`}>{mobilePriceCell(quote, currency, fitSizes)}</td>
                     <td className={`px-1.5 py-3 align-middle ${MOBILE_TARGET_SECTION}`}>{targetCell(holding, metrics.targetPrice, true)}</td>
                   </tr>,
                   mobileDetailRow(holding)
@@ -298,8 +387,8 @@ export function HoldingsTable({ holdings, settings, currency, onChange, readOnly
       </div>
 
       <div className="hidden border-y border-ink/10 bg-white md:block">
-        <table className="holdings-desktop-table w-full table-fixed border-collapse text-left text-xs lg:text-sm">
-          <DesktopHoldingsColgroup />
+        <table className={`holdings-desktop-table ${tableClass} w-full table-fixed border-collapse text-left text-xs lg:text-sm`}>
+          <DesktopHoldingsColgroup currency={currency} />
           <thead className="bg-marine text-xs uppercase text-white">
             <tr className="hidden border-b border-white/15 sm:table-row">
               <th className="px-3 py-2 text-center" colSpan={4}>Position</th>
@@ -341,35 +430,39 @@ export function HoldingsTable({ holdings, settings, currency, onChange, readOnly
                     ) : null}
                   </td>
                   <td className="bg-inherit px-1.5 py-2 font-bold lg:px-2 lg:py-3">
-                    <span className="holdings-fit-text inline-flex max-w-full items-center gap-0.5">
+                    <span className="inline-flex max-w-full items-center gap-0.5">
                       <span className="truncate">{holding.symbol}</span>
                       {quote?.stale ? <StaleQuoteMarker /> : null}
                     </span>
-                    <span className="holdings-fit-text-sm block font-normal text-ink/55">{holding.name}</span>
+                    <HoldingsFitText minSize={fitSizes.minSm} maxSize={fitSizes.maxSm} className="font-normal text-ink/55">
+                      {holding.name}
+                    </HoldingsFitText>
                   </td>
                   <td className="px-1.5 py-2 lg:px-2 lg:py-3">{fitText(holding.shares)}</td>
-                  <td className="px-1.5 py-2 lg:px-2 lg:py-3">{fitText(formatMoney(holding.averageCost, currency))}</td>
+                  <td className="px-1.5 py-2 lg:px-2 lg:py-3">{fitText(tableMoney(holding.averageCost, currency))}</td>
                   <td className="border-l-2 border-ink/15 bg-marine/5 px-1.5 py-2 lg:px-2 lg:py-3">
                     {fitText(priceLabel(quote, currency), "font-semibold text-marine")}
                   </td>
-                  <td className="px-1.5 py-2 lg:px-2 lg:py-3">{fitText(metrics.current ? formatMoney(metrics.current.grossValue, currency) : "N/A")}</td>
+                  <td className="px-1.5 py-2 lg:px-2 lg:py-3">
+                    {fitText(metrics.current ? tableMoney(metrics.current.grossValue, currency) : "N/A")}
+                  </td>
                   <td className={`bg-marine/5 px-1.5 py-2 lg:px-2 lg:py-3 ${valueClass(metrics.current?.profitLoss)}`}>
-                    {fitText(metrics.current ? `${formatMoney(metrics.current.profitLoss, currency)} (${metrics.current.profitLossPercent}%)` : "N/A", "font-semibold")}
+                    {desktopPlCell(metrics.current?.profitLoss, metrics.current?.profitLossPercent, "font-semibold")}
                   </td>
                   <td className={`px-1.5 py-2 lg:px-2 lg:py-3 ${valueClass(metrics.daily?.profitLoss)}`}>
-                    {fitText(metrics.daily ? `${formatMoney(metrics.daily.profitLoss, currency)} (${metrics.daily.profitLossPercent}%)` : "N/A", "font-semibold")}
+                    {desktopPlCell(metrics.daily?.profitLoss, metrics.daily?.profitLossPercent, "font-semibold")}
                   </td>
                   <td className="border-l-2 border-ink/15 px-1.5 py-2 lg:px-2 lg:py-3">{badge(holding.analysis?.action)}</td>
                   <td className="px-1.5 py-2 lg:px-2 lg:py-3">{badge(holding.analysis?.confidence)}</td>
                   <td className="border-l-2 border-ink/15 bg-amber/10 px-1.5 py-2 lg:px-2 lg:py-3">
-                    {fitText(metrics.stopPrice ? formatMoney(metrics.stopPrice, currency) : "N/A", "font-semibold")}
+                    {fitText(metrics.stopPrice ? tableMoney(metrics.stopPrice, currency) : "N/A", "font-semibold")}
                   </td>
                   <td className="px-1.5 py-2 lg:px-2 lg:py-3">
-                    {fitText(metrics.stopPl ? `${formatMoney(metrics.stopPl.profitLoss, currency)} (${metrics.stopPl.profitLossPercent}%)` : "N/A")}
+                    {desktopPlCell(metrics.stopPl?.profitLoss, metrics.stopPl?.profitLossPercent)}
                   </td>
                   <td className="border-l-2 border-ink/15 bg-mint/70 px-1.5 py-2 lg:px-2 lg:py-3">{targetCell(holding, metrics.targetPrice)}</td>
                   <td className={`bg-mint/70 px-1.5 py-2 font-bold lg:px-2 lg:py-3 ${valueClass(metrics.targetPl?.profitLoss)}`}>
-                    {fitText(metrics.targetPl ? `${formatMoney(metrics.targetPl.profitLoss, currency)} (${metrics.targetPl.profitLossPercent}%)` : "N/A", "font-bold")}
+                    {desktopPlCell(metrics.targetPl?.profitLoss, metrics.targetPl?.profitLossPercent, "font-bold")}
                   </td>
                   <td className="border-l-2 border-ink/15 px-1.5 py-2 lg:px-2 lg:py-3">{badge(holding.analysis?.riskLevel)}</td>
                 </tr>,
