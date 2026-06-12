@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { fallbackAnalysis } from "@/lib/aiFallback";
-import { generateGeminiJson, isGeminiConfigured } from "@/lib/geminiClient";
+import { formatGeminiError, generateGeminiJson, isGeminiConfigured } from "@/lib/geminiClient";
 import { analysisRequestSchema, normalizeAiAnalysis } from "@/lib/validation";
 
 const ANALYSIS_SYSTEM_INSTRUCTION = "You are a cautious portfolio analysis assistant. Analyze this stock/ETF using only the provided market data, technical indicators, portfolio cost basis, supplied news headlines, and supplied catalysts. Do not invent facts, news, earnings dates, IPO dates, analyst changes, or catalysts. If no reliable catalyst is found, return upcomingCatalysts as [] and include the phrase No verified upcoming catalyst found. Return JSON only. Recommend one of Keep, Watch, Trim, Sell. Explain bull and bear cases clearly. Do not give guarantees. Do not say this is financial advice.";
@@ -65,7 +65,7 @@ export async function POST(request: Request) {
   } catch (error) {
     return NextResponse.json({
       analysis: fallbackAnalysis(holding, quote, news),
-      warning: `AI analysis unavailable: ${error instanceof Error ? error.message : "Unknown error"}`
+      warning: formatGeminiError(error)
     });
   }
 }

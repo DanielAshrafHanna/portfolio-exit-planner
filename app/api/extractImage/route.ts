@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { generateGeminiJsonFromImage, isGeminiConfigured } from "@/lib/geminiClient";
+import { generateGeminiJsonFromImage, formatGeminiError, isGeminiConfigured } from "@/lib/geminiClient";
 
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
@@ -90,7 +90,7 @@ export async function POST(request: Request) {
       rawSymbols: parsed.data.rawSymbols
     });
   } catch (error) {
-    return NextResponse.json({ rows: [], warning: `OCR failed: ${error instanceof Error ? error.message : "Unknown error"}` }, { status: 500 });
+    return NextResponse.json({ rows: [], warning: formatGeminiError(error, "OCR") }, { status: 500 });
   }
 }
 
