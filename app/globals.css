@@ -72,32 +72,14 @@ label:has(input:focus-visible) {
   vertical-align: middle;
 }
 
-.holdings-fit-text {
-  display: block;
-  max-width: 100%;
+.holdings-fit-text-slot {
   overflow: hidden;
-  white-space: nowrap;
-  font-size: clamp(0.5625rem, 8cqi, 0.75rem);
-  line-height: 1.25;
 }
 
-.holdings-fit-text-sm {
-  display: block;
-  max-width: 100%;
-  overflow: hidden;
-  white-space: nowrap;
-  font-size: clamp(0.5rem, 7cqi, 0.625rem);
-  line-height: 1.25;
-}
-
-@media (min-width: 1024px) {
-  .holdings-desktop-table .holdings-fit-text {
-    font-size: clamp(0.625rem, 7cqi, 0.875rem);
-  }
-
-  .holdings-desktop-table .holdings-fit-text-sm {
-    font-size: clamp(0.5625rem, 6cqi, 0.75rem);
-  }
+.holdings-table-egp.holdings-mobile-table td,
+.holdings-table-egp.holdings-desktop-table td {
+  padding-left: 0.25rem;
+  padding-right: 0.25rem;
 }
 
 @keyframes expandPanelIn {
