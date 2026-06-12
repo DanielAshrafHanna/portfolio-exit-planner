@@ -33,7 +33,7 @@ import {
 import { geminiAnalyzeRequestGapMs, geminiModelName } from "@/lib/geminiClient";
 import { applyCompanyNameToHolding } from "@/lib/holdingNames";
 import { applyAnalyzedHoldingResults, type AnalyzedHoldingResult } from "@/lib/holdingMerge";
-import { applyLiveQuotes, getQuoteRefreshIntervalMs, liveQuoteKey } from "@/lib/marketRefresh";
+import { applyLiveQuotes, getQuoteRefreshIntervalMs, isQuotableQuote, liveQuoteKey } from "@/lib/marketRefresh";
 import { sanitizeProfilesForPersistence } from "@/lib/quoteCacheMigration";
 import { DEFAULT_SETTINGS, defaultProfiles, displayMarketSymbol } from "@/lib/profileUtils";
 import { filterUnsupportedHoldings, getUnsupportedTickerMessage, isUnsupportedTicker } from "@/lib/unsupportedTickers";
@@ -338,8 +338,10 @@ export default function Home() {
   const signedInUserIdRef = useRef<string | null>(null);
   const cloudLoadInFlightRef = useRef(false);
   const [liveQuotes, setLiveQuotes] = useState<Record<string, MarketQuote>>({});
+  const [sharedLiveQuotes, setSharedLiveQuotes] = useState<Record<string, MarketQuote>>({});
   const marketRequestId = useRef(0);
   const liveQuoteRequestId = useRef(0);
+  const sharedLiveQuoteRequestId = useRef(0);
   const analysisRequestId = useRef(0);
   const activeProfileIdRef = useRef(activeProfileId);
   const holdingInputKeyRef = useRef("");
@@ -589,11 +591,26 @@ export default function Home() {
     () => applyLiveQuotes(holdings, liveQuotes, region),
     [holdings, liveQuotes, region]
   );
+  const sharedMarketSymbolKey = useMemo(() => {
+    if (!selectedSharedProfile) return "";
+    const sharedRegion = selectedSharedProfile.profile.region;
+    return selectedSharedProfile.profile.holdings
+      .map((holding) => `${holding.id}:${displayMarketSymbol(holding.symbol, sharedRegion)}`)
+      .join("|");
+  }, [selectedSharedProfile]);
+  const sharedHoldingsWithQuotes = useMemo(() => {
+    if (!selectedSharedProfile) return [];
+    return applyLiveQuotes(
+      selectedSharedProfile.profile.holdings,
+      sharedLiveQuotes,
+      selectedSharedProfile.profile.region
+    );
+  }, [selectedSharedProfile, sharedLiveQuotes]);
   const displayedHoldings = useMemo(() => {
-    const source = selectedSharedProfile?.profile.holdings || holdingsWithLiveQuotes;
+    const source = selectedSharedProfile ? sharedHoldingsWithQuotes : holdingsWithLiveQuotes;
     const sourceRegion = selectedSharedProfile?.profile.region || region;
     return filterUnsupportedHoldings(source, sourceRegion);
-  }, [holdingsWithLiveQuotes, region, selectedSharedProfile]);
+  }, [holdingsWithLiveQuotes, sharedHoldingsWithQuotes, region, selectedSharedProfile]);
   const displayedSettings = selectedSharedProfile?.profile.settings || settings;
   const displayedCurrency = selectedSharedProfile?.profile.currency || currency;
   const marketSymbolKey = useMemo(() => (
@@ -615,7 +632,7 @@ export default function Home() {
     () => holdings.map((holding) => `${holding.id}:${holding.symbol}:${holding.analysis ? 1 : 0}`).join("|"),
     [holdings]
   );
-  const portfolioAnalysisCoverage = useMemo(() => analysisCoverage(holdings), [holdings]);
+  const portfolioAnalysisCoverage = useMemo(() => analysisCoverage(holdingsWithLiveQuotes), [holdingsWithLiveQuotes]);
 
   useEffect(() => {
     activeProfileIdRef.current = activeProfile?.id || activeProfileId;
@@ -712,6 +729,22 @@ export default function Home() {
     });
   };
 
+  const syncSharedLiveQuotesFromRows = (
+    rows: MarketApiRow[],
+    regionAtStart: typeof region,
+    isLatest: () => boolean
+  ) => {
+    if (!isLatest()) return;
+    setSharedLiveQuotes((existing) => {
+      const next = { ...existing };
+      rows.forEach((row) => {
+        if (!row.quote) return;
+        next[liveQuoteKey(regionAtStart, row.symbol)] = row.quote;
+      });
+      return next;
+    });
+  };
+
   const refreshLiveQuotes = async () => {
     const requestId = liveQuoteRequestId.current + 1;
     liveQuoteRequestId.current = requestId;
@@ -745,6 +778,49 @@ export default function Home() {
       syncLiveQuotesFromRows(marketData.rows || [], regionAtStart, isLatestRequest);
     } catch {
       // Quote polls fail quietly so the rest of the UI stays stable.
+    }
+  };
+
+  const refreshSharedLiveQuotes = async (options: { showWarnings?: boolean } = {}) => {
+    if (!selectedSharedProfile) return;
+    const requestId = sharedLiveQuoteRequestId.current + 1;
+    sharedLiveQuoteRequestId.current = requestId;
+    const sharedRegion = selectedSharedProfile.profile.region;
+    const holdingsSnapshot = selectedSharedProfile.profile.holdings;
+    const viewIdAtStart = selectedSharedProfileId;
+    const isLatestRequest = () => (
+      sharedLiveQuoteRequestId.current === requestId && selectedSharedProfileId === viewIdAtStart
+    );
+    const symbols = holdingsSnapshot
+      .map((holding) => displayMarketSymbol(holding.symbol, sharedRegion))
+      .filter(Boolean);
+    if (!symbols.length) return;
+
+    try {
+      const marketResponse = await fetch("/api/market", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        cache: "no-store",
+        body: JSON.stringify({
+          holdings: holdingsSnapshot.map((holding) => ({
+            symbol: displayMarketSymbol(holding.symbol, sharedRegion),
+            region: sharedRegion
+          })),
+          region: sharedRegion,
+          quotesOnly: true
+        })
+      });
+      const marketData = await readJsonResponse<MarketApiResponse>(marketResponse);
+      if (!marketResponse.ok || marketData.error || !isLatestRequest()) return;
+      if (options.showWarnings && isLatestRequest()) {
+        setWarnings((existing) => [
+          ...existing,
+          ...(marketData.rows || []).flatMap((row) => row.warnings || []).map(normalizeWarning)
+        ]);
+      }
+      syncSharedLiveQuotesFromRows(marketData.rows || [], sharedRegion, isLatestRequest);
+    } catch {
+      // Shared quote polls fail quietly so the read-only view stays stable.
     }
   };
 
@@ -811,12 +887,23 @@ export default function Home() {
   }, [activeProfileId, marketSymbolKey]);
 
   useEffect(() => {
+    setSharedLiveQuotes({});
+  }, [selectedSharedProfileId, sharedMarketSymbolKey]);
+
+  useEffect(() => {
     if (!isHydrated || !holdings.some((holding) => holding.symbol)) return;
     void refreshLiveQuotes();
     void refreshMarketData({ showLoading: false, showWarnings: false });
     // Keyed by symbol/profile fingerprint so quote-only updates do not trigger another refresh.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isHydrated, activeProfileId, region, marketSymbolKey]);
+
+  useEffect(() => {
+    if (!isHydrated || !selectedSharedProfile || !sharedMarketSymbolKey) return;
+    void refreshSharedLiveQuotes({ showWarnings: true });
+    // Keyed by shared holdings fingerprint so quote-only updates do not trigger another refresh.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isHydrated, selectedSharedProfileId, sharedMarketSymbolKey]);
 
   useEffect(() => {
     if (!isHydrated || !holdings.some((holding) => holding.symbol)) return;
@@ -851,6 +938,40 @@ export default function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isHydrated, activeProfileId, region, marketSymbolKey, holdingInputKey]);
 
+  useEffect(() => {
+    if (!isHydrated || !selectedSharedProfile || !sharedMarketSymbolKey) return;
+    let cancelled = false;
+    let timeoutId = 0;
+    const sharedRegion = selectedSharedProfile.profile.region;
+
+    const scheduleNext = () => {
+      if (cancelled) return;
+      const hidden = document.visibilityState === "hidden";
+      const delay = getQuoteRefreshIntervalMs(sharedRegion, { hidden });
+      timeoutId = window.setTimeout(async () => {
+        if (cancelled) return;
+        if (document.visibilityState === "visible") {
+          await refreshSharedLiveQuotes();
+        }
+        scheduleNext();
+      }, delay);
+    };
+
+    scheduleNext();
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void refreshSharedLiveQuotes();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+    // Keyed by shared holdings fingerprint, not live quote updates.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isHydrated, selectedSharedProfileId, sharedMarketSymbolKey]);
+
   const storeAnalysisSession = (session: AnalysisSession) => {
     setAnalysisSession(session);
     writeAnalysisSession(user?.id ?? "guest", session);
@@ -873,12 +994,20 @@ export default function Home() {
         .catch(() => null);
       const analyzeGapMs = aiConfig?.requestGapMs ?? geminiAnalyzeRequestGapMs();
       const analyzeModel = aiConfig?.model ?? geminiModelName();
-      const holdingsToAnalyze = withMarket.filter((holding) => holding.quote && (!options?.resume || !holding.analysis));
-      const skippedHoldings = withMarket.filter((holding) => holding.quote && options?.resume && holding.analysis);
       const initialCoverage = analysisCoverage(withMarket);
+      const holdingsToAnalyze = withMarket.filter((holding) => isQuotableQuote(holding.quote) && (!options?.resume || !holding.analysis));
+      const skippedHoldings = withMarket.filter((holding) => holding.quote !== undefined && !isQuotableQuote(holding.quote));
+      const skippedHoldingsFromResume = withMarket.filter((holding) => isQuotableQuote(holding.quote) && options?.resume && holding.analysis);
       const startingCompleted = options?.resume ? initialCoverage.analyzed : 0;
       const completedSymbols = options?.resume ? [...initialCoverage.analyzedSymbols] : [];
       const pendingSymbols = holdingsToAnalyze.map((holding) => holding.symbol.trim().toUpperCase());
+
+      if (skippedHoldings.length) {
+        const skipWarnings = skippedHoldings.map((holding) => (
+          `${holding.symbol.trim().toUpperCase()} skipped — no live quote available for AI analysis.`
+        ));
+        setWarnings((existing) => [...existing, ...skipWarnings]);
+      }
 
       storeAnalysisSession(buildAnalysisSession({
         profileId: profileIdAtStart,
@@ -904,7 +1033,7 @@ export default function Home() {
         pendingSymbols
       }));
 
-      const analyzed: AnalyzedHoldingResponse[] = skippedHoldings.map((holding) => ({
+      const analyzed: AnalyzedHoldingResponse[] = skippedHoldingsFromResume.map((holding) => ({
         id: holding.id,
         quote: holding.quote,
         news: holding.news,
@@ -913,7 +1042,7 @@ export default function Home() {
       let analyzedCount = startingCompleted;
       for (const holding of withMarket) {
         if (!isLatestAnalysis()) return;
-        if (!holding.quote) {
+        if (!isQuotableQuote(holding.quote)) {
           analyzed.push({ id: holding.id, quote: holding.quote, news: holding.news });
           continue;
         }
@@ -1622,7 +1751,7 @@ export default function Home() {
     </div>
   );
 
-  const analysisProgressBanner = !viewingSharedPortfolio && portfolioAnalysisCoverage.total > 0 ? (
+  const analysisProgressBanner = !viewingSharedPortfolio && (portfolioAnalysisCoverage.total > 0 || portfolioAnalysisCoverage.skippedSymbols.length > 0) ? (
     <AnalysisProgressBanner
       phase={isAnalyzing ? (analysisSession?.phase ?? "analyzing") : (analysisSession?.phase ?? (portfolioAnalysisCoverage.analyzed >= portfolioAnalysisCoverage.total ? "complete" : "idle"))}
       completed={isAnalyzing ? (analysisSession?.completed ?? portfolioAnalysisCoverage.analyzed) : portfolioAnalysisCoverage.analyzed}
@@ -1631,6 +1760,7 @@ export default function Home() {
       model={analysisSession?.model ?? geminiModelName()}
       completedSymbols={isAnalyzing ? (analysisSession?.completedSymbols ?? portfolioAnalysisCoverage.analyzedSymbols) : portfolioAnalysisCoverage.analyzedSymbols}
       pendingSymbols={isAnalyzing ? (analysisSession?.pendingSymbols ?? portfolioAnalysisCoverage.pendingSymbols) : portfolioAnalysisCoverage.pendingSymbols}
+      skippedSymbols={portfolioAnalysisCoverage.skippedSymbols}
       isActive={isAnalyzing}
       onResume={analysisSession?.phase === "interrupted" ? () => void analyze({ resume: true }) : undefined}
     />

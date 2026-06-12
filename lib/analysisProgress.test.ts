@@ -42,6 +42,10 @@ function holding(symbol: string, hasAnalysis: boolean): EnrichedHolding {
   };
 }
 
+function holdingWithQuote(symbol: string, hasAnalysis: boolean, quote: EnrichedHolding["quote"]): EnrichedHolding {
+  return { ...holding(symbol, hasAnalysis), quote };
+}
+
 describe("analysisCoverage", () => {
   it("counts analyzed and pending holdings with symbols", () => {
     const coverage = analysisCoverage([
@@ -53,6 +57,37 @@ describe("analysisCoverage", () => {
     expect(coverage.analyzed).toBe(1);
     expect(coverage.analyzedSymbols).toEqual(["AAPL"]);
     expect(coverage.pendingSymbols).toEqual(["MSFT"]);
+    expect(coverage.skippedSymbols).toEqual([]);
+  });
+
+  it("excludes unavailable quotes from total and tracks skipped symbols", () => {
+    const coverage = analysisCoverage([
+      holdingWithQuote("COMI", true, { symbol: "COMI", currentPrice: 100, previousClose: 99, dailyChangePercent: 1, provider: "mubasher_egx" }),
+      holdingWithQuote("ORAS", true, { symbol: "ORAS", currentPrice: 50, previousClose: 49, dailyChangePercent: 2, provider: "mubasher_egx" }),
+      holdingWithQuote("RAYA", true, { symbol: "RAYA", currentPrice: 30, previousClose: 29, dailyChangePercent: 3, provider: "mubasher_egx" }),
+      holdingWithQuote("TICK", false, {
+        symbol: "TICK",
+        currentPrice: 0,
+        previousClose: 0,
+        dailyChangePercent: 0,
+        provider: "unavailable",
+        error: "No live quote"
+      })
+    ]);
+    expect(coverage.total).toBe(3);
+    expect(coverage.analyzed).toBe(3);
+    expect(coverage.skippedSymbols).toEqual(["TICK"]);
+    expect(coverage.pendingSymbols).toEqual([]);
+  });
+
+  it("keeps holdings without quotes in total while quotes are still loading", () => {
+    const coverage = analysisCoverage([
+      holdingWithQuote("AAPL", false, { symbol: "AAPL", currentPrice: 100, previousClose: 99, dailyChangePercent: 1, provider: "yahoo" }),
+      holding("MSFT", false)
+    ]);
+    expect(coverage.total).toBe(2);
+    expect(coverage.pendingSymbols).toEqual(["AAPL", "MSFT"]);
+    expect(coverage.skippedSymbols).toEqual([]);
   });
 });
 

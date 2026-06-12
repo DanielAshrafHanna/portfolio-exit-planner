@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, CircleDashed, Loader2, PauseCircle, Sparkles } from "lucide-react";
+import { CheckCircle2, CircleDashed, Loader2, MinusCircle, PauseCircle, Sparkles } from "lucide-react";
 import type { AnalysisPhase } from "@/lib/analysisProgress";
 
 type Props = {
@@ -11,17 +11,28 @@ type Props = {
   model: string;
   completedSymbols: string[];
   pendingSymbols: string[];
+  skippedSymbols?: string[];
   isActive: boolean;
   onResume?: () => void;
 };
 
-function phaseLabel(phase: AnalysisPhase, completed: number, total: number, currentSymbol: string | null, model: string) {
+function phaseLabel(
+  phase: AnalysisPhase,
+  completed: number,
+  total: number,
+  currentSymbol: string | null,
+  model: string,
+  skippedSymbols: string[]
+) {
   if (phase === "market") return "Refreshing quotes and news before AI analysis…";
   if (phase === "analyzing" && currentSymbol) {
     return `Analyzing ${currentSymbol} with ${model} (${completed + 1} of ${total})`;
   }
   if (phase === "analyzing") return `Running AI analysis with ${model}…`;
   if (phase === "interrupted") return `${completed} of ${total} holdings analyzed — run was interrupted`;
+  if ((phase === "complete" || completed >= total) && completed === total && skippedSymbols.length) {
+    return "All analyzable holdings analyzed";
+  }
   if (phase === "complete" && completed === total) return `All ${total} holdings analyzed`;
   if (completed < total) return `${completed} of ${total} holdings analyzed`;
   return "AI analysis";
@@ -32,19 +43,22 @@ function SymbolPill({
   status
 }: {
   symbol: string;
-  status: "done" | "active" | "pending";
+  status: "done" | "active" | "pending" | "skipped";
 }) {
   const classes = status === "done"
     ? "border-marine/25 bg-mint/50 text-marine"
     : status === "active"
       ? "border-marine bg-marine text-white shadow-sm"
-      : "border-ink/12 bg-white text-ink/55";
+      : status === "skipped"
+        ? "border-ink/10 bg-ink/[0.03] text-ink/40"
+        : "border-ink/12 bg-white text-ink/55";
 
   return (
     <span className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold ${classes}`}>
       {status === "done" ? <CheckCircle2 className="h-3.5 w-3.5" aria-hidden /> : null}
       {status === "active" ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : null}
       {status === "pending" ? <CircleDashed className="h-3.5 w-3.5 opacity-60" aria-hidden /> : null}
+      {status === "skipped" ? <MinusCircle className="h-3.5 w-3.5 opacity-60" aria-hidden /> : null}
       {symbol}
     </span>
   );
@@ -58,15 +72,21 @@ export function AnalysisProgressBanner({
   model,
   completedSymbols,
   pendingSymbols,
+  skippedSymbols = [],
   isActive,
   onResume
 }: Props) {
-  if (!total) return null;
+  if (!total && !skippedSymbols.length) return null;
 
   const percent = total ? Math.round((completed / total) * 100) : 0;
-  const allDone = completed >= total && total > 0;
+  const allDone = total > 0 && completed >= total;
   const showResume = phase === "interrupted" && pendingSymbols.length > 0 && onResume;
-  const orderedSymbols = [...completedSymbols, ...(currentSymbol ? [currentSymbol] : []), ...pendingSymbols.filter((symbol) => symbol !== currentSymbol)];
+  const orderedSymbols = [
+    ...completedSymbols,
+    ...(currentSymbol ? [currentSymbol] : []),
+    ...pendingSymbols.filter((symbol) => symbol !== currentSymbol),
+    ...skippedSymbols
+  ];
   const uniqueSymbols = [...new Set(orderedSymbols)];
 
   return (
@@ -95,8 +115,13 @@ export function AnalysisProgressBanner({
               <p className="text-sm font-semibold text-ink/70">holdings analyzed</p>
             </div>
             <p className="mt-1 text-sm text-ink/60">
-              {phaseLabel(phase, completed, total, currentSymbol, model)}
+              {phaseLabel(phase, completed, total, currentSymbol, model, skippedSymbols)}
             </p>
+            {skippedSymbols.length && allDone && !isActive ? (
+              <p className="mt-1 text-xs text-ink/50">
+                Skipped (no live quote): {skippedSymbols.join(", ")}
+              </p>
+            ) : null}
           </div>
         </div>
         {showResume ? (
@@ -128,11 +153,13 @@ export function AnalysisProgressBanner({
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink/45">By holding</p>
           <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
             {uniqueSymbols.map((symbol) => {
-              const status = completedSymbols.includes(symbol)
-                ? "done"
-                : currentSymbol === symbol && isActive
-                  ? "active"
-                  : "pending";
+              const status = skippedSymbols.includes(symbol)
+                ? "skipped"
+                : completedSymbols.includes(symbol)
+                  ? "done"
+                  : currentSymbol === symbol && isActive
+                    ? "active"
+                    : "pending";
               return <SymbolPill key={symbol} symbol={symbol} status={status} />;
             })}
           </div>

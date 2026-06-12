@@ -1,6 +1,10 @@
 import type { EnrichedHolding, MarketQuote, MarketRegion } from "./types";
 import { displayMarketSymbol } from "./profileUtils";
 
+export function isQuotableQuote(quote?: MarketQuote) {
+  return Boolean(quote?.currentPrice && quote.provider !== "mock" && quote.provider !== "unavailable" && !quote.error);
+}
+
 export const US_QUOTE_INTERVAL_OPEN_MS = 15_000;
 export const US_QUOTE_INTERVAL_CLOSED_MS = 120_000;
 export const EG_QUOTE_INTERVAL_OPEN_MS = 60_000;

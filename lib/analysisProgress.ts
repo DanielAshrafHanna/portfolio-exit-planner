@@ -1,3 +1,4 @@
+import { isQuotableQuote } from "./marketRefresh";
 import type { EnrichedHolding } from "./types";
 
 export type AnalysisPhase = "idle" | "market" | "analyzing" | "complete" | "interrupted";
@@ -7,6 +8,7 @@ export type AnalysisCoverage = {
   analyzed: number;
   pendingSymbols: string[];
   analyzedSymbols: string[];
+  skippedSymbols: string[];
 };
 
 export type AnalysisSession = {
@@ -29,14 +31,19 @@ export function analysisSessionKey(userId: string | "guest") {
 }
 
 export function analysisCoverage(holdings: EnrichedHolding[]): AnalysisCoverage {
-  const analyzable = holdings.filter((holding) => holding.symbol.trim());
+  const withSymbol = holdings.filter((holding) => holding.symbol.trim());
+  const skippedSymbols = withSymbol
+    .filter((holding) => holding.quote !== undefined && !isQuotableQuote(holding.quote))
+    .map((holding) => holding.symbol.trim().toUpperCase());
+  const analyzable = withSymbol.filter((holding) => holding.quote === undefined || isQuotableQuote(holding.quote));
   const analyzedSymbols = analyzable.filter((holding) => holding.analysis).map((holding) => holding.symbol.trim().toUpperCase());
   const pendingSymbols = analyzable.filter((holding) => !holding.analysis).map((holding) => holding.symbol.trim().toUpperCase());
   return {
     total: analyzable.length,
     analyzed: analyzedSymbols.length,
     pendingSymbols,
-    analyzedSymbols
+    analyzedSymbols,
+    skippedSymbols
   };
 }
 

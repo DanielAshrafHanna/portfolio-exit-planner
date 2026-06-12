@@ -8,6 +8,7 @@ import { computeHoldingRowMetrics, profitLossTone, badgeTone } from "@/lib/holdi
 import { holdingDisplayName } from "@/lib/holdingNames";
 import { filterHoldingsBySearch } from "@/lib/holdingSearch";
 import { nextSortState, sortHoldings, type HoldingSortKey, type SortDirection } from "@/lib/holdingSort";
+import { isQuotableQuote } from "@/lib/marketRefresh";
 import { formatMoney, formatMoneyTable } from "@/lib/profileUtils";
 import {
   HoldingsMobileHeader,
@@ -53,13 +54,9 @@ function fitSizesFor(currency: CurrencyCode): FitSizes {
   return { min: 8, max: 12, minSm: 7, maxSm: 10 };
 }
 
-function isLiveQuote(quote?: EnrichedHolding["quote"]) {
-  return Boolean(quote?.currentPrice && quote.provider !== "mock" && quote.provider !== "unavailable" && !quote.error);
-}
-
 function priceLabel(quote: EnrichedHolding["quote"] | undefined, currency: CurrencyCode) {
   if (!quote) return "Loading";
-  if (!isLiveQuote(quote)) return "Unavailable";
+  if (!isQuotableQuote(quote)) return "Unavailable";
   return tableMoney(quote.currentPrice, currency);
 }
 

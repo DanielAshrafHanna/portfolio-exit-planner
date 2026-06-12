@@ -61,7 +61,7 @@ export function PortfolioWorkspace({
         icon={LineChart}
         eyebrow="Holdings"
         title="Your portfolio"
-        description={readOnly ? "Read-only view of a shared portfolio." : "Add holdings, review analysis, and adjust targets."}
+        description={readOnly ? "Read-only view of a shared portfolio. Live prices refresh for you; AI badges reflect the owner's saved analysis." : "Add holdings, review analysis, and adjust targets."}
         id="portfolio-workspace"
         compactHeader
         flushContent
