@@ -13,6 +13,7 @@ export type PortfolioCacheSnapshot = {
   profiles: PortfolioProfile[];
   activeProfileId: string;
   cloudUpdatedAt: string | null;
+  localUpdatedAt?: string | null;
 };
 
 export function portfolioCacheKeys(userId: string | "guest") {
@@ -20,7 +21,8 @@ export function portfolioCacheKeys(userId: string | "guest") {
   return {
     profiles: `portfolio-exit-planner:profiles:v2:${suffix}`,
     activeProfile: `portfolio-exit-planner:active-profile:v2:${suffix}`,
-    cloudUpdatedAt: `portfolio-exit-planner:cloud-updated-at:v2:${suffix}`
+    cloudUpdatedAt: `portfolio-exit-planner:cloud-updated-at:v2:${suffix}`,
+    localUpdatedAt: `portfolio-exit-planner:local-updated-at:v2:${suffix}`
   };
 }
 
@@ -61,7 +63,8 @@ export function readPortfolioCache(userId: string | "guest"): PortfolioCacheSnap
     return {
       profiles: sanitizeProfilesForPersistence(profiles),
       activeProfileId,
-      cloudUpdatedAt: safeGetItem(keys.cloudUpdatedAt)
+      cloudUpdatedAt: safeGetItem(keys.cloudUpdatedAt),
+      localUpdatedAt: safeGetItem(keys.localUpdatedAt)
     };
   } catch {
     return null;
@@ -74,6 +77,8 @@ export function writePortfolioCache(userId: string | "guest", snapshot: Portfoli
   safeSetItem(keys.activeProfile, snapshot.activeProfileId);
   if (snapshot.cloudUpdatedAt) safeSetItem(keys.cloudUpdatedAt, snapshot.cloudUpdatedAt);
   else safeRemoveItem(keys.cloudUpdatedAt);
+  if (snapshot.localUpdatedAt) safeSetItem(keys.localUpdatedAt, snapshot.localUpdatedAt);
+  else safeRemoveItem(keys.localUpdatedAt);
 }
 
 export function clearPortfolioCache(userId: string | "guest") {
@@ -81,6 +86,7 @@ export function clearPortfolioCache(userId: string | "guest") {
   safeRemoveItem(keys.profiles);
   safeRemoveItem(keys.activeProfile);
   safeRemoveItem(keys.cloudUpdatedAt);
+  safeRemoveItem(keys.localUpdatedAt);
 }
 
 export function clearLegacyPortfolioKeys() {
@@ -126,13 +132,19 @@ function safeRemoveItem(key: string) {
   localStorage.removeItem(key);
 }
 
-export function portfolioSnapshotFromProfiles(profiles: PortfolioProfile[], activeProfileId: string, cloudUpdatedAt?: string | null): PortfolioCacheSnapshot {
+export function portfolioSnapshotFromProfiles(
+  profiles: PortfolioProfile[],
+  activeProfileId: string,
+  cloudUpdatedAt?: string | null,
+  localUpdatedAt?: string | null
+): PortfolioCacheSnapshot {
   const resolvedActiveProfileId = profiles.some((profile) => profile.id === activeProfileId)
     ? activeProfileId
     : profiles[0]?.id || defaultProfiles()[0].id;
   return {
     profiles: sanitizeProfilesForPersistence(profiles),
     activeProfileId: resolvedActiveProfileId,
-    cloudUpdatedAt: cloudUpdatedAt ?? null
+    cloudUpdatedAt: cloudUpdatedAt ?? null,
+    localUpdatedAt: localUpdatedAt ?? null
   };
 }

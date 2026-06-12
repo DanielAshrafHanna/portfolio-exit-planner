@@ -5,6 +5,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import type { CurrencyCode, EnrichedHolding, FeeSettings } from "@/lib/types";
 import { totalCostFor } from "@/lib/calculations";
 import { computeHoldingRowMetrics, profitLossTone, badgeTone } from "@/lib/holdingDisplay";
+import { holdingDisplayName } from "@/lib/holdingNames";
 import { filterHoldingsBySearch } from "@/lib/holdingSearch";
 import { nextSortState, sortHoldings, type HoldingSortKey, type SortDirection } from "@/lib/holdingSort";
 import { formatMoney, formatMoneyTable } from "@/lib/profileUtils";
@@ -502,7 +503,7 @@ export function HoldingsTable({ holdings, settings, currency, onChange, readOnly
                       {quote?.stale ? <StaleQuoteMarker /> : null}
                     </span>
                     <HoldingsFitText minSize={fitSizes.minSm} maxSize={fitSizes.maxSm} className="font-normal text-ink/55">
-                      {holding.name}
+                      {holdingDisplayName(holding)}
                     </HoldingsFitText>
                   </td>
                   <td className="px-1.5 py-2 lg:px-2 lg:py-3">{fitText(holding.shares)}</td>

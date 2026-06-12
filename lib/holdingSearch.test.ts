@@ -36,6 +36,22 @@ describe("filterHoldingsBySearch", () => {
     expect(filterHoldingsBySearch(holdings, "commercial")).toEqual([holdings[2]]);
   });
 
+  it("matches provider company names when the stored holding name is empty", () => {
+    const unnamedApple = {
+      ...holdings[0],
+      name: "",
+      quote: {
+        symbol: "AAPL",
+        currentPrice: 190,
+        dailyChangePercent: 1,
+        previousClose: 188,
+        companyName: "Apple Inc.",
+        provider: "yahoo_finance"
+      }
+    };
+    expect(filterHoldingsBySearch([unnamedApple], "apple")).toEqual([unnamedApple]);
+  });
+
   it("returns an empty list when nothing matches", () => {
     expect(filterHoldingsBySearch(holdings, "tesla")).toEqual([]);
   });

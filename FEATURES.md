@@ -321,6 +321,8 @@ supabase/
 
 | Date (approx.) | Feature |
 |----------------|---------|
+| Jun 2026 | **Instant portfolio backup** — local cache + faster cloud save on every edit; restores newer local data after reload |
+| Jun 2026 | **Company name search** — Yahoo `longName`/`shortName` fills holdings; search matches names like Apple → AAPL |
 | Jun 2026 | Holdings table **search** by ticker or name |
 | Jun 2026 | Target planner **breakeven** stat card (fee-aware zero P/L price) |
 | Jun 2026 | **EGP table layout** — full large numbers visible (shrink-to-fit, wider columns, compact format) |

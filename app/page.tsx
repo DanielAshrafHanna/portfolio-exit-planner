@@ -20,6 +20,7 @@ import { SettingsDialog } from "@/components/SettingsDialog";
 import { SettingsPanel } from "@/components/SettingsPanel";
 import { SharedHoldingsViewer } from "@/components/SharedHoldingsViewer";
 import { defaultSellTargets } from "@/lib/calculations";
+import { applyCompanyNameToHolding } from "@/lib/holdingNames";
 import { applyAnalyzedHoldingResults, type AnalyzedHoldingResult } from "@/lib/holdingMerge";
 import { applyLiveQuotes, getQuoteRefreshIntervalMs, liveQuoteKey } from "@/lib/marketRefresh";
 import { sanitizeProfilesForPersistence } from "@/lib/quoteCacheMigration";
@@ -31,6 +32,7 @@ import {
   defaultPortfolioSnapshot,
   portfolioSnapshotFromProfiles,
   readGuestPortfolioState,
+  readPortfolioCache,
   writePortfolioCache,
   type PortfolioCacheSnapshot
 } from "@/lib/portfolioStorage";
@@ -40,6 +42,7 @@ import {
   mergeProfilesForCloudSave,
   portfolioHoldingSymbols,
   shouldKeepSessionPortfolioEdits,
+  shouldPreferLocalPortfolioCache,
   shouldSkipEmptyCloudOverwrite
 } from "@/lib/portfolioSync";
 import {
@@ -303,6 +306,8 @@ export default function Home() {
   const quickAddRef = useRef<QuickAddHoldingHandle>(null);
   const hydratedPrefsUserId = useRef<string | null>(null);
   const displayNameSaveTimeout = useRef<number | null>(null);
+  const cloudSaveTimeout = useRef<number | null>(null);
+  const pushCloudPortfolioNowRef = useRef<(override?: { displayName?: string; shareHoldings?: boolean }) => Promise<void>>(async () => {});
   const latestSyncKey = useRef("");
   const userEditRevision = useRef(0);
   const profilesRef = useRef(profiles);
@@ -341,6 +346,8 @@ export default function Home() {
   const touchPortfolioSave = () => {
     userEditRevision.current += 1;
     sessionPortfolioEditedRef.current = true;
+    persistLocalPortfolioBackup();
+    schedulePortfolioCloudSave();
   };
 
   const touchHoldingsEdit = () => {
@@ -366,6 +373,24 @@ export default function Home() {
   const persistSignedInPortfolioCache = (snapshot: PortfolioCacheSnapshot) => {
     if (!user) return;
     writePortfolioCache(user.id, snapshot);
+  };
+
+  const persistLocalPortfolioBackup = (nextProfiles = profiles, nextActiveProfileId = activeProfileId) => {
+    if (!user) return;
+    writePortfolioCache(user.id, portfolioSnapshotFromProfiles(
+      nextProfiles,
+      nextActiveProfileId,
+      cloudPortfolioUpdatedAtRef.current,
+      new Date().toISOString()
+    ));
+  };
+
+  const schedulePortfolioCloudSave = () => {
+    if (!supabase || !user || cloudLoadedUserId !== user.id) return;
+    if (cloudSaveTimeout.current) window.clearTimeout(cloudSaveTimeout.current);
+    cloudSaveTimeout.current = window.setTimeout(() => {
+      void pushCloudPortfolioNowRef.current();
+    }, 400);
   };
 
   const applyCloudPortfolioSnapshot = (
@@ -450,7 +475,8 @@ export default function Home() {
     lastCloudProfilesRef.current = defaultProfiles();
     latestSyncKey.current = "";
     setCloudLoadedUserId(null);
-    const bootstrap = defaultPortfolioSnapshot();
+    const cached = readPortfolioCache(user.id);
+    const bootstrap = cached ?? defaultPortfolioSnapshot();
     setProfiles(bootstrap.profiles);
     setActiveProfileId(bootstrap.activeProfileId);
     const storedPrefs = readStoredUserPrefs(user.id);
@@ -467,8 +493,15 @@ export default function Home() {
 
   useEffect(() => {
     if (!isHydrated || user) return;
-    writePortfolioCache("guest", portfolioSnapshotFromProfiles(profiles, activeProfileId, null));
+    writePortfolioCache("guest", portfolioSnapshotFromProfiles(profiles, activeProfileId, null, new Date().toISOString()));
   }, [profiles, activeProfileId, isHydrated, user]);
+
+  useEffect(() => {
+    if (!isHydrated || !user) return;
+    persistLocalPortfolioBackup();
+    // Backup signed-in edits locally on every portfolio change, even before cloud save completes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profiles, activeProfileId, isHydrated, user?.id]);
 
   useEffect(() => {
     if (!isHydrated) return;
@@ -712,7 +745,12 @@ export default function Home() {
         const row = bySymbol.get(displayMarketSymbol(holding.symbol, regionAtStart).toUpperCase());
         if (!row) return holding;
         const selectedTargetPrice = !holding.targetPriceEdited ? defaultSellTargets(row.quote.currentPrice)[1].price : holding.selectedTargetPrice;
-        return { ...holding, quote: row.quote, news: row.news, selectedTargetPrice };
+        return applyCompanyNameToHolding({
+          ...holding,
+          quote: row.quote,
+          news: row.news,
+          selectedTargetPrice
+        }, row.quote);
       }));
       syncLiveQuotesFromRows(marketData.rows || [], regionAtStart, isLatestRequest);
       return withMarket;
@@ -963,7 +1001,8 @@ export default function Home() {
     persistSignedInPortfolioCache(portfolioSnapshotFromProfiles(
       mergedProfiles,
       parsedPayload.activeProfileId,
-      savedAt
+      savedAt,
+      null
     ));
     setCloudSyncStatus("saved");
     setCloudSyncMessage(`Saved to cloud at ${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}.`);
@@ -1065,6 +1104,7 @@ export default function Home() {
       }
 
       const { snapshot, resolvedDisplayName, resolvedShareHoldings, cloudSettings } = resolveCloudPortfolioRow(data);
+      const localCache = readPortfolioCache(user.id);
       const resolvedPrefs = resolveUserPrefsForSync({
         local: {
           displayName: normalizeDisplayName(displayNameRef.current),
@@ -1072,9 +1112,26 @@ export default function Home() {
         },
         cloudDisplayName: data.display_name ?? cloudSettings.displayName,
         cloudShareHoldings: data.share_holdings ?? cloudSettings.shareHoldings,
-        localIsNewer: false,
+        localIsNewer: Boolean(localCache?.localUpdatedAt && data.updated_at && new Date(localCache.localUpdatedAt) > new Date(data.updated_at)),
         shareHoldingsTouched: shareHoldingsTouchedRef.current
       });
+      if (localCache && shouldPreferLocalPortfolioCache(localCache, snapshot.profiles, data.updated_at)) {
+        cloudShareHoldingsRef.current = resolvedPrefs.shareHoldings;
+        if (!shareHoldingsTouchedRef.current) setShareHoldings(resolvedPrefs.shareHoldings);
+        setDisplayName(resolvedPrefs.displayName);
+        setCloudLoadedUserId(user.id);
+        setProfiles(localCache.profiles);
+        setActiveProfileId(localCache.activeProfileId);
+        sessionPortfolioEditedRef.current = true;
+        setCloudSyncStatus("saving");
+        setCloudSyncMessage("Restoring newer local portfolio changes to cloud...");
+        void pushCloudPortfolioNowRef.current({
+          displayName: resolvedPrefs.displayName,
+          shareHoldings: resolvedPrefs.shareHoldings
+        });
+        void loadSharedProfiles();
+        return;
+      }
       const keepLocalPortfolio = shouldKeepSessionPortfolioEdits(
         profilesRef.current,
         snapshot.profiles,
@@ -1250,6 +1307,21 @@ export default function Home() {
     const saved = await saveCloudPortfolio(payload);
     if (saved) latestSyncKey.current = syncKey;
   };
+  pushCloudPortfolioNowRef.current = pushCloudPortfolioNow;
+
+  useEffect(() => {
+    if (!user) return;
+    const flushPendingCloudSave = () => {
+      if (!sessionPortfolioEditedRef.current) return;
+      persistLocalPortfolioBackup();
+      if (cloudLoadedUserId !== user.id) return;
+      if (cloudSaveTimeout.current) window.clearTimeout(cloudSaveTimeout.current);
+      void pushCloudPortfolioNowRef.current();
+    };
+    window.addEventListener("pagehide", flushPendingCloudSave);
+    return () => window.removeEventListener("pagehide", flushPendingCloudSave);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, cloudLoadedUserId]);
 
   const handleDisplayNameChange = (nextDisplayName: string) => {
     setDisplayName(nextDisplayName);
