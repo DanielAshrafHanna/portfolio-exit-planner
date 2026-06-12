@@ -1,0 +1,49 @@
+import { createClient } from "@supabase/supabase-js";
+
+function supabaseUrl() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!url) throw new Error("NEXT_PUBLIC_SUPABASE_URL is not configured.");
+  return url;
+}
+
+function supabaseAnonKey() {
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!key) throw new Error("NEXT_PUBLIC_SUPABASE_ANON_KEY is not configured.");
+  return key;
+}
+
+function supabaseServiceRoleKey() {
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!key) throw new Error("SUPABASE_SERVICE_ROLE_KEY is not configured.");
+  return key;
+}
+
+export function createSupabaseAdminClient() {
+  return createClient(supabaseUrl(), supabaseServiceRoleKey(), {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false
+    }
+  });
+}
+
+export function createSupabaseUserClient(accessToken: string) {
+  return createClient(supabaseUrl(), supabaseAnonKey(), {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false
+    },
+    global: {
+      headers: {
+        Authorization: `Bearer ${accessToken}`
+      }
+    }
+  });
+}
+
+export function bearerTokenFromRequest(request: Request) {
+  const header = request.headers.get("authorization") || "";
+  const [scheme, token] = header.split(" ");
+  if (scheme?.toLowerCase() !== "bearer" || !token) return null;
+  return token;
+}
