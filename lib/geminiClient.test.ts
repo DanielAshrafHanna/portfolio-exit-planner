@@ -2,10 +2,10 @@ import { describe, expect, it } from "vitest";
 import { formatGeminiError, geminiModelName, isGeminiConfigured, isGeminiRateLimitError } from "./geminiClient";
 
 describe("geminiClient config", () => {
-  it("defaults to gemini-2.0-flash for higher free-tier RPM", () => {
+  it("defaults to gemini-3.1-flash-lite for newer free-tier RPM", () => {
     const original = process.env.GEMINI_MODEL;
     delete process.env.GEMINI_MODEL;
-    expect(geminiModelName()).toBe("gemini-2.0-flash");
+    expect(geminiModelName()).toBe("gemini-3.1-flash-lite");
     process.env.GEMINI_MODEL = original;
   });
 

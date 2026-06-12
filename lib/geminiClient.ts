@@ -1,7 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
 
-/** Free tier: gemini-2.0-flash allows ~15 RPM vs ~5 RPM for 2.5-flash. */
-const DEFAULT_MODEL = "gemini-2.0-flash";
+/** Free tier: gemini-3.1-flash-lite is Google's newest lite model (~15 RPM, multimodal + JSON). */
+const DEFAULT_MODEL = "gemini-3.1-flash-lite";
 
 /** Minimum gap between analyze API calls from the client (ms). */
 export const GEMINI_CLIENT_REQUEST_GAP_MS = 4500;

@@ -21,7 +21,7 @@ Add these secrets in your deployment environment:
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`: Supabase anon/publishable key. Safe for browser use when RLS is enabled.
 - `SUPABASE_SERVICE_ROLE_KEY`: server-only Supabase service role key used by `/api/resolveLoginIdentifier` to let users sign in with a previously saved display name. Never expose this as a `NEXT_PUBLIC_` variable.
 - `GEMINI_API_KEY`: enables AI decision analysis and screenshot OCR via the Gemini API free tier ([Google AI Studio](https://aistudio.google.com/)).
-- `GEMINI_MODEL`: optional, defaults to `gemini-2.0-flash` (higher free-tier rate limit than 2.5-flash).
+- `GEMINI_MODEL`: optional, defaults to `gemini-3.1-flash-lite` (newest free-tier Flash-Lite; supports analysis + OCR).
 - `MARKET_DATA_PROVIDER`: set to `alpha_vantage` for the real provider, or leave unset/use `mock`.
 - `MARKET_DATA_API_KEY`: Alpha Vantage API key for quotes, indicators, and news.
 - `ALPHA_VANTAGE_API_KEY`: optional alias for `MARKET_DATA_API_KEY`.
