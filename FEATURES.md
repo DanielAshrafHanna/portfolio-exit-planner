@@ -42,7 +42,7 @@ Users always make the final decision. The app does not place trades.
 | **Portfolio input table** | Full editable grid: symbol, name, shares, avg cost, total cost, broker value, notes |
 | **CSV import** | Upload CSV; maps common column names |
 | **CSV export** | Download current holdings as CSV |
-| **Screenshot OCR** | User selects image → explicit “Extract” → OpenAI vision parses rows (JPEG/PNG/WebP, max 8 MB) |
+| **Screenshot OCR** | User selects image → explicit “Extract” → Gemini vision parses rows (JPEG/PNG/WebP, max 8 MB) |
 | **Unsupported ticker block** | Egyptian mutual fund tickers blocked with clear message (no fake prices) |
 
 **Key files:** `components/QuickAddHolding.tsx`, `components/PortfolioInput.tsx`, `components/ImageImport.tsx`, `app/api/extractImage/route.ts`, `lib/unsupportedTickers.ts`
@@ -144,9 +144,9 @@ Triggered by **Analyze** button — refreshes market data, then calls AI per hol
 
 - Rule-based analysis from MAs, P/L, RSI — **Low confidence**
 
-**Env vars:** `OPENAI_API_KEY` (required), `OPENAI_MODEL`, `OPENAI_VISION_MODEL` (optional)
+**Env vars:** `GEMINI_API_KEY` (required), `GEMINI_MODEL` (optional, default `gemini-2.5-flash`)
 
-**Key files:** `app/api/analyzeHolding/route.ts`, `lib/aiFallback.ts`, `lib/validation.ts`
+**Key files:** `app/api/analyzeHolding/route.ts`, `lib/geminiClient.ts`, `lib/aiFallback.ts`, `lib/validation.ts`
 
 ---
 
@@ -267,7 +267,7 @@ Desktop: settings panel in sidebar. Mobile: Settings tab in bottom nav.
 |-------|--------|---------|
 | `/api/market` | POST | Batch quotes + news for holdings |
 | `/api/analyzeHolding` | POST | OpenAI structured analysis per holding |
-| `/api/extractImage` | POST | OpenAI vision OCR for screenshots |
+| `/api/extractImage` | POST | Gemini vision OCR for screenshots |
 | `/api/resolveLoginIdentifier` | POST | Resolve display name → email for sign-in |
 
 All validate input with Zod. Secrets stay in Vercel env vars.
@@ -321,7 +321,8 @@ supabase/
 
 | Date (approx.) | Feature |
 |----------------|---------|
-| Jun 2026 | **Instant portfolio backup** — local cache + faster cloud save on every edit; restores newer local data after reload |
+| Jun 2026 | **Gemini AI** — stock analysis + screenshot OCR via `gemini-2.5-flash` (free tier) instead of OpenAI |
+| Jun 2026 | **PWA install** — add to home screen on Android/iPhone via web manifest + service worker |
 | Jun 2026 | **Company name search** — Yahoo `longName`/`shortName` fills holdings; search matches names like Apple → AAPL |
 | Jun 2026 | Holdings table **search** by ticker or name |
 | Jun 2026 | Target planner **breakeven** stat card (fee-aware zero P/L price) |
@@ -341,9 +342,8 @@ supabase/
 | `NEXT_PUBLIC_SUPABASE_URL` | For auth/cloud | Supabase project URL |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | For auth/cloud | Browser client key (RLS) |
 | `SUPABASE_SERVICE_ROLE_KEY` | For display-name login | Server-only |
-| `OPENAI_API_KEY` | For AI/OCR | Chat + vision |
-| `OPENAI_MODEL` | Optional | Analysis model |
-| `OPENAI_VISION_MODEL` | Optional | OCR model |
+| `GEMINI_API_KEY` | For AI/OCR | Gemini API (free tier) |
+| `GEMINI_MODEL` | Optional | Default `gemini-2.5-flash` |
 | `MARKET_DATA_API_KEY` | Optional | Alpha Vantage |
 | `MARKET_DATA_PROVIDER` | Optional | `alpha_vantage` or mock |
 

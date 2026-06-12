@@ -1,22 +1,17 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const { mockOpenAiCreate } = vi.hoisted(() => ({
-  mockOpenAiCreate: vi.fn()
+const { mockGenerateGeminiJsonFromImage } = vi.hoisted(() => ({
+  mockGenerateGeminiJsonFromImage: vi.fn()
 }));
 
-vi.mock("openai", () => ({
-  default: class MockOpenAI {
-    chat = {
-      completions: {
-        create: mockOpenAiCreate
-      }
-    };
-  }
+vi.mock("@/lib/geminiClient", () => ({
+  isGeminiConfigured: () => Boolean(process.env.GEMINI_API_KEY?.trim()),
+  generateGeminiJsonFromImage: mockGenerateGeminiJsonFromImage
 }));
 
 import { POST } from "./route";
 
-const originalOpenAiKey = process.env.OPENAI_API_KEY;
+const originalGeminiKey = process.env.GEMINI_API_KEY;
 
 function formRequest(formData: FormData) {
   return new Request("http://localhost/api/extractImage", {
@@ -35,38 +30,30 @@ function imageFile() {
   return new File([new Uint8Array([1, 2, 3])], "portfolio.png", { type: "image/png" });
 }
 
-function openAiResponse(content: string) {
-  return {
-    choices: [{
-      message: { content }
-    }]
-  };
-}
-
 async function readJson(response: Response) {
   return await response.json() as Record<string, unknown>;
 }
 
 describe("/api/extractImage", () => {
   afterEach(() => {
-    process.env.OPENAI_API_KEY = originalOpenAiKey;
+    process.env.GEMINI_API_KEY = originalGeminiKey;
     vi.clearAllMocks();
   });
 
-  it("handles missing OPENAI_API_KEY safely", async () => {
-    delete process.env.OPENAI_API_KEY;
+  it("handles missing GEMINI_API_KEY safely", async () => {
+    delete process.env.GEMINI_API_KEY;
 
     const response = await POST(formRequest(formDataWithFile(imageFile())));
     const body = await readJson(response);
 
     expect(response.status).toBe(200);
-    expect(mockOpenAiCreate).not.toHaveBeenCalled();
+    expect(mockGenerateGeminiJsonFromImage).not.toHaveBeenCalled();
     expect(body.unavailable).toBe(true);
-    expect(body.warning).toContain("OPENAI_API_KEY is missing");
+    expect(body.warning).toContain("GEMINI_API_KEY is missing");
   });
 
   it("rejects missing image", async () => {
-    process.env.OPENAI_API_KEY = "test-key";
+    process.env.GEMINI_API_KEY = "test-key";
 
     const response = await POST(formRequest(new FormData()));
     const body = await readJson(response);
@@ -76,7 +63,7 @@ describe("/api/extractImage", () => {
   });
 
   it("rejects unsupported file types", async () => {
-    process.env.OPENAI_API_KEY = "test-key";
+    process.env.GEMINI_API_KEY = "test-key";
     const file = new File(["not an image"], "notes.txt", { type: "text/plain" });
 
     const response = await POST(formRequest(formDataWithFile(file)));
@@ -87,7 +74,7 @@ describe("/api/extractImage", () => {
   });
 
   it("rejects files over the size limit", async () => {
-    process.env.OPENAI_API_KEY = "test-key";
+    process.env.GEMINI_API_KEY = "test-key";
     const response = await POST(new Request("http://localhost/api/extractImage", {
       method: "POST",
       headers: { "content-length": String(10 * 1024 * 1024) }
@@ -99,8 +86,8 @@ describe("/api/extractImage", () => {
   });
 
   it("handles malformed OCR JSON safely", async () => {
-    process.env.OPENAI_API_KEY = "test-key";
-    mockOpenAiCreate.mockResolvedValue(openAiResponse("not json"));
+    process.env.GEMINI_API_KEY = "test-key";
+    mockGenerateGeminiJsonFromImage.mockResolvedValue("not json");
 
     const response = await POST(formRequest(formDataWithFile(imageFile())));
     const body = await readJson(response);
@@ -111,8 +98,8 @@ describe("/api/extractImage", () => {
   });
 
   it("returns normalized rows only", async () => {
-    process.env.OPENAI_API_KEY = "test-key";
-    mockOpenAiCreate.mockResolvedValue(openAiResponse(JSON.stringify({
+    process.env.GEMINI_API_KEY = "test-key";
+    mockGenerateGeminiJsonFromImage.mockResolvedValue(JSON.stringify({
       rows: [
         { symbol: "", name: "Unreadable", shares: 1, averageCost: 2, totalCost: 2 },
         {
@@ -127,7 +114,7 @@ describe("/api/extractImage", () => {
       ],
       warnings: ["Confirm extracted rows."],
       rawSymbols: ["TSM"]
-    })));
+    }));
 
     const response = await POST(formRequest(formDataWithFile(imageFile())));
     const body = await readJson(response);

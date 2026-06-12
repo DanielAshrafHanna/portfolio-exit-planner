@@ -68,8 +68,8 @@ function portfolioFieldsChanged(existing: EnrichedHolding | undefined, row: Hold
 }
 
 function normalizeWarning(warning: string) {
-  if (warning.includes("OPENAI_API_KEY")) {
-    return "OPENAI_API_KEY is missing. AI/OCR features are using deterministic fallback analysis until the secret is added.";
+  if (warning.includes("GEMINI_API_KEY")) {
+    return "GEMINI_API_KEY is missing. AI/OCR features are using deterministic fallback analysis until the secret is added.";
   }
   if (warning.includes("Yahoo Finance's public chart feed")) {
     return "Market API key is missing. Quotes are currently fetched from Yahoo Finance's public chart feed.";
@@ -85,7 +85,7 @@ function warningForAudience(warning: string, isAdmin: boolean) {
   if (warning.includes("Supabase SQL") || warning.includes("schema cache") || warning.includes("display_name") || warning.includes("share_holdings")) {
     return null;
   }
-  if (warning.includes("OPENAI_API_KEY")) {
+  if (warning.includes("GEMINI_API_KEY")) {
     return "AI/OCR features are unavailable right now. Ask the admin to check setup.";
   }
   if (warning.includes("MARKET_DATA_API_KEY")) {

@@ -71,7 +71,7 @@ npm run lint
 
 ## API And Security Rules
 
-- Never expose `OPENAI_API_KEY`, market data API keys, or other secrets in frontend code.
+- Never expose `GEMINI_API_KEY`, market data API keys, or other secrets in frontend code.
 - Keep OpenAI, market-data, news, and OCR calls server-side through `app/api/*`.
 - Validate request bodies with Zod before processing.
 - Validate AI and external provider responses before trusting or storing them.

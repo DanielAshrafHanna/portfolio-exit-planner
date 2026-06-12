@@ -1,9 +1,19 @@
-import OpenAI from "openai";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { generateGeminiJsonFromImage, isGeminiConfigured } from "@/lib/geminiClient";
 
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+
+const OCR_SYSTEM_INSTRUCTION = [
+  "You extract stock and ETF holdings from broker screenshots.",
+  "Scan the entire image from top to bottom and left to right. Do not stop after the first visible rows.",
+  "Return every visible holding row, including rows that are partially visible if the ticker/symbol is readable.",
+  "Only use values visible in the image. Do not invent tickers, company names, share counts, costs, or values.",
+  "Numbers may contain commas, currency symbols, parentheses, or negative signs. Convert them to plain numbers.",
+  "If a field is unreadable, use null for numbers or an empty string for text.",
+  "Return JSON only with this shape: {\"rows\":[{\"symbol\":\"string\",\"name\":\"string\",\"shares\":number|null,\"averageCost\":number|null,\"totalCost\":number|null,\"brokerCurrentValue\":number|null,\"notes\":\"string\"}],\"warnings\":[\"string\"],\"rawSymbols\":[\"string\"]}."
+].join(" ");
 
 const ocrRowSchema = z.object({
   symbol: z.string().trim().max(24).catch(""),
@@ -22,11 +32,11 @@ const ocrResponseSchema = z.object({
 });
 
 export async function POST(request: Request) {
-  if (!process.env.OPENAI_API_KEY) {
+  if (!isGeminiConfigured()) {
     return NextResponse.json({
       rows: [],
       unavailable: true,
-      warning: "OPENAI_API_KEY is missing, so OCR extraction is unavailable. Please enter holdings manually or import CSV."
+      warning: "GEMINI_API_KEY is missing, so OCR extraction is unavailable. Please enter holdings manually or import CSV."
     });
   }
   const contentLength = Number(request.headers.get("content-length") || 0);
@@ -45,35 +55,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Image is too large. Please upload a screenshot under 8 MB." }, { status: 413 });
     }
     const bytes = Buffer.from(await file.arrayBuffer());
-    const dataUrl = `data:${file.type};base64,${bytes.toString("base64")}`;
-    const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-    const completion = await client.chat.completions.create({
-      model: process.env.OPENAI_VISION_MODEL || "gpt-4o",
-      response_format: { type: "json_object" },
-      temperature: 0,
-      messages: [
-        {
-          role: "system",
-          content: [
-            "You extract stock and ETF holdings from broker screenshots.",
-            "Scan the entire image from top to bottom and left to right. Do not stop after the first visible rows.",
-            "Return every visible holding row, including rows that are partially visible if the ticker/symbol is readable.",
-            "Only use values visible in the image. Do not invent tickers, company names, share counts, costs, or values.",
-            "Numbers may contain commas, currency symbols, parentheses, or negative signs. Convert them to plain numbers.",
-            "If a field is unreadable, use null for numbers or an empty string for text.",
-            "Return JSON only with this shape: {\"rows\":[{\"symbol\":\"string\",\"name\":\"string\",\"shares\":number|null,\"averageCost\":number|null,\"totalCost\":number|null,\"brokerCurrentValue\":number|null,\"notes\":\"string\"}],\"warnings\":[\"string\"],\"rawSymbols\":[\"string\"]}."
-          ].join(" ")
-        },
-        {
-          role: "user",
-          content: [
-            { type: "text", text: "Extract all visible portfolio holding rows from this screenshot. Include every visible ticker. The user will confirm and edit fields before analysis." },
-            { type: "image_url", image_url: { url: dataUrl, detail: "high" } }
-          ]
-        }
-      ]
+    const raw = await generateGeminiJsonFromImage({
+      systemInstruction: OCR_SYSTEM_INSTRUCTION,
+      userText: "Extract all visible portfolio holding rows from this screenshot. Include every visible ticker. The user will confirm and edit fields before analysis.",
+      imageMimeType: file.type,
+      imageBase64: bytes.toString("base64")
     });
-    const decoded = safeJson(completion.choices[0]?.message.content || "{\"rows\":[],\"warnings\":[]}");
+    const decoded = safeJson(raw);
     if (decoded === undefined) {
       return NextResponse.json({
         rows: [],
