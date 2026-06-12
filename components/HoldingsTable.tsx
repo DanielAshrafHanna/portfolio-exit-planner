@@ -1,10 +1,11 @@
 "use client";
 
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronRight, Search, X } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 import type { CurrencyCode, EnrichedHolding, FeeSettings } from "@/lib/types";
 import { totalCostFor } from "@/lib/calculations";
 import { computeHoldingRowMetrics, profitLossTone, badgeTone } from "@/lib/holdingDisplay";
+import { filterHoldingsBySearch } from "@/lib/holdingSearch";
 import { nextSortState, sortHoldings, type HoldingSortKey, type SortDirection } from "@/lib/holdingSort";
 import { formatMoney, formatMoneyTable } from "@/lib/profileUtils";
 import {
@@ -223,16 +224,66 @@ function symbolWithActionCell(holding: EnrichedHolding, stale?: boolean) {
   );
 }
 
+function HoldingsSearchBar({
+  query,
+  onChange,
+  resultCount,
+  totalCount
+}: {
+  query: string;
+  onChange: (value: string) => void;
+  resultCount: number;
+  totalCount: number;
+}) {
+  const trimmed = query.trim();
+  return (
+    <div className="border-b border-ink/10 bg-paper/50 px-3 py-2.5 md:px-4">
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink/40" aria-hidden />
+        <input
+          className="min-h-11 w-full rounded-md border border-ink/15 bg-white py-2 pl-9 pr-10 text-base text-ink"
+          type="search"
+          value={query}
+          placeholder="Search by ticker or name (e.g. AAPL, Apple)"
+          aria-label="Search holdings by ticker or name"
+          onChange={(event) => onChange(event.target.value)}
+        />
+        {trimmed ? (
+          <button
+            className="absolute right-2 top-1/2 inline-flex min-h-8 min-w-8 -translate-y-1/2 items-center justify-center rounded text-ink/55 hover:bg-ink/5 hover:text-ink"
+            type="button"
+            aria-label="Clear search"
+            onClick={() => onChange("")}
+          >
+            <X className="h-4 w-4" aria-hidden />
+          </button>
+        ) : null}
+      </div>
+      {trimmed ? (
+        <p className="mt-1.5 text-xs text-ink/55">
+          Showing {resultCount} of {totalCount} {totalCount === 1 ? "holding" : "holdings"}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 export function HoldingsTable({ holdings, settings, currency, onChange, readOnly = false }: Props) {
   const [open, setOpen] = useState<Record<string, boolean>>({});
+  const [searchQuery, setSearchQuery] = useState("");
   const [sortKey, setSortKey] = useState<HoldingSortKey>("symbol");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const fitSizes = fitSizesFor(currency);
   const tableClass = currency === "EGP" ? "holdings-table-egp" : "";
 
+  const filteredHoldings = useMemo(
+    () => filterHoldingsBySearch(holdings, searchQuery),
+    [holdings, searchQuery]
+  );
+
   const sortedHoldings = useMemo(
-    () => sortHoldings(holdings, settings, sortKey, sortDirection),
-    [holdings, settings, sortKey, sortDirection]
+    () => sortHoldings(filteredHoldings, settings, sortKey, sortDirection),
+    [filteredHoldings, settings, sortKey, sortDirection]
   );
 
   const handleSort = (key: HoldingSortKey) => {
@@ -319,10 +370,26 @@ export function HoldingsTable({ holdings, settings, currency, onChange, readOnly
     ) : null
   );
 
+  const emptySearchRow = (colSpan: number) => (
+    <tr className="border-t border-ink/10 bg-white" key="search-empty">
+      <td className="px-4 py-6 text-center text-sm text-ink/60" colSpan={colSpan}>
+        No holdings match &ldquo;{searchQuery.trim()}&rdquo;. Try another ticker or company name.
+      </td>
+    </tr>
+  );
+
   return (
     <>
+      {holdings.length ? (
+        <HoldingsSearchBar
+          query={searchQuery}
+          onChange={setSearchQuery}
+          resultCount={filteredHoldings.length}
+          totalCount={holdings.length}
+        />
+      ) : null}
       <div className="md:hidden">
-        {sortedHoldings.length ? (
+        {holdings.length ? (
           <div className="flex items-center justify-between gap-3 border-b border-ink/10 bg-paper/50 px-3 py-2">
             <p className="text-xs font-medium text-ink/60">Sort holdings</p>
             <HoldingsSortControl
@@ -358,7 +425,7 @@ export function HoldingsTable({ holdings, settings, currency, onChange, readOnly
               </tr>
             </thead>
             <tbody>
-              {sortedHoldings.map((holding, index) => {
+              {sortedHoldings.length === 0 ? emptySearchRow(MOBILE_COLUMN_COUNT) : sortedHoldings.map((holding, index) => {
                 const quote = holding.quote;
                 const metrics = computeHoldingRowMetrics(holding, settings);
                 const rowTone = index % 2 === 1 ? "bg-paper/40" : "bg-white";
@@ -417,7 +484,7 @@ export function HoldingsTable({ holdings, settings, currency, onChange, readOnly
             </tr>
           </thead>
           <tbody>
-            {sortedHoldings.map((holding) => {
+            {sortedHoldings.length === 0 ? emptySearchRow(15) : sortedHoldings.map((holding) => {
               const quote = holding.quote;
               const metrics = computeHoldingRowMetrics(holding, settings);
               return [
