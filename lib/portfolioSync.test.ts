@@ -4,8 +4,10 @@ import {
   mergeProfilesForCloudSave,
   portfolioHasUnsavedSymbols,
   shouldKeepSessionPortfolioEdits,
+  shouldPreferLocalPortfolioCache,
   shouldSkipEmptyCloudOverwrite
 } from "./portfolioSync";
+import { portfolioSnapshotFromProfiles } from "./portfolioStorage";
 import type { PortfolioProfile } from "./types";
 
 function profile(id: string, region: "US" | "EG", symbols: string[]): PortfolioProfile {
@@ -68,6 +70,17 @@ describe("portfolio sync policy", () => {
     const merged = mergeProfilesForCloudSave(local, cloud, new Set(["eg-portfolio"]));
     expect(merged.find((item) => item.id === "us-portfolio")?.holdings.map((holding) => holding.symbol)).toEqual(["NASA"]);
     expect(merged.find((item) => item.id === "eg-portfolio")?.holdings.map((holding) => holding.symbol)).toEqual(["ORHD", "RAYA"]);
+  });
+
+  it("prefers a newer local cache over older cloud data", () => {
+    const local = portfolioSnapshotFromProfiles(
+      [profile("us-portfolio", "US", ["AAPL"]), profile("eg-portfolio", "EG", [])],
+      "us-portfolio",
+      "2026-06-01T00:00:00.000Z",
+      "2026-06-10T12:00:00.000Z"
+    );
+    const cloud = [profile("us-portfolio", "US", []), profile("eg-portfolio", "EG", [])];
+    expect(shouldPreferLocalPortfolioCache(local, cloud, "2026-06-09T00:00:00.000Z")).toBe(true);
   });
 
   it("allows an intentionally cleared profile to save empty holdings", () => {

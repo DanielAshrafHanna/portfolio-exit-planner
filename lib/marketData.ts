@@ -260,6 +260,15 @@ function numberValue(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
+function stringValue(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function quoteCompanyNameFromMeta(meta?: Record<string, unknown>) {
+  if (!meta) return undefined;
+  return stringValue(meta.longName) || stringValue(meta.shortName);
+}
+
 function nullableNumberArray(value: unknown): Array<number | null> {
   return Array.isArray(value) ? value.map((item) => numberValue(item) ?? null) : [];
 }
@@ -413,6 +422,7 @@ export function parseYahooChartQuote(data: unknown, symbol: string): MarketQuote
     currentPrice,
     dailyChangePercent,
     previousClose,
+    companyName: quoteCompanyNameFromMeta(meta),
     week52High: week52High !== undefined ? Number(week52High.toFixed(2)) : Math.round(Math.max(...closes.slice(0, 252)) * 100) / 100,
     week52Low: week52Low !== undefined ? Number(week52Low.toFixed(2)) : Math.round(Math.min(...closes.slice(0, 252)) * 100) / 100,
     volume: regularMarketVolume ?? rows[0]?.volume ?? undefined,

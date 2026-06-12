@@ -31,7 +31,8 @@ describe("Yahoo chart quote parsing", () => {
           meta: {
             regularMarketPrice: 125.125,
             previousClose: 124,
-            regularMarketVolume: 1000
+            regularMarketVolume: 1000,
+            longName: "Apple Inc."
           },
           indicators: {
             quote: [{
@@ -51,6 +52,7 @@ describe("Yahoo chart quote parsing", () => {
       previousClose: 124,
       dailyChangePercent: 0.91,
       volume: 1000,
+      companyName: "Apple Inc.",
       provider: "yahoo_finance"
     });
     expect(quote?.ma20).toBeGreaterThan(0);

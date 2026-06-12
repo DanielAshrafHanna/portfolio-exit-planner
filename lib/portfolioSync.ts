@@ -1,3 +1,4 @@
+import type { PortfolioCacheSnapshot } from "./portfolioStorage";
 import type { PortfolioProfile } from "./types";
 
 export function profileHoldingCount(profile: PortfolioProfile) {
@@ -33,6 +34,17 @@ export function shouldSkipEmptyCloudOverwrite(
   return cloudHoldingCount > 0
     && portfolioHoldingSymbols(local).length === 0
     && !sessionPortfolioEdited;
+}
+
+export function shouldPreferLocalPortfolioCache(
+  local: PortfolioCacheSnapshot,
+  cloudProfiles: PortfolioProfile[],
+  cloudUpdatedAt?: string | null
+) {
+  if (portfolioHasUnsavedSymbols(local.profiles, cloudProfiles)) return true;
+  if (!local.localUpdatedAt) return false;
+  if (!cloudUpdatedAt) return portfolioHoldingSymbols(local.profiles).length > 0;
+  return new Date(local.localUpdatedAt) > new Date(cloudUpdatedAt);
 }
 
 /** Prevent one device's empty US/Egypt profile from wiping another profile's cloud holdings on save. */
