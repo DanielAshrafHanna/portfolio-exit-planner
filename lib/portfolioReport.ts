@@ -90,32 +90,13 @@ type BuildPortfolioReportOptions = {
   fetchQuote?: PortfolioReportQuoteFetcher;
 };
 
-const EMPTY_TOTALS: PortfolioReportTotals = {
-  currency: "USD",
-  totalCost: 0,
-  currentValue: 0,
-  netValue: 0,
-  fees: 0,
-  profitLoss: 0,
-  profitLossPercent: 0,
-  dailyProfitLoss: 0,
-  dailyProfitLossPercent: 0,
-  dailyPriorValue: 0,
-  totalGains: 0,
-  totalLosses: 0,
-  stopProfitLoss: 0,
-  targetProfitLoss: 0,
-  holdingsCount: 0,
-  quotedHoldingsCount: 0
-};
-
 export async function buildPortfolioReport(
   profiles: PortfolioProfile[],
   options: BuildPortfolioReportOptions = {}
 ): Promise<PortfolioReport> {
   const generatedAt = (options.now || new Date()).toISOString();
   const fetchQuote = options.fetchQuote || defaultFetchQuote;
-  const reportProfiles = await Promise.all(profiles.map((profile) => buildProfileReport(profile, generatedAt, fetchQuote)));
+  const reportProfiles = await Promise.all(profiles.map((profile) => buildProfileReport(profile, fetchQuote)));
   const holdings = reportProfiles.flatMap((profile) => profile.holdings);
   const quotedHoldings = holdings.filter((holding) => holding.currentPrice !== undefined);
   const totalsByCurrency = aggregateTotalsByCurrency(reportProfiles);
@@ -141,7 +122,6 @@ export async function buildPortfolioReport(
 
 async function buildProfileReport(
   profile: PortfolioProfile,
-  generatedAt: string,
   fetchQuote: PortfolioReportQuoteFetcher
 ): Promise<PortfolioReportProfile> {
   const rows = await Promise.all(profile.holdings.map((holding) => buildHoldingReport(profile, holding, fetchQuote)));
