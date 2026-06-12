@@ -6,7 +6,7 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { formatMoney } from "@/lib/profileUtils";
 import { createSupabaseBrowserClient } from "@/lib/supabaseClient";
 import type { CurrencyCode } from "@/lib/types";
-import type { PortfolioReport, PortfolioReportHolding, PortfolioReportProfile, PortfolioReportTotals } from "@/lib/portfolioReport";
+import type { PortfolioReport, PortfolioReportHolding, PortfolioReportTotals } from "@/lib/portfolioReport";
 
 type ReportResponse = {
   report?: PortfolioReport;
