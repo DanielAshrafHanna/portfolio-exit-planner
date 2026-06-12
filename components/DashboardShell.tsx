@@ -1,5 +1,6 @@
 "use client";
 
+import { BarChart3 } from "lucide-react";
 import { useEffect, useRef, type ReactNode } from "react";
 
 type Props = {
@@ -39,6 +40,13 @@ export function DashboardShell({ syncBadge, headerActions, children, mobileTabsA
             <p className="mt-1 hidden max-w-2xl text-sm text-ink/65 md:block md:text-base">Pick a profile, add holdings, and review exit scenarios for US and Egypt markets.</p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
+            <a
+              className="hidden min-h-10 items-center gap-2 rounded-md border border-ink/15 bg-white px-3 py-2 text-sm font-semibold text-ink hover:border-marine/35 hover:text-marine md:inline-flex"
+              href="/report"
+            >
+              <BarChart3 className="h-4 w-4" aria-hidden />
+              Report
+            </a>
             {headerActions}
             {syncBadge}
           </div>
