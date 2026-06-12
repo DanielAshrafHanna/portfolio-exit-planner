@@ -144,7 +144,7 @@ Triggered by **Analyze** button — refreshes market data, then calls AI per hol
 
 - Rule-based analysis from MAs, P/L, RSI — **Low confidence**
 
-**Env vars:** `GEMINI_API_KEY` (required), `GEMINI_MODEL` (optional, default `gemini-2.5-flash`)
+**Env vars:** `GEMINI_API_KEY` (required), `GEMINI_MODEL` (optional, default `gemini-2.0-flash`)
 
 **Key files:** `app/api/analyzeHolding/route.ts`, `lib/geminiClient.ts`, `lib/aiFallback.ts`, `lib/validation.ts`
 
@@ -343,7 +343,7 @@ supabase/
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | For auth/cloud | Browser client key (RLS) |
 | `SUPABASE_SERVICE_ROLE_KEY` | For display-name login | Server-only |
 | `GEMINI_API_KEY` | For AI/OCR | Gemini API (free tier) |
-| `GEMINI_MODEL` | Optional | Default `gemini-2.5-flash` |
+| `GEMINI_MODEL` | Optional | Default `gemini-2.0-flash` (better free-tier RPM) |
 | `MARKET_DATA_API_KEY` | Optional | Alpha Vantage |
 | `MARKET_DATA_PROVIDER` | Optional | `alpha_vantage` or mock |
 

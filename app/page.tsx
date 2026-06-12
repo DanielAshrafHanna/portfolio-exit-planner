@@ -20,6 +20,7 @@ import { SettingsDialog } from "@/components/SettingsDialog";
 import { SettingsPanel } from "@/components/SettingsPanel";
 import { SharedHoldingsViewer } from "@/components/SharedHoldingsViewer";
 import { defaultSellTargets } from "@/lib/calculations";
+import { GEMINI_CLIENT_REQUEST_GAP_MS } from "@/lib/geminiClient";
 import { applyCompanyNameToHolding } from "@/lib/holdingNames";
 import { applyAnalyzedHoldingResults, type AnalyzedHoldingResult } from "@/lib/holdingMerge";
 import { applyLiveQuotes, getQuoteRefreshIntervalMs, liveQuoteKey } from "@/lib/marketRefresh";
@@ -70,6 +71,9 @@ function portfolioFieldsChanged(existing: EnrichedHolding | undefined, row: Hold
 function normalizeWarning(warning: string) {
   if (warning.includes("GEMINI_API_KEY")) {
     return "GEMINI_API_KEY is missing. AI/OCR features are using deterministic fallback analysis until the secret is added.";
+  }
+  if (warning.includes("Gemini free tier rate limit")) {
+    return warning;
   }
   if (warning.includes("Yahoo Finance's public chart feed")) {
     return "Market API key is missing. Quotes are currently fetched from Yahoo Finance's public chart feed.";
@@ -820,8 +824,26 @@ export default function Home() {
     try {
       const withMarket = await refreshMarketData({ showLoading: true, showWarnings: true });
       if (!withMarket || !isLatestAnalysis()) return;
-      const analyzed = await Promise.all(withMarket.map(async (holding): Promise<AnalyzedHoldingResponse> => {
-        if (!holding.quote) return { id: holding.id, quote: holding.quote, news: holding.news };
+      const holdingsToAnalyze = withMarket.filter((holding) => holding.quote);
+      const analyzed: AnalyzedHoldingResponse[] = [];
+      let analyzedCount = 0;
+      for (const holding of withMarket) {
+        if (!isLatestAnalysis()) return;
+        if (!holding.quote) {
+          analyzed.push({ id: holding.id, quote: holding.quote, news: holding.news });
+          continue;
+        }
+        analyzedCount += 1;
+        if (holdingsToAnalyze.length > 1) {
+          setWarnings([
+            "Refreshing market data, news, and analysis. Uploaded screenshots are not sent unless you use image extraction.",
+            `Analyzing holding ${analyzedCount} of ${holdingsToAnalyze.length} (Gemini free tier runs one at a time).`
+          ]);
+        }
+        if (analyzedCount > 1) {
+          await new Promise((resolve) => window.setTimeout(resolve, GEMINI_CLIENT_REQUEST_GAP_MS));
+          if (!isLatestAnalysis()) return;
+        }
         const response = await fetch("/api/analyzeHolding", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -829,14 +851,14 @@ export default function Home() {
         });
         const data = await readJsonResponse<AnalysisApiResponse>(response);
         if (!response.ok) throw new Error(data.error || `Analysis failed for ${holding.symbol}`);
-        return {
+        analyzed.push({
           id: holding.id,
           quote: holding.quote,
           news: holding.news,
           analysis: data.analysis,
           warning: data.warning
-        };
-      }));
+        });
+      }
       if (!isLatestAnalysis()) return;
       const warningsToAdd = analyzed.map((item) => item.warning).filter((warning): warning is string => Boolean(warning)).map(normalizeWarning);
       if (warningsToAdd.length) setWarnings((existing) => [...existing, ...warningsToAdd]);
