@@ -41,11 +41,12 @@ export function DashboardShell({ syncBadge, headerActions, children, mobileTabsA
           </div>
           <div className="flex shrink-0 items-center gap-2">
             <a
-              className="hidden min-h-10 items-center gap-2 rounded-md border border-ink/15 bg-white px-3 py-2 text-sm font-semibold text-ink hover:border-marine/35 hover:text-marine md:inline-flex"
+              className="inline-flex min-h-8 items-center gap-2 rounded-md border border-ink/15 bg-white px-2 py-1 text-sm font-semibold text-ink hover:border-marine/35 hover:text-marine md:min-h-10 md:px-3 md:py-2"
               href="/report"
+              aria-label="Report"
             >
               <BarChart3 className="h-4 w-4" aria-hidden />
-              Report
+              <span className="hidden md:inline">Report</span>
             </a>
             {headerActions}
             {syncBadge}
