@@ -1,9 +1,9 @@
 import { GoogleGenAI } from "@google/genai";
 
-/** Free tier: gemini-3.1-flash-lite is Google's newest lite model (~15 RPM, multimodal + JSON). */
+/** Free tier default: gemini-3.1-flash-lite (~15 RPM, multimodal + JSON). */
 const DEFAULT_MODEL = "gemini-3.1-flash-lite";
 
-/** Minimum gap between analyze API calls from the client (ms). */
+/** @deprecated Use geminiAnalyzeRequestGapMs() — kept for tests referencing the constant. */
 export const GEMINI_CLIENT_REQUEST_GAP_MS = 4500;
 
 const MAX_RATE_LIMIT_RETRIES = 4;
@@ -14,6 +14,21 @@ export function isGeminiConfigured() {
 
 export function geminiModelName() {
   return process.env.GEMINI_MODEL?.trim() || DEFAULT_MODEL;
+}
+
+/** Pacing between portfolio analyze calls — slower for 5 RPM models like gemini-3.5-flash. */
+export function geminiAnalyzeRequestGapMs(model = geminiModelName()) {
+  const override = Number(process.env.GEMINI_REQUEST_GAP_MS);
+  if (Number.isFinite(override) && override > 0) return override;
+  return gapForModel(model);
+}
+
+export function gapForModel(model: string) {
+  const id = model.trim().toLowerCase();
+  if (id.includes("flash-lite")) return 4500;
+  if (id.includes("3.5-flash") || (id.includes("2.5-flash") && !id.includes("lite"))) return 13_000;
+  if (id.includes("3-flash") && !id.includes("lite")) return 7000;
+  return 4500;
 }
 
 export function isGeminiRateLimitError(error: unknown) {

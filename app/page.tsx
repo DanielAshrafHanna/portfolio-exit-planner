@@ -20,7 +20,7 @@ import { SettingsDialog } from "@/components/SettingsDialog";
 import { SettingsPanel } from "@/components/SettingsPanel";
 import { SharedHoldingsViewer } from "@/components/SharedHoldingsViewer";
 import { defaultSellTargets } from "@/lib/calculations";
-import { GEMINI_CLIENT_REQUEST_GAP_MS } from "@/lib/geminiClient";
+import { geminiAnalyzeRequestGapMs, geminiModelName } from "@/lib/geminiClient";
 import { applyCompanyNameToHolding } from "@/lib/holdingNames";
 import { applyAnalyzedHoldingResults, type AnalyzedHoldingResult } from "@/lib/holdingMerge";
 import { applyLiveQuotes, getQuoteRefreshIntervalMs, liveQuoteKey } from "@/lib/marketRefresh";
@@ -824,6 +824,11 @@ export default function Home() {
     try {
       const withMarket = await refreshMarketData({ showLoading: true, showWarnings: true });
       if (!withMarket || !isLatestAnalysis()) return;
+      const aiConfig = await fetch("/api/aiConfig")
+        .then((response) => response.json() as Promise<{ requestGapMs?: number; model?: string }>)
+        .catch(() => null);
+      const analyzeGapMs = aiConfig?.requestGapMs ?? geminiAnalyzeRequestGapMs();
+      const analyzeModel = aiConfig?.model ?? geminiModelName();
       const holdingsToAnalyze = withMarket.filter((holding) => holding.quote);
       const analyzed: AnalyzedHoldingResponse[] = [];
       let analyzedCount = 0;
@@ -837,11 +842,11 @@ export default function Home() {
         if (holdingsToAnalyze.length > 1) {
           setWarnings([
             "Refreshing market data, news, and analysis. Uploaded screenshots are not sent unless you use image extraction.",
-            `Analyzing holding ${analyzedCount} of ${holdingsToAnalyze.length} (Gemini free tier runs one at a time).`
+            `Analyzing holding ${analyzedCount} of ${holdingsToAnalyze.length} with ${analyzeModel} (paced for free-tier limits).`
           ]);
         }
         if (analyzedCount > 1) {
-          await new Promise((resolve) => window.setTimeout(resolve, GEMINI_CLIENT_REQUEST_GAP_MS));
+          await new Promise((resolve) => window.setTimeout(resolve, analyzeGapMs));
           if (!isLatestAnalysis()) return;
         }
         const response = await fetch("/api/analyzeHolding", {
