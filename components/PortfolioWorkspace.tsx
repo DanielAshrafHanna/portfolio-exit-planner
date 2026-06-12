@@ -2,6 +2,7 @@
 
 import { LineChart, Plus } from "lucide-react";
 import type { ReactNode } from "react";
+import { InstallAppHint } from "@/components/InstallAppHint";
 import { SectionCard } from "@/components/ui/SectionCard";
 
 type Props = {
@@ -48,6 +49,12 @@ export function PortfolioWorkspace({
       </div>
 
       {summary}
+
+      {!readOnly ? (
+        <div className="px-1 md:px-0">
+          <InstallAppHint />
+        </div>
+      ) : null}
 
       <SectionCard
         variant="primary"
