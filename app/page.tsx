@@ -4,6 +4,7 @@ import { AlertCircle, CheckCircle2, Cloud, CloudOff, Loader2, Settings2 } from "
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import type { CloudSyncStatus } from "@/components/AuthPanel";
+import { AnalysisProgressBanner } from "@/components/AnalysisProgressBanner";
 import { AuthPanel } from "@/components/AuthPanel";
 import { DashboardShell } from "@/components/DashboardShell";
 import { HoldingsTable } from "@/components/HoldingsTable";
@@ -20,6 +21,15 @@ import { SettingsDialog } from "@/components/SettingsDialog";
 import { SettingsPanel } from "@/components/SettingsPanel";
 import { SharedHoldingsViewer } from "@/components/SharedHoldingsViewer";
 import { defaultSellTargets } from "@/lib/calculations";
+import {
+  analysisCoverage,
+  buildAnalysisSession,
+  clearAnalysisSession,
+  readAnalysisSession,
+  reconcileAnalysisSession,
+  writeAnalysisSession,
+  type AnalysisSession
+} from "@/lib/analysisProgress";
 import { geminiAnalyzeRequestGapMs, geminiModelName } from "@/lib/geminiClient";
 import { applyCompanyNameToHolding } from "@/lib/holdingNames";
 import { applyAnalyzedHoldingResults, type AnalyzedHoldingResult } from "@/lib/holdingMerge";
@@ -291,6 +301,7 @@ export default function Home() {
   const [activeProfileId, setActiveProfileId] = useState("us-portfolio");
   const [warnings, setWarnings] = useState<string[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisSession, setAnalysisSession] = useState<AnalysisSession | null>(null);
   const [isRefreshingMarket, setIsRefreshingMarket] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(false);
@@ -600,11 +611,38 @@ export default function Home() {
       holding.notes
     ].join(":")).join("|")
   ), [holdings]);
+  const holdingsAnalysisKey = useMemo(
+    () => holdings.map((holding) => `${holding.id}:${holding.symbol}:${holding.analysis ? 1 : 0}`).join("|"),
+    [holdings]
+  );
+  const portfolioAnalysisCoverage = useMemo(() => analysisCoverage(holdings), [holdings]);
 
   useEffect(() => {
     activeProfileIdRef.current = activeProfile?.id || activeProfileId;
     holdingInputKeyRef.current = holdingInputKey;
   }, [activeProfile?.id, activeProfileId, holdingInputKey]);
+
+  useEffect(() => {
+    if (!isHydrated || isAnalyzing || selectedSharedProfileId !== OWN_HOLDINGS_VIEW_ID) return;
+    const userId = user?.id ?? "guest";
+    const stored = readAnalysisSession(userId);
+    const reconciled = reconcileAnalysisSession(
+      stored,
+      activeProfileId,
+      holdingInputKey,
+      portfolioAnalysisCoverage
+    );
+    setAnalysisSession(reconciled);
+  }, [
+    isHydrated,
+    isAnalyzing,
+    user?.id,
+    activeProfileId,
+    holdingInputKey,
+    holdingsAnalysisKey,
+    portfolioAnalysisCoverage,
+    selectedSharedProfileId
+  ]);
 
   useEffect(() => {
     if (!holdingsViewOptions.some((option) => option.id === selectedSharedProfileId)) {
@@ -813,14 +851,20 @@ export default function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isHydrated, activeProfileId, region, marketSymbolKey, holdingInputKey]);
 
-  const analyze = async () => {
+  const storeAnalysisSession = (session: AnalysisSession) => {
+    setAnalysisSession(session);
+    writeAnalysisSession(user?.id ?? "guest", session);
+  };
+
+  const analyze = async (options?: { resume?: boolean }) => {
     const requestId = analysisRequestId.current + 1;
     analysisRequestId.current = requestId;
     const profileIdAtStart = activeProfile?.id || activeProfileId;
     const inputKeyAtStart = holdingInputKeyRef.current;
     const isLatestAnalysis = () => analysisRequestId.current === requestId && activeProfileIdRef.current === profileIdAtStart && holdingInputKeyRef.current === inputKeyAtStart;
     setIsAnalyzing(true);
-    setWarnings(["Refreshing market data, news, and analysis. Uploaded screenshots are not sent unless you use image extraction."]);
+    setWarnings(["Refreshing market data and news before AI analysis."]);
+    const userId = user?.id ?? "guest";
     try {
       const withMarket = await refreshMarketData({ showLoading: true, showWarnings: true });
       if (!withMarket || !isLatestAnalysis()) return;
@@ -829,26 +873,70 @@ export default function Home() {
         .catch(() => null);
       const analyzeGapMs = aiConfig?.requestGapMs ?? geminiAnalyzeRequestGapMs();
       const analyzeModel = aiConfig?.model ?? geminiModelName();
-      const holdingsToAnalyze = withMarket.filter((holding) => holding.quote);
-      const analyzed: AnalyzedHoldingResponse[] = [];
-      let analyzedCount = 0;
+      const holdingsToAnalyze = withMarket.filter((holding) => holding.quote && (!options?.resume || !holding.analysis));
+      const skippedHoldings = withMarket.filter((holding) => holding.quote && options?.resume && holding.analysis);
+      const initialCoverage = analysisCoverage(withMarket);
+      const startingCompleted = options?.resume ? initialCoverage.analyzed : 0;
+      const completedSymbols = options?.resume ? [...initialCoverage.analyzedSymbols] : [];
+      const pendingSymbols = holdingsToAnalyze.map((holding) => holding.symbol.trim().toUpperCase());
+
+      storeAnalysisSession(buildAnalysisSession({
+        profileId: profileIdAtStart,
+        inputKey: inputKeyAtStart,
+        phase: "market",
+        completed: startingCompleted,
+        total: initialCoverage.total,
+        currentSymbol: null,
+        model: analyzeModel,
+        completedSymbols,
+        pendingSymbols
+      }));
+
+      storeAnalysisSession(buildAnalysisSession({
+        profileId: profileIdAtStart,
+        inputKey: inputKeyAtStart,
+        phase: "analyzing",
+        completed: startingCompleted,
+        total: initialCoverage.total,
+        currentSymbol: holdingsToAnalyze[0]?.symbol.trim().toUpperCase() || null,
+        model: analyzeModel,
+        completedSymbols,
+        pendingSymbols
+      }));
+
+      const analyzed: AnalyzedHoldingResponse[] = skippedHoldings.map((holding) => ({
+        id: holding.id,
+        quote: holding.quote,
+        news: holding.news,
+        analysis: holding.analysis
+      }));
+      let analyzedCount = startingCompleted;
       for (const holding of withMarket) {
         if (!isLatestAnalysis()) return;
         if (!holding.quote) {
           analyzed.push({ id: holding.id, quote: holding.quote, news: holding.news });
           continue;
         }
-        analyzedCount += 1;
-        if (holdingsToAnalyze.length > 1) {
-          setWarnings([
-            "Refreshing market data, news, and analysis. Uploaded screenshots are not sent unless you use image extraction.",
-            `Analyzing holding ${analyzedCount} of ${holdingsToAnalyze.length} with ${analyzeModel} (paced for free-tier limits).`
-          ]);
-        }
-        if (analyzedCount > 1) {
+        if (options?.resume && holding.analysis) continue;
+
+        const symbol = holding.symbol.trim().toUpperCase();
+        storeAnalysisSession(buildAnalysisSession({
+          profileId: profileIdAtStart,
+          inputKey: inputKeyAtStart,
+          phase: "analyzing",
+          completed: analyzedCount,
+          total: initialCoverage.total,
+          currentSymbol: symbol,
+          model: analyzeModel,
+          completedSymbols: [...completedSymbols],
+          pendingSymbols: pendingSymbols.filter((item) => !completedSymbols.includes(item) && item !== symbol)
+        }));
+
+        if (analyzedCount > startingCompleted) {
           await new Promise((resolve) => window.setTimeout(resolve, analyzeGapMs));
           if (!isLatestAnalysis()) return;
         }
+
         const response = await fetch("/api/analyzeHolding", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -856,19 +944,50 @@ export default function Home() {
         });
         const data = await readJsonResponse<AnalysisApiResponse>(response);
         if (!response.ok) throw new Error(data.error || `Analysis failed for ${holding.symbol}`);
-        analyzed.push({
+
+        const result: AnalyzedHoldingResponse = {
           id: holding.id,
           quote: holding.quote,
           news: holding.news,
           analysis: data.analysis,
           warning: data.warning
-        });
+        };
+        analyzed.push(result);
+        analyzedCount += 1;
+        completedSymbols.push(symbol);
+        const nextPending = pendingSymbols.filter((item) => !completedSymbols.includes(item));
+
+        setHoldings((currentItems) => applyAnalyzedHoldingResults(currentItems, [result]));
+        storeAnalysisSession(buildAnalysisSession({
+          profileId: profileIdAtStart,
+          inputKey: inputKeyAtStart,
+          phase: "analyzing",
+          completed: analyzedCount,
+          total: initialCoverage.total,
+          currentSymbol: nextPending[0] || null,
+          model: analyzeModel,
+          completedSymbols: [...completedSymbols],
+          pendingSymbols: nextPending
+        }));
       }
       if (!isLatestAnalysis()) return;
       const warningsToAdd = analyzed.map((item) => item.warning).filter((warning): warning is string => Boolean(warning)).map(normalizeWarning);
       if (warningsToAdd.length) setWarnings((existing) => [...existing, ...warningsToAdd]);
-      setHoldings((currentItems) => applyAnalyzedHoldingResults(currentItems, analyzed));
+      clearAnalysisSession(userId);
+      setAnalysisSession(null);
     } catch (error) {
+      const coverage = analysisCoverage(holdings);
+      storeAnalysisSession(buildAnalysisSession({
+        profileId: profileIdAtStart,
+        inputKey: inputKeyAtStart,
+        phase: "interrupted",
+        completed: coverage.analyzed,
+        total: coverage.total,
+        currentSymbol: null,
+        model: analysisSession?.model ?? geminiModelName(),
+        completedSymbols: coverage.analyzedSymbols,
+        pendingSymbols: coverage.pendingSymbols
+      }));
       setWarnings((existing) => [...existing, error instanceof Error ? error.message : "Analysis failed"]);
     } finally {
       if (analysisRequestId.current === requestId) setIsAnalyzing(false);
@@ -1503,6 +1622,20 @@ export default function Home() {
     </div>
   );
 
+  const analysisProgressBanner = !viewingSharedPortfolio && portfolioAnalysisCoverage.total > 0 ? (
+    <AnalysisProgressBanner
+      phase={isAnalyzing ? (analysisSession?.phase ?? "analyzing") : (analysisSession?.phase ?? (portfolioAnalysisCoverage.analyzed >= portfolioAnalysisCoverage.total ? "complete" : "idle"))}
+      completed={isAnalyzing ? (analysisSession?.completed ?? portfolioAnalysisCoverage.analyzed) : portfolioAnalysisCoverage.analyzed}
+      total={analysisSession?.total ?? portfolioAnalysisCoverage.total}
+      currentSymbol={isAnalyzing ? (analysisSession?.currentSymbol ?? null) : null}
+      model={analysisSession?.model ?? geminiModelName()}
+      completedSymbols={isAnalyzing ? (analysisSession?.completedSymbols ?? portfolioAnalysisCoverage.analyzedSymbols) : portfolioAnalysisCoverage.analyzedSymbols}
+      pendingSymbols={isAnalyzing ? (analysisSession?.pendingSymbols ?? portfolioAnalysisCoverage.pendingSymbols) : portfolioAnalysisCoverage.pendingSymbols}
+      isActive={isAnalyzing}
+      onResume={analysisSession?.phase === "interrupted" ? () => void analyze({ resume: true }) : undefined}
+    />
+  ) : null;
+
   const workspaceProps = {
     hasHoldings: displayedHoldings.some((holding) => holding.symbol),
     readOnly: viewingSharedPortfolio,
@@ -1541,17 +1674,13 @@ export default function Home() {
     summary: <PortfolioSummary holdings={displayedHoldings} settings={displayedSettings} currency={displayedCurrency} />,
     quickAdd: quickAddForm,
     holdingsTable,
-    analyzing: isAnalyzing ? (
-      <div className="mt-4 grid gap-3 sm:grid-cols-3">
-        {[0, 1, 2].map((item) => <div className="h-24 animate-pulse rounded-md bg-paper" key={item} />)}
-      </div>
-    ) : null,
+    analyzing: analysisProgressBanner,
     editHoldings: viewingSharedPortfolio ? null : (
       <PortfolioInput
         holdings={inputRows}
         region={region}
         onChange={setInputRows}
-        onAnalyze={analyze}
+        onAnalyze={() => void analyze()}
         isAnalyzing={isAnalyzing}
         isRefreshingMarket={isRefreshingMarket}
         onBlockedTicker={(message) => setWarnings((existing) => [...existing, message])}

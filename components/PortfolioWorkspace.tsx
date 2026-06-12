@@ -88,10 +88,10 @@ export function PortfolioWorkspace({
             ) : null}
           </div>
         ) : null}
+        {analyzing}
         <div className={hasHoldings ? "md:mt-4" : ""}>
           {holdingsTable}
         </div>
-        {analyzing}
         {!readOnly ? <div className="mt-4 px-4 md:mt-6 md:px-4">{editHoldings}</div> : null}
       </SectionCard>
 
