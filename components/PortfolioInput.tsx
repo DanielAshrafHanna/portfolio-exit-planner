@@ -13,24 +13,13 @@ import {
 import { useState } from "react";
 import type { HoldingInput, MarketRegion } from "@/lib/types";
 import { totalCostFor } from "@/lib/calculations";
+import { isIncompleteNumericInput, parseNumericInput } from "@/lib/numericInput";
 import { filterUnsupportedHoldings, getUnsupportedTickerMessage } from "@/lib/unsupportedTickers";
 
 type NumericField = "shares" | "averageCost" | "totalCost" | "brokerCurrentValue";
 
 function numericDraftKey(id: string, key: NumericField) {
   return `${id}:${key}`;
-}
-
-function isIncompleteNumericInput(value: string) {
-  const trimmed = value.trim();
-  return trimmed.endsWith(".") || trimmed === "-" || trimmed === ".";
-}
-
-function parseNumericInput(value: string): number {
-  const trimmed = value.trim();
-  if (trimmed === "" || trimmed === "-" || trimmed === ".") return 0;
-  const parsed = Number(trimmed);
-  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 function formatNumericDisplay(holding: HoldingInput, key: NumericField): string {
