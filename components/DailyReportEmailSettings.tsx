@@ -1,6 +1,6 @@
 "use client";
 
-import { Mail } from "lucide-react";
+import { Loader2, Mail } from "lucide-react";
 import { useEffect, useState } from "react";
 import { isValidReportEmail, normalizeReportEmail } from "@/lib/dailyReportEmailPrefs";
 
@@ -11,6 +11,7 @@ type Props = {
   enabled: boolean;
   syncHint?: string;
   onChange: (next: { email: string; enabled: boolean }) => void;
+  onSendTest?: (email: string) => Promise<{ ok: boolean; message: string }>;
 };
 
 export function DailyReportEmailSettings({
@@ -19,9 +20,12 @@ export function DailyReportEmailSettings({
   email,
   enabled,
   syncHint,
-  onChange
+  onChange,
+  onSendTest
 }: Props) {
   const [draftEmail, setDraftEmail] = useState(email);
+  const [testStatus, setTestStatus] = useState<"idle" | "sending" | "ok" | "error">("idle");
+  const [testMessage, setTestMessage] = useState("");
   const validEmail = isValidReportEmail(draftEmail);
 
   useEffect(() => {
@@ -93,6 +97,36 @@ export function DailyReportEmailSettings({
         >
           Use account email ({accountEmail})
         </button>
+      ) : null}
+      {onSendTest ? (
+        <div className="mt-3">
+          <button
+            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-marine/25 bg-white px-3 py-2 text-sm font-semibold text-marine hover:bg-mint/40 disabled:cursor-not-allowed disabled:opacity-60"
+            type="button"
+            disabled={!validEmail || testStatus === "sending"}
+            onClick={async () => {
+              const normalized = normalizeReportEmail(draftEmail);
+              setTestStatus("sending");
+              setTestMessage("");
+              try {
+                const result = await onSendTest(normalized);
+                setTestStatus(result.ok ? "ok" : "error");
+                setTestMessage(result.message);
+              } catch {
+                setTestStatus("error");
+                setTestMessage("Test email failed. Try again in a moment.");
+              }
+            }}
+          >
+            {testStatus === "sending" ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
+            Send test email
+          </button>
+          {testMessage ? (
+            <p className={`mt-2 text-xs ${testStatus === "ok" ? "text-marine" : "text-coral"}`}>{testMessage}</p>
+          ) : (
+            <p className="mt-2 text-xs text-ink/55">Sends a sample daily summary with charts and movers to the address above.</p>
+          )}
+        </div>
       ) : null}
       {syncHint ? <p className="mt-2 text-xs text-ink/55">{syncHint}</p> : null}
     </div>

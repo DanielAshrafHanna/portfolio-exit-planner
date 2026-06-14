@@ -1715,6 +1715,26 @@ export default function Home() {
     });
   };
 
+  const handleSendTestDailyReportEmail = async (email: string): Promise<{ ok: boolean; message: string }> => {
+    if (!supabase) return { ok: false, message: "Sign in to send a test email." };
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) return { ok: false, message: "Session expired. Sign in again." };
+    const response = await fetch("/api/daily-report-email/test", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ email })
+    });
+    const body = await response.json() as { message?: string; error?: string };
+    if (!response.ok) {
+      return { ok: false, message: body.error || "Test email failed." };
+    }
+    return { ok: true, message: body.message || "Test email sent." };
+  };
+
   const handleQuickAdd = (holding: HoldingInput) => {
     const message = getUnsupportedTickerMessage(holding.symbol, region);
     if (message) {
@@ -1786,6 +1806,7 @@ export default function Home() {
         enabled={dailyReportEmailEnabled}
         syncHint={prefsSyncHint}
         onChange={handleDailyReportEmailChange}
+        onSendTest={handleSendTestDailyReportEmail}
       />
       <SettingsPanel settings={settings} currency={currency} onChange={setSettings} onClear={clearStored} />
       <ImageImport
@@ -1835,6 +1856,7 @@ export default function Home() {
         enabled={dailyReportEmailEnabled}
         syncHint={prefsSyncHint}
         onChange={handleDailyReportEmailChange}
+        onSendTest={handleSendTestDailyReportEmail}
       />
       <ProfileSelector
         profiles={profiles}

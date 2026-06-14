@@ -2,8 +2,8 @@
 
 Living reference for what the app does today, where it lives in the codebase, and what was added recently. Use this for audits, onboarding, and planning refactors.
 
-**Last updated:** June 2026  
-**Production:** Vercel deploy from `main`  
+**Last updated:** 15 June 2026  
+**Production:** [portfolio-exit-planner.vercel.app](https://portfolio-exit-planner.vercel.app) (Vercel deploy from `main`)  
 **Disclaimer:** Educational tool only — not financial advice, not auto-trading, no brokerage integration.
 
 ---
@@ -100,9 +100,16 @@ Responsive: compact labels on mobile.
 
 | Region | Primary | Fallback |
 |--------|---------|----------|
-| **US** | Alpha Vantage (if `MARKET_DATA_API_KEY`) | Yahoo Finance chart API |
+| **US** | Alpha Vantage (if `ALPHA_VANTAGE_API_KEY` / `MARKET_DATA_API_KEY`) | Yahoo Finance chart API (automatic on Alpha errors or missing key) |
 | **EG (stocks)** | Mubasher EGX HTML parse | Unavailable (no mock price) |
 | **Missing key** | Yahoo public feeds | Unavailable quote (not fake mock for production tickers) |
+
+### US extended hours (restored with validation)
+
+- Pre-market and after-hours prices shown when Yahoo `preMarketPrice` / `postMarketPrice` pass validation (within ~15% of regular price, not a stale copy of the last daily bar).
+- Holdings table shows compact **Pre** / **AH** badges when `priceSession` is `pre` or `post`.
+- Faster quote refresh during US extended sessions via `lib/marketRefresh.ts`.
+- If Alpha Vantage fails for a symbol, the server falls back to Yahoo for that request instead of returning unavailable.
 
 ### Indicators computed (~1 year daily bars)
 
@@ -229,10 +236,12 @@ Responsive: 3 cards in a row on wider screens; stacked on narrow phones.
 | **Percent trading fee** | % of gross sale value |
 | **FX fee %** | Additional % fee (e.g. conversion) |
 | **Clear stored portfolio** | Wipes local holdings and fee prefs |
+| **Daily market-close email** | Opt-in email address + toggle; stored in cloud `settings` JSONB; delivered after US close via Resend |
+| **Send test email** | Settings button calls `/api/daily-report-email/test` to verify delivery to any address |
 
 Desktop: settings panel in sidebar. Mobile: Settings tab in bottom nav.
 
-**Key files:** `components/SettingsPanel.tsx`, `components/SettingsDialog.tsx`, `components/MobileTabShell.tsx`
+**Key files:** `components/SettingsPanel.tsx`, `components/SettingsDialog.tsx`, `components/MobileTabShell.tsx`, `components/DailyReportEmailSettings.tsx`, `lib/dailyReportEmailPrefs.ts`, `lib/userPrefs.ts`
 
 ---
 
@@ -250,7 +259,63 @@ Desktop: settings panel in sidebar. Mobile: Settings tab in bottom nav.
 
 ---
 
-## 14. Privacy and warnings
+## 14. Daily portfolio report (`/report`)
+
+Signed-in users get a dedicated report page with two tabs:
+
+### Daily report tab
+
+- Profile filter (US / Egypt / all)
+- Currency totals, sortable holdings, stop/target columns
+- Saved AI action/risk labels (no fresh AI run on page load)
+- Warnings for missing data or stale quotes
+
+### Charts tab
+
+| Chart | Description |
+|-------|-------------|
+| **Daily P/L this week** | Signed bar chart, rolling 7-day window (region-aware week boundaries) |
+| **Today's top movers** | Horizontal bar chart from live report holdings |
+| **Cumulative weekly P/L** | Running 7-day total line chart |
+| **Portfolio value trend** | 7-day gross value line chart |
+
+Chart UX (2026): shared theme/colors, memoized domains, lazy-loaded chart components, reduced motion, aria summaries, legend, gradient fills, skeleton loading on profile switch.
+
+History is stored in Supabase `portfolio_daily_snapshots` (one row per user/profile/day). Snapshots are written when:
+
+1. A signed-in user opens `/report` or refreshes charts (`/api/portfolio-report`).
+2. Vercel crons run (`vercel.json`): morning Cairo refresh, after EGX close, after US close (`?fresh=1`).
+
+**Key files:** `app/report/page.tsx`, `components/ReportPageContent.tsx`, `components/PortfolioReportPanel.tsx`, `components/PortfolioReportChartsPanel.tsx`, `lib/portfolioReport.ts`, `lib/portfolioReportCharts.ts`, `lib/portfolioReportHistory.ts`, `lib/chartFormat.ts`, `app/api/portfolio-report/route.ts`, `app/api/portfolio-report/history/route.ts`
+
+---
+
+## 15. Daily email delivery (Resend)
+
+Per-user opt-in emails after the US market-close cron (`0 22 * * *` UTC with `fresh=1`).
+
+| Piece | Behavior |
+|-------|----------|
+| **Opt-in** | Settings: email address + enable toggle; synced to cloud `settings.dailyReportEmail` / `dailyReportEmailEnabled` |
+| **Recipients** | Any valid address the user enters — not limited to the Resend account owner |
+| **Content** | HTML + plain text: portfolio summary, top movers, inline SVG 7-day P/L charts |
+| **Test send** | `POST /api/daily-report-email/test` (auth required); subject prefix `[Test]` |
+| **Cron loop** | After snapshots, `sendOptedInDailyReportEmails` emails each opted-in cloud user with holdings |
+
+### Production email domain
+
+- **Sending domain:** `stocks.danyhanna.uk` (verified in Resend, DNS on Cloudflare)
+- **From address:** `Portfolio Exit Planner <reports@stocks.danyhanna.uk>`
+- **Setup script:** `scripts/setup-resend-domain.mjs` (one-time Resend + Cloudflare DNS automation)
+- **API keys:** Use a **Sending access** Resend key in Vercel; full-access key only needed for domain setup
+
+**Key files:** `lib/emailReport.ts`, `lib/dailyReportEmailDelivery.ts`, `app/api/cron/daily-portfolio-summary/route.ts`, `app/api/daily-report-email/test/route.ts`
+
+See also: [`docs/daily-portfolio-report.md`](docs/daily-portfolio-report.md)
+
+---
+
+## 16. Privacy and warnings
 
 - Screenshots not sent until user clicks extract
 - Warning banner for mock data, missing keys, AI fallback, Yahoo fallback
@@ -261,20 +326,24 @@ Desktop: settings panel in sidebar. Mobile: Settings tab in bottom nav.
 
 ---
 
-## 15. API routes (server-only)
+## 17. API routes (server-only)
 
 | Route | Method | Purpose |
 |-------|--------|---------|
 | `/api/market` | POST | Batch quotes + news for holdings |
-| `/api/analyzeHolding` | POST | OpenAI structured analysis per holding |
+| `/api/analyzeHolding` | POST | Gemini structured analysis per holding |
 | `/api/extractImage` | POST | Gemini vision OCR for screenshots |
 | `/api/resolveLoginIdentifier` | POST | Resolve display name → email for sign-in |
+| `/api/portfolio-report` | GET | Signed-in daily report JSON + snapshot upsert |
+| `/api/portfolio-report/history` | GET | Rolling chart history (`days=7` default) |
+| `/api/cron/daily-portfolio-summary` | GET | Vercel Cron: snapshots for all cloud users + opted-in emails |
+| `/api/daily-report-email/test` | POST | Signed-in test email to verify Resend delivery |
 
-All validate input with Zod. Secrets stay in Vercel env vars.
+All validate input with Zod. Secrets stay in Vercel env vars. Cron routes require `Authorization: Bearer $CRON_SECRET`.
 
 ---
 
-## 16. Testing
+## 18. Testing
 
 ```bash
 npm test      # Vitest — lib + API route tests
@@ -282,22 +351,28 @@ npm run build # Next.js production build
 npm run lint  # ESLint
 ```
 
-**98+ tests** covering calculations, market parsing, validation, migrations, key components.
+**170+ tests** covering calculations, market parsing, validation, migrations, report charts, email delivery, and API routes.
 
 ---
 
-## 17. Codebase map (audit quick reference)
+## 19. Codebase map (audit quick reference)
 
 ```
 app/
   page.tsx              # Main dashboard orchestration
+  report/page.tsx       # Daily report + charts page
   api/
     market/             # Quotes + news
     analyzeHolding/     # AI analysis
     extractImage/       # OCR
     resolveLoginIdentifier/
+    portfolio-report/   # Report JSON + history
+    cron/daily-portfolio-summary/
+    daily-report-email/test/
 components/
   HoldingsTable.tsx     # Primary holdings UI + search
+  ReportPageContent.tsx # Report + charts tabs
+  DailyReportEmailSettings.tsx
   TargetPlanner.tsx     # Target / breakeven stats
   HoldingDetails.tsx    # Expanded holding panel
   AuthPanel.tsx         # Sign in / up
@@ -305,37 +380,49 @@ components/
   ImageImport.tsx       # Screenshot upload
 lib/
   calculations.ts       # Financial math (pure)
-  marketData.ts         # External market providers
+  marketData.ts         # External market providers + extended-hours validation
+  marketRefresh.ts      # Quote polling intervals
+  portfolioReport.ts    # Server report builder
+  portfolioReportCharts.ts
+  emailReport.ts        # Resend HTML/text emails
+  dailyReportEmailDelivery.ts
   holdingSearch.ts      # Table search filter
   holdingSort.ts        # Table sort
   validation.ts         # Zod schemas
   portfolioStorage.ts   # localStorage
   portfolioSync.ts      # Cloud merge rules
+scripts/
+  setup-resend-domain.mjs  # One-time Resend + Cloudflare DNS for stocks.danyhanna.uk
 supabase/
-  schema.sql            # RLS + user_portfolios
+  schema.sql            # RLS + user_portfolios + portfolio_daily_snapshots
+docs/
+  daily-portfolio-report.md
+vercel.json             # Cron schedules
 ```
 
 ---
 
-## 18. Changelog (recent additions)
+## 20. Changelog (recent additions)
 
 | Date (approx.) | Feature |
 |----------------|---------|
-| Jun 2026 | **Gemini AI** — stock analysis + screenshot OCR via `gemini-2.5-flash` (free tier) instead of OpenAI |
-| Jun 2026 | **PWA install** — add to home screen on Android/iPhone via web manifest + service worker |
-| Jun 2026 | **Company name search** — Yahoo `longName`/`shortName` fills holdings; search matches names like Apple → AAPL |
+| Jun 2026 | **Verified email domain** — `stocks.danyhanna.uk` on Resend + Cloudflare; production sends from `reports@stocks.danyhanna.uk` |
+| Jun 2026 | **Send test email** — Settings button + `/api/daily-report-email/test` |
+| Jun 2026 | **Per-user daily emails** — opt-in in Settings; cron emails movers + 7-day chart SVGs to any address |
+| Jun 2026 | **Daily report + Charts** — `/report` page, snapshots, weekly P/L/value/movers charts, region-aware 7-day window |
+| Jun 2026 | **Alpha → Yahoo failsafe** — US quotes fall back to Yahoo when Alpha Vantage errors |
+| Jun 2026 | **Extended hours v2** — validated pre/post prices with Pre/AH badges; faster refresh in extended sessions |
+| Jun 2026 | **Vercel crons** — morning refresh, post-EGX close, post-US close (`fresh=1`) snapshot jobs |
+| Jun 2026 | **Gemini AI** — stock analysis + screenshot OCR via Gemini free tier |
+| Jun 2026 | **PWA install** — add to home screen via web manifest + service worker |
 | Jun 2026 | Holdings table **search** by ticker or name |
 | Jun 2026 | Target planner **breakeven** stat card (fee-aware zero P/L price) |
-| Jun 2026 | **EGP table layout** — full large numbers visible (shrink-to-fit, wider columns, compact format) |
-| Jun 2026 | **Table text overflow fix** — dynamic fit text, no column overlap |
-| Jun 2026 | **Mobile sign-up** — separate password field on Create account |
-| Jun 2026 | **Mobile table** — section headers, stacked cells, unified table layout |
-| Jun 2026 | **Live Yahoo quotes fix** — correct headers, no persisted stale quotes, unavailable instead of mock |
+| Jun 2026 | **EGP table layout** — shrink-to-fit, wider columns, compact format |
 | Earlier | Supabase auth, cloud sync, shared portfolios, AI analysis, OCR, Egypt Mubasher quotes, stop/target planner |
 
 ---
 
-## 19. Environment variables (checklist)
+## 21. Environment variables (checklist)
 
 | Variable | Required | Purpose |
 |----------|----------|---------|
@@ -344,22 +431,25 @@ supabase/
 | `SUPABASE_SERVICE_ROLE_KEY` | For display-name login | Server-only |
 | `GEMINI_API_KEY` | For AI/OCR | Gemini API (free tier) |
 | `GEMINI_MODEL` | Optional | Default `gemini-3.1-flash-lite` (newest free-tier multimodal model) |
-| `MARKET_DATA_API_KEY` | Optional | Alpha Vantage |
-| `MARKET_DATA_PROVIDER` | Optional | `alpha_vantage` or mock |
+| `MARKET_DATA_API_KEY` / `ALPHA_VANTAGE_API_KEY` | Optional | Alpha Vantage US quotes/news |
+| `MARKET_DATA_PROVIDER` | Optional | `alpha_vantage` or `yahoo` |
+| `CRON_SECRET` | For crons | Protects `/api/cron/daily-portfolio-summary` |
+| `RESEND_API_KEY` | For email | Sending-access Resend key |
+| `REPORT_FROM_EMAIL` | For email | e.g. `Portfolio Exit Planner <reports@stocks.danyhanna.uk>` |
 
 ---
 
-## 20. Known limitations and removed features
+## 22. Known limitations and removed features
 
 - **No auto-trading** or broker connections
-- **No extended-hours US prices** (removed — Yahoo extended quotes were often stale; see README “Future update recommendations”)
+- **Extended-hours prices** only when Yahoo extended fields pass validation; otherwise regular/closed session price is shown
 - **Egyptian mutual funds** not supported (no live quote source)
-- **ChatGPT subscription ≠ API billing** — OpenAI API is pay-as-you-go separately
 - **AI catalysts** only from supplied data; model must not invent events
+- **Resend domain setup** requires a full-access API key once; production uses sending-only key
 
 ---
 
-## 21. Suggested audit order
+## 23. Suggested audit order
 
 1. `lib/calculations.ts` + tests — money math correctness  
 2. `lib/marketData.ts` + `app/api/market/route.ts` — quote accuracy and fallbacks  
@@ -367,7 +457,8 @@ supabase/
 4. `app/api/analyzeHolding/route.ts` — prompt, validation, fallback  
 5. `components/HoldingsTable.tsx` — primary UX and data display  
 6. `app/page.tsx` — sync, race conditions, warning handling  
-7. `supabase/schema.sql` — RLS policies  
+7. `lib/dailyReportEmailDelivery.ts` + `lib/emailReport.ts` — cron email loop and Resend payloads  
+8. `supabase/schema.sql` — RLS policies and snapshot table  
 
 ---
 

@@ -7,7 +7,7 @@ The daily portfolio report is generated server-side from Supabase cloud portfoli
 - `/report`: an interactive signed-in report page with **Daily report** and **Charts** tabs, profile filters, currency totals, sortable holdings, stop/target values, warnings, and saved AI action/risk labels.
 - `/api/portfolio-report`: an authenticated JSON report endpoint for the currently signed-in user. Also upserts today's per-profile snapshot rows for chart history.
 - `/api/portfolio-report/history`: an authenticated rolling history endpoint (`days=7` by default) for weekly chart data.
-- `/api/cron/daily-portfolio-summary`: a Vercel Cron endpoint that saves daily snapshots for **every** cloud portfolio user and optionally emails one configured account.
+- `/api/cron/daily-portfolio-summary`: a Vercel Cron endpoint that saves daily snapshots for **every** cloud portfolio user and emails **opted-in** users (see below).
 - `portfolio_daily_snapshots` in Supabase: one row per user/profile/day with daily P/L, portfolio value, and cost-basis P/L.
 - `vercel.json`: schedules three crons:
   - `0 5 * * *` — morning refresh (~8:00 AM Cairo), good for EGX open and pre-US.
@@ -79,24 +79,27 @@ Response shape:
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Yes | Browser/auth key used by the signed-in report route. |
 | `SUPABASE_SERVICE_ROLE_KEY` | Yes for cron | Server-only key used by the cron route to read the configured user's portfolio. |
 | `CRON_SECRET` | Yes for cron | Bearer token Vercel sends to protect the cron endpoint. |
-| `PORTFOLIO_REPORT_USER_ID` | Optional | Supabase `auth.users.id` for the one account that should receive the optional daily email. Snapshots run for all users without this. |
+| `PORTFOLIO_REPORT_USER_ID` | Deprecated | Replaced by per-user Settings opt-in. Snapshots run for all users without this. |
 | `MARKET_DATA_PROVIDER` | Recommended | Set to `alpha_vantage` when `ALPHA_VANTAGE_API_KEY` is configured; otherwise `yahoo` (default on Vercel). |
 | `MARKET_DATA_API_KEY` or `ALPHA_VANTAGE_API_KEY` | Recommended | Alpha Vantage key for US quotes/news. Without it, the app uses Yahoo Finance and Mubasher EGX. |
-| `RESEND_API_KEY` | Optional | Enables daily email delivery. |
-| `REPORT_TO_EMAIL` | Optional | Comma-separated recipient list for email delivery. |
-| `REPORT_FROM_EMAIL` | Optional | Verified Resend sender address. |
+| `RESEND_API_KEY` | Optional | Enables daily email delivery (use a **Sending access** key in production). |
+| `REPORT_FROM_EMAIL` | Optional | Verified Resend sender, e.g. `Portfolio Exit Planner <reports@stocks.danyhanna.uk>`. |
 | `GEMINI_API_KEY` | Optional | Needed for AI analysis elsewhere in the app. The daily report displays saved AI labels but does not run a fresh AI analysis by default. |
 
-## How To Find `PORTFOLIO_REPORT_USER_ID`
+## Per-user daily email (Settings opt-in)
 
-Only needed if you want one daily email summary. Snapshots do not depend on it.
+Each signed-in cloud user can enable a daily market-close email in **Settings**:
 
-In Supabase:
+- `settings.dailyReportEmail` — recipient address (any valid inbox)
+- `settings.dailyReportEmailEnabled` — toggle
 
-1. Open Authentication.
-2. Open Users.
-3. Copy the `User UID` for the account you want emailed.
-4. Set that value as `PORTFOLIO_REPORT_USER_ID` in Vercel.
+After the US-close cron (`0 22 * * *` UTC with `?fresh=1`), the server snapshots all cloud portfolios, then emails users who opted in. Email content includes portfolio summary, top movers, and inline SVG 7-day P/L charts.
+
+**Test delivery:** Settings → **Send test email** (calls `POST /api/daily-report-email/test`).
+
+**Domain setup:** Production uses verified domain `stocks.danyhanna.uk` on Cloudflare + Resend. One-time setup: `scripts/setup-resend-domain.mjs` (requires full-access Resend key for domain creation only).
+
+Legacy env vars `PORTFOLIO_REPORT_USER_ID` and `REPORT_TO_EMAIL` are no longer required for per-user delivery.
 
 ## Manual Testing
 

@@ -14,6 +14,7 @@ type SendDailyReportEmailOptions = {
   report: PortfolioReport;
   series?: WeeklyChartSeries[];
   displayName?: string;
+  subjectPrefix?: string;
 };
 
 export function formatDailyReportEmailText(
@@ -97,6 +98,10 @@ export async function sendDailyReportEmail(options: SendDailyReportEmailOptions)
     day: "numeric",
     year: "numeric"
   });
+  const subjectPrefix = options.subjectPrefix?.trim();
+  const subject = subjectPrefix
+    ? `${subjectPrefix} Daily Portfolio Summary - ${subjectDate}`
+    : `Daily Portfolio Summary - ${subjectDate}`;
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {
@@ -106,7 +111,7 @@ export async function sendDailyReportEmail(options: SendDailyReportEmailOptions)
     body: JSON.stringify({
       from,
       to: [options.to],
-      subject: `Daily Portfolio Summary - ${subjectDate}`,
+      subject,
       text: formatDailyReportEmailText(options.report, {
         series: options.series,
         displayName: options.displayName
