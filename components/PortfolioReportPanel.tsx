@@ -22,9 +22,10 @@ type Props = {
 
 type SortKey = "profitLoss" | "dailyProfitLoss" | "profitLossPercent";
 
-const sortLabels: Record<Exclude<SortKey, "dailyProfitLoss">, string> = {
-  profitLoss: "P/L",
-  profitLossPercent: "%"
+const sortLabels: Record<SortKey, string> = {
+  profitLoss: "Total P/L",
+  dailyProfitLoss: "Session P/L",
+  profitLossPercent: "Total %"
 };
 
 export function PortfolioReportPanel({
@@ -51,7 +52,7 @@ export function PortfolioReportPanel({
   const totals = selectedProfile ? [selectedProfile.totals] : report?.totalsByCurrency || [];
   const dailyColumnLabel = useMemo(() => {
     if (selectedProfile) return getDailyPlSessionInfo(selectedProfile.region).columnLabel;
-    return "Session";
+    return "vs prior close · per market";
   }, [selectedProfile]);
   const dailySortLabel = useMemo(() => {
     if (selectedProfile) {
@@ -105,8 +106,14 @@ export function PortfolioReportPanel({
               ))}
             </div>
 
-            <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+            <div className="grid gap-3 md:grid-cols-2">
               {totals.map((item) => <TotalsBlock totals={item} key={item.currency} />)}
+            </div>
+
+            <div className="rounded-md border border-ink/10 bg-mint/15 px-3 py-2 text-xs text-ink/65">
+              <span className="font-semibold text-ink/75">How to read this:</span>{" "}
+              <span className="text-ink/60">Total P/L</span> is your overall gain or loss since purchase (after fees).{" "}
+              <span className="text-ink/60">Session P/L</span> is today&apos;s price move vs the prior close for that market.
             </div>
 
             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -119,7 +126,7 @@ export function PortfolioReportPanel({
                     key={key}
                     onClick={() => setSortKey(key)}
                   >
-                    {key === "dailyProfitLoss" ? dailySortLabel : sortLabels[key]}
+                    {key === "dailyProfitLoss" ? (dailySortLabel === "Session" ? "Session P/L" : `${dailySortLabel} P/L`) : sortLabels[key]}
                   </button>
                 ))}
               </div>
@@ -127,15 +134,30 @@ export function PortfolioReportPanel({
 
             <div className="overflow-x-auto rounded-md border border-ink/10 bg-white">
               <table className="min-w-[720px] w-full text-sm">
-                <thead className="bg-surface-muted text-left text-xs uppercase text-ink/55">
+                <thead className="bg-surface-muted text-left text-xs text-ink/55">
                   <tr>
-                    <th className="px-3 py-2">Symbol</th>
-                    <th className="px-3 py-2">Value</th>
-                    <th className="px-3 py-2">P/L</th>
-                    <th className="px-3 py-2">{dailyColumnLabel}</th>
-                    <th className="px-3 py-2">Stop</th>
-                    <th className="px-3 py-2">Target</th>
-                    <th className="px-3 py-2">AI</th>
+                    <th className="px-3 py-2 font-semibold uppercase tracking-wide">Holding</th>
+                    <th className="px-3 py-2">
+                      <div className="font-semibold uppercase tracking-wide">Market value</div>
+                      <div className="font-normal normal-case text-ink/45">shares × price</div>
+                    </th>
+                    <th className="px-3 py-2">
+                      <div className="font-semibold uppercase tracking-wide">Total P/L</div>
+                      <div className="font-normal normal-case text-ink/45">vs cost · after fees</div>
+                    </th>
+                    <th className="px-3 py-2">
+                      <div className="font-semibold uppercase tracking-wide">Session P/L</div>
+                      <div className="font-normal normal-case text-ink/45">{dailyColumnLabel}</div>
+                    </th>
+                    <th className="px-3 py-2">
+                      <div className="font-semibold uppercase tracking-wide">Stop-loss</div>
+                      <div className="font-normal normal-case text-ink/45">if triggered</div>
+                    </th>
+                    <th className="px-3 py-2">
+                      <div className="font-semibold uppercase tracking-wide">Take-profit</div>
+                      <div className="font-normal normal-case text-ink/45">target price</div>
+                    </th>
+                    <th className="px-3 py-2 font-semibold uppercase tracking-wide">AI view</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -168,25 +190,79 @@ export function PortfolioReportPanel({
 
 function TotalsBlock({ totals }: { totals: PortfolioReportTotals }) {
   const session = getDailyPlSessionInfo(regionFromCurrency(totals.currency));
+  const sessionStatus = session.isMarketClosed ? "market closed" : "market open";
+
   return (
     <div className="rounded-md border border-ink/10 bg-white p-3">
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <span className="text-xs font-semibold uppercase text-ink/55">{totals.currency}</span>
+      <div className="mb-3 flex items-center justify-between gap-2 border-b border-ink/8 pb-2">
+        <span className="text-xs font-semibold uppercase tracking-wide text-ink/55">{totals.currency} portfolio</span>
         {totals.profitLoss >= 0 ? <TrendingUp className="h-4 w-4 text-marine" aria-hidden /> : <TrendingDown className="h-4 w-4 text-coral" aria-hidden />}
       </div>
-      <div className="text-lg font-semibold text-ink">{formatMoney(totals.currentValue, totals.currency)}</div>
-      <div className={toneClass(totals.profitLoss)}>{formatSignedMoney(totals.profitLoss, totals.currency)} ({formatPercent(totals.profitLossPercent)})</div>
-      <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-ink/60">
-        <span>{session.columnLabel}</span><span className={`text-right font-semibold ${toneClass(totals.dailyProfitLoss)}`}>{formatSignedMoney(totals.dailyProfitLoss, totals.currency)}</span>
-        <span>Gains</span><span className="text-right font-semibold text-marine">{formatSignedMoney(totals.totalGains, totals.currency)}</span>
-        <span>Losses</span><span className="text-right font-semibold text-coral">{formatSignedMoney(totals.totalLosses, totals.currency)}</span>
+
+      <dl className="space-y-3 text-sm">
+        <MetricRow
+          label="Portfolio value"
+          hint="current market price"
+          value={formatMoney(totals.currentValue, totals.currency)}
+        />
+        <MetricRow
+          label="Total P/L"
+          hint="since purchase · after fees"
+          value={formatSignedMoney(totals.profitLoss, totals.currency)}
+          subValue={formatPercent(totals.profitLossPercent)}
+          tone={totals.profitLoss}
+        />
+        <MetricRow
+          label="Session P/L"
+          hint={`${session.sessionLabel} · ${sessionStatus}`}
+          value={formatSignedMoney(totals.dailyProfitLoss, totals.currency)}
+          subValue={formatPercent(totals.dailyProfitLossPercent)}
+          tone={totals.dailyProfitLoss}
+        />
+      </dl>
+
+      <div className="mt-3 grid grid-cols-2 gap-2 border-t border-ink/8 pt-3 text-xs">
+        <div className="rounded-md bg-mint/20 px-2 py-1.5">
+          <div className="text-ink/55">Winning positions</div>
+          <div className="font-semibold text-marine">{formatSignedMoney(totals.totalGains, totals.currency)}</div>
+        </div>
+        <div className="rounded-md bg-coral/10 px-2 py-1.5">
+          <div className="text-ink/55">Losing positions</div>
+          <div className="font-semibold text-coral">{formatSignedMoney(totals.totalLosses, totals.currency)}</div>
+        </div>
       </div>
     </div>
   );
 }
 
+function MetricRow({
+  label,
+  hint,
+  value,
+  subValue,
+  tone
+}: {
+  label: string;
+  hint: string;
+  value: string;
+  subValue?: string;
+  tone?: number;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-3">
+      <dt className="min-w-0">
+        <div className="font-semibold text-ink">{label}</div>
+        <div className="text-xs text-ink/50">{hint}</div>
+      </dt>
+      <dd className={`shrink-0 text-right font-semibold ${tone !== undefined ? toneClass(tone) : "text-ink"}`}>
+        <div>{value}</div>
+        {subValue ? <div className="text-xs font-medium opacity-80">{subValue}</div> : null}
+      </dd>
+    </div>
+  );
+}
+
 function HoldingRow({ holding }: { holding: PortfolioReportHolding }) {
-  const session = getDailyPlSessionInfo(holding.region);
   return (
     <tr className="border-t border-ink/8">
       <td className="px-3 py-2">
@@ -200,10 +276,7 @@ function HoldingRow({ holding }: { holding: PortfolioReportHolding }) {
       </td>
       <td className={`px-3 py-2 font-semibold ${toneClass(holding.dailyProfitLoss)}`}>
         {holding.currentPrice ? formatSignedMoney(holding.dailyProfitLoss, holding.currency) : "N/A"}
-        <div className="text-xs">{holding.currentPrice ? formatPercent(holding.dailyProfitLossPercent) : ""}</div>
-        <div className="text-[10px] font-normal text-ink/45">
-          {session.sessionLabel}{session.isMarketClosed ? " · closed" : ""}
-        </div>
+        <div className="text-xs font-normal">{holding.currentPrice ? formatPercent(holding.dailyProfitLossPercent) : ""}</div>
       </td>
       <td className="px-3 py-2 text-ink/70">{holding.stopPrice ? formatMoney(holding.stopPrice, holding.currency) : "-"}</td>
       <td className="px-3 py-2 text-ink/70">{holding.targetPrice ? formatMoney(holding.targetPrice, holding.currency) : "-"}</td>
