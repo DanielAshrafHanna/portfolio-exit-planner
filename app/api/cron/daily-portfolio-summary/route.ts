@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
-import { profilesFromCloudPortfolioRow, type CloudPortfolioRow } from "@/lib/cloudPortfolio";
 import { buildPortfolioReport, type PortfolioReport } from "@/lib/portfolioReport";
-import { snapshotsFromReport, upsertPortfolioSnapshots } from "@/lib/portfolioSnapshots";
+import { profilesFromCloudPortfolioRow, type CloudPortfolioRow } from "@/lib/cloudPortfolio";
+import { runDailyPortfolioSnapshotsForAllUsers } from "@/lib/portfolioSnapshotJobs";
 import { createSupabaseAdminClient } from "@/lib/supabaseServer";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 300;
 
 type EmailResult = {
   configured: boolean;
@@ -22,46 +23,65 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const targetUserId = process.env.PORTFOLIO_REPORT_USER_ID;
-  if (!targetUserId) {
-    return NextResponse.json({ error: "PORTFOLIO_REPORT_USER_ID is not configured." }, { status: 503 });
-  }
-
   try {
     const supabase = createSupabaseAdminClient();
-    const { data, error } = await supabase
-      .from("user_portfolios")
-      .select("holdings, settings, display_name, share_holdings, updated_at, user_id")
-      .eq("user_id", targetUserId)
-      .maybeSingle();
+    const summary = await runDailyPortfolioSnapshotsForAllUsers(supabase, {
+      shareQuoteCache: true
+    });
 
-    if (error) {
-      return NextResponse.json({ error: `Portfolio row failed to load: ${error.message}` }, { status: 500 });
-    }
-
-    if (!data) {
-      return NextResponse.json({ error: "No cloud portfolio exists for PORTFOLIO_REPORT_USER_ID." }, { status: 404 });
-    }
-
-    const report = await buildPortfolioReport(profilesFromCloudPortfolioRow(data as CloudPortfolioRow));
-    const snapshotResult = await upsertPortfolioSnapshots(
-      supabase,
-      snapshotsFromReport(targetUserId, report)
-    );
-    const email = await sendReportEmail(report);
+    const emailUserId = process.env.PORTFOLIO_REPORT_USER_ID?.trim();
+    const emailReport = emailUserId
+      ? await resolveEmailReport(supabase, summary.results, emailUserId)
+      : undefined;
+    const email = emailReport ? await sendReportEmail(emailReport) : {
+      configured: false,
+      sent: false,
+      warning: emailUserId
+        ? "Email report user has no saved holdings snapshot in this run."
+        : "Set PORTFOLIO_REPORT_USER_ID to email one daily summary."
+    };
 
     return NextResponse.json({
-      ok: true,
+      ok: summary.failed === 0,
+      snapshots: {
+        totalUsers: summary.totalUsers,
+        processed: summary.processed,
+        skipped: summary.skipped,
+        failed: summary.failed
+      },
+      failures: summary.results
+        .filter((result) => !result.ok)
+        .map((result) => ({ userId: result.userId, error: result.error })),
+      snapshotWarnings: summary.results
+        .map((result) => result.snapshotWarning)
+        .filter((warning): warning is string => Boolean(warning)),
       emailed: email.sent,
       emailWarning: email.warning,
-      snapshotWarning: snapshotResult.warning,
-      report
+      report: emailReport
     });
   } catch (error) {
     return NextResponse.json({
       error: error instanceof Error ? error.message : "Daily portfolio summary failed."
     }, { status: 500 });
   }
+}
+
+async function resolveEmailReport(
+  supabase: ReturnType<typeof createSupabaseAdminClient>,
+  results: Awaited<ReturnType<typeof runDailyPortfolioSnapshotsForAllUsers>>["results"],
+  emailUserId: string
+): Promise<PortfolioReport | undefined> {
+  const existing = results.find((result) => result.userId === emailUserId && result.report);
+  if (existing?.report) return existing.report;
+
+  const { data, error } = await supabase
+    .from("user_portfolios")
+    .select("holdings, settings, display_name, share_holdings, updated_at, user_id")
+    .eq("user_id", emailUserId)
+    .maybeSingle();
+
+  if (error || !data) return undefined;
+  return buildPortfolioReport(profilesFromCloudPortfolioRow(data as CloudPortfolioRow));
 }
 
 async function sendReportEmail(report: PortfolioReport): Promise<EmailResult> {

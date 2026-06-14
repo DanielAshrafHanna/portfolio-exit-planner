@@ -1,6 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { PortfolioReport } from "./portfolioReport";
-import { holdingsSnapshotFromReportRows } from "./holdingSnapshots";
+import { parseHoldingsSnapshot, holdingsSnapshotFromReportRows } from "./holdingSnapshots";
+import {
+  applyCostBasisDailyPlToReport,
+  lookbackSnapshotDate,
+  pickPriorSnapshotsForProfiles
+} from "./dailyPlDelta";
 import { getDailyPlSessionInfo, isTradingWeekday } from "./marketSession";
 import type { CurrencyCode, MarketRegion } from "./types";
 
@@ -33,6 +38,46 @@ export function snapshotDateForRegion(now: Date, region: MarketRegion) {
   const month = parts.find((part) => part.type === "month")?.value ?? "01";
   const day = parts.find((part) => part.type === "day")?.value ?? "01";
   return `${year}-${month}-${day}`;
+}
+
+export async function fetchPriorSnapshotsForReport(
+  supabase: SupabaseClient,
+  userId: string,
+  report: PortfolioReport,
+  now = new Date(report.generatedAt)
+) {
+  const targets = report.profiles.map((profile) => ({
+    profileId: profile.id,
+    sessionDate: getDailyPlSessionInfo(profile.region, now).sessionDate
+  }));
+  const earliestSessionDate = targets.reduce(
+    (earliest, target) => (target.sessionDate < earliest ? target.sessionDate : earliest),
+    targets[0]?.sessionDate || snapshotDateForRegion(now, "US")
+  );
+  const startDate = lookbackSnapshotDate(earliestSessionDate);
+
+  const { data, error } = await supabase
+    .from("portfolio_daily_snapshots")
+    .select("snapshot_date, profile_id, total_profit_loss, portfolio_value, holdings_snapshot")
+    .eq("user_id", userId)
+    .gte("snapshot_date", startDate)
+    .order("snapshot_date", { ascending: false });
+
+  if (error || !data?.length) {
+    return new Map();
+  }
+
+  return pickPriorSnapshotsForProfiles(data, targets, parseHoldingsSnapshot);
+}
+
+export async function prepareReportForSnapshot(
+  supabase: SupabaseClient,
+  userId: string,
+  report: PortfolioReport,
+  now = new Date(report.generatedAt)
+) {
+  const priorByProfileId = await fetchPriorSnapshotsForReport(supabase, userId, report, now);
+  return applyCostBasisDailyPlToReport(report, priorByProfileId);
 }
 
 export function snapshotsFromReport(userId: string, report: PortfolioReport, now = new Date(report.generatedAt)): PortfolioDailySnapshotRow[] {

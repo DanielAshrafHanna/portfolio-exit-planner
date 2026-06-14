@@ -8,6 +8,11 @@ export type HoldingSnapshotEntry = {
   daily_profit_loss: number;
   daily_profit_loss_percent: number;
   shares: number;
+  average_cost: number;
+  current_value: number;
+  profit_loss: number;
+  /** False for legacy snapshots saved before cost-basis fields existed. */
+  cost_basis_tracked?: boolean;
 };
 
 export type HoldingSnapshotDay = {
@@ -48,7 +53,11 @@ export function holdingsSnapshotFromReportRows(rows: PortfolioReportHolding[]): 
       name: row.name,
       daily_profit_loss: row.dailyProfitLoss,
       daily_profit_loss_percent: row.dailyProfitLossPercent,
-      shares: row.shares
+      shares: row.shares,
+      average_cost: row.averageCost,
+      current_value: row.currentValue,
+      profit_loss: row.profitLoss,
+      cost_basis_tracked: true
     }));
 }
 
@@ -61,12 +70,20 @@ export function parseHoldingsSnapshot(value: unknown): HoldingSnapshotEntry[] {
     const daily = Number(row.daily_profit_loss);
     const dailyPercent = Number(row.daily_profit_loss_percent);
     const shares = Number(row.shares);
+    const averageCost = Number(row.average_cost);
+    const currentValue = Number(row.current_value);
+    const profitLoss = Number(row.profit_loss);
+    const costBasisTracked = "profit_loss" in row && "current_value" in row;
     return [{
       symbol: row.symbol,
       name: typeof row.name === "string" ? row.name : row.symbol,
       daily_profit_loss: Number.isFinite(daily) ? daily : 0,
       daily_profit_loss_percent: Number.isFinite(dailyPercent) ? dailyPercent : 0,
-      shares: Number.isFinite(shares) ? shares : 0
+      shares: Number.isFinite(shares) ? shares : 0,
+      average_cost: Number.isFinite(averageCost) ? averageCost : 0,
+      current_value: Number.isFinite(currentValue) ? currentValue : 0,
+      profit_loss: Number.isFinite(profitLoss) ? profitLoss : 0,
+      cost_basis_tracked: costBasisTracked
     }];
   });
 }

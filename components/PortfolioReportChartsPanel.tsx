@@ -156,7 +156,7 @@ export function PortfolioReportChartsPanel({
       icon={BarChart3}
       eyebrow="Report"
       title="Charts"
-      description="Pick a day for top movers. Latest uses live quotes; past days use saved snapshots from when you opened the report."
+      description="Pick a day for top movers. Latest uses live quotes. Dollar bars show daily cost-basis P/L change vs your last saved snapshot when history exists."
       action={(
         <button
           className="inline-flex min-h-10 items-center gap-2 rounded-md border border-marine/25 bg-white px-3 py-2 text-sm font-semibold text-marine hover:border-marine/50 disabled:cursor-not-allowed disabled:opacity-60"

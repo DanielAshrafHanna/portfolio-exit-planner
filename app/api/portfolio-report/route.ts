@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { activeProfileIdFromCloudPortfolioRow, profilesFromCloudPortfolioRow, type CloudPortfolioRow } from "@/lib/cloudPortfolio";
 import { buildPortfolioReport } from "@/lib/portfolioReport";
-import { snapshotsFromReport, upsertPortfolioSnapshots } from "@/lib/portfolioSnapshots";
+import { snapshotsFromReport, upsertPortfolioSnapshots, prepareReportForSnapshot } from "@/lib/portfolioSnapshots";
 import { defaultProfiles } from "@/lib/profileUtils";
 import { bearerTokenFromRequest, createSupabaseUserClient } from "@/lib/supabaseServer";
 
@@ -36,13 +36,14 @@ export async function GET(request: Request) {
     const row = data as CloudPortfolioRow | null;
     const profiles = row ? profilesFromCloudPortfolioRow(row) : defaultProfiles();
     const report = await buildPortfolioReport(profiles, { freshQuotes });
+    const snapshotReport = await prepareReportForSnapshot(supabase, user.id, report);
     const snapshotResult = await upsertPortfolioSnapshots(
       supabase,
-      snapshotsFromReport(user.id, report)
+      snapshotsFromReport(user.id, snapshotReport)
     );
 
     return NextResponse.json({
-      report,
+      report: snapshotReport,
       activeProfileId: row ? activeProfileIdFromCloudPortfolioRow(row, profiles) : profiles[0]?.id,
       cloudUpdatedAt: row?.updated_at || null,
       snapshotWarning: snapshotResult.warning

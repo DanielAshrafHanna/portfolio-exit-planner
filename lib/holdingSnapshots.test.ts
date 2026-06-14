@@ -12,7 +12,17 @@ describe("parseHoldingsSnapshot", () => {
       { symbol: 123 },
       null
     ]);
-    expect(parsed).toEqual([{ symbol: "AAPL", name: "Apple", daily_profit_loss: 12.5, daily_profit_loss_percent: 1.2, shares: 4 }]);
+    expect(parsed).toEqual([{
+      symbol: "AAPL",
+      name: "Apple",
+      daily_profit_loss: 12.5,
+      daily_profit_loss_percent: 1.2,
+      shares: 4,
+      average_cost: 0,
+      current_value: 0,
+      profit_loss: 0,
+      cost_basis_tracked: false
+    }]);
   });
 });
 
@@ -24,8 +34,8 @@ describe("mergeHoldingSnapshotsForMovers", () => {
         profileId: "us-portfolio",
         currency: "USD",
         holdings: [
-          { symbol: "AAPL", name: "Apple", daily_profit_loss: 10, daily_profit_loss_percent: 2, shares: 2 },
-          { symbol: "MSFT", name: "Microsoft", daily_profit_loss: -5, daily_profit_loss_percent: -1, shares: 1 }
+          { symbol: "AAPL", name: "Apple", daily_profit_loss: 10, daily_profit_loss_percent: 2, shares: 2, average_cost: 150, current_value: 300, profit_loss: 20, cost_basis_tracked: true },
+          { symbol: "MSFT", name: "Microsoft", daily_profit_loss: -5, daily_profit_loss_percent: -1, shares: 1, average_cost: 400, current_value: 395, profit_loss: -5, cost_basis_tracked: true }
         ]
       }
     ], {
@@ -47,7 +57,7 @@ describe("buildMoverDateOptions", () => {
         snapshotDate: "2026-06-12",
         profileId: "us-portfolio",
         currency: "USD",
-        holdings: [{ symbol: "AAPL", name: "Apple", daily_profit_loss: 1, daily_profit_loss_percent: 0.5, shares: 1 }]
+        holdings: [{ symbol: "AAPL", name: "Apple", daily_profit_loss: 1, daily_profit_loss_percent: 0.5, shares: 1, average_cost: 100, current_value: 101, profit_loss: 1, cost_basis_tracked: true }]
       }],
       { currency: "USD", profileId: "us-portfolio" },
       new Date("2026-06-14T12:00:00.000Z")
