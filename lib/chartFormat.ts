@@ -28,6 +28,11 @@ export function formatChartSignedMoney(value: number, currency: CurrencyCode) {
   return `${prefix}${formatMoney(Math.abs(value), currency)}`;
 }
 
+export function formatChartSignedPercent(value: number) {
+  const prefix = value > 0 ? "+" : value < 0 ? "-" : "";
+  return `${prefix}${Math.abs(value).toLocaleString(undefined, { maximumFractionDigits: 2 })}%`;
+}
+
 export function plChartDomain(values: number[]): [number, number] {
   const finite = values.filter((value) => Number.isFinite(value));
   if (!finite.length) return [-1, 1];

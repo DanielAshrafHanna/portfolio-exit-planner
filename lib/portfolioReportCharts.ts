@@ -143,18 +143,25 @@ export function buildCumulativePoints(points: WeeklyChartPoint[]) {
   });
 }
 
-export function topHoldingMovers<T extends { symbol: string; name: string; dailyProfitLoss: number }>(
-  holdings: T[],
-  limit = 5
+export type MoverRankMode = "dollar" | "percent";
+
+export function moverSortValue(
+  holding: { dailyProfitLoss: number; dailyProfitLossPercent?: number },
+  rankBy: MoverRankMode
 ) {
-  const sorted = [...holdings].sort((a, b) => b.dailyProfitLoss - a.dailyProfitLoss);
-  const gainers = sorted.filter((holding) => holding.dailyProfitLoss > 0).slice(0, limit);
-  const losers = [...sorted].filter((holding) => holding.dailyProfitLoss < 0).slice(-limit).reverse();
-  return [...losers, ...gainers].map((holding) => ({
-    symbol: holding.symbol,
-    name: holding.name,
-    dailyProfitLoss: holding.dailyProfitLoss
-  }));
+  return rankBy === "percent" ? (holding.dailyProfitLossPercent ?? 0) : holding.dailyProfitLoss;
+}
+
+export function topHoldingMovers<T extends { symbol: string; name: string; dailyProfitLoss: number; dailyProfitLossPercent?: number }>(
+  holdings: T[],
+  options: { limit?: number; rankBy?: MoverRankMode } = {}
+): T[] {
+  const limit = options.limit ?? 5;
+  const rankBy = options.rankBy ?? "dollar";
+  const sorted = [...holdings].sort((a, b) => moverSortValue(b, rankBy) - moverSortValue(a, rankBy));
+  const gainers = sorted.filter((holding) => moverSortValue(holding, rankBy) > 0).slice(0, limit);
+  const losers = [...sorted].filter((holding) => moverSortValue(holding, rankBy) < 0).slice(-limit).reverse();
+  return [...losers, ...gainers];
 }
 
 function emptyWeeklyPoints(windowDates: string[], region: MarketRegion, now: Date): WeeklyChartPoint[] {

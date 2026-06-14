@@ -110,14 +110,20 @@ describe("buildCumulativePoints", () => {
 });
 
 describe("topHoldingMovers", () => {
-  it("returns biggest gainers and losers by daily profit and loss", () => {
-    const movers = topHoldingMovers([
-      { symbol: "AAPL", name: "Apple", dailyProfitLoss: 30 },
-      { symbol: "MSFT", name: "Microsoft", dailyProfitLoss: 10 },
-      { symbol: "TSLA", name: "Tesla", dailyProfitLoss: -20 },
-      { symbol: "NVDA", name: "Nvidia", dailyProfitLoss: -5 }
-    ], 2);
+  const holdings = [
+    { symbol: "AAPL", name: "Apple", dailyProfitLoss: 30, dailyProfitLossPercent: 1 },
+    { symbol: "MSFT", name: "Microsoft", dailyProfitLoss: 10, dailyProfitLossPercent: 3 },
+    { symbol: "TSLA", name: "Tesla", dailyProfitLoss: -20, dailyProfitLossPercent: -4 },
+    { symbol: "NVDA", name: "Nvidia", dailyProfitLoss: -5, dailyProfitLossPercent: -1 }
+  ];
 
+  it("returns biggest gainers and losers by daily profit and loss", () => {
+    const movers = topHoldingMovers(holdings, { limit: 2, rankBy: "dollar" });
     expect(movers.map((item) => item.symbol)).toEqual(["TSLA", "NVDA", "AAPL", "MSFT"]);
+  });
+
+  it("can rank movers by percent move instead of dollar impact", () => {
+    const movers = topHoldingMovers(holdings, { limit: 2, rankBy: "percent" });
+    expect(movers.map((item) => item.symbol)).toEqual(["TSLA", "NVDA", "MSFT", "AAPL"]);
   });
 });

@@ -8,11 +8,11 @@ import {
 describe("parseHoldingsSnapshot", () => {
   it("coerces valid holding rows and ignores invalid entries", () => {
     const parsed = parseHoldingsSnapshot([
-      { symbol: "AAPL", name: "Apple", daily_profit_loss: 12.5, shares: 4 },
+      { symbol: "AAPL", name: "Apple", daily_profit_loss: 12.5, daily_profit_loss_percent: 1.2, shares: 4 },
       { symbol: 123 },
       null
     ]);
-    expect(parsed).toEqual([{ symbol: "AAPL", name: "Apple", daily_profit_loss: 12.5, shares: 4 }]);
+    expect(parsed).toEqual([{ symbol: "AAPL", name: "Apple", daily_profit_loss: 12.5, daily_profit_loss_percent: 1.2, shares: 4 }]);
   });
 });
 
@@ -24,8 +24,8 @@ describe("mergeHoldingSnapshotsForMovers", () => {
         profileId: "us-portfolio",
         currency: "USD",
         holdings: [
-          { symbol: "AAPL", name: "Apple", daily_profit_loss: 10, shares: 2 },
-          { symbol: "MSFT", name: "Microsoft", daily_profit_loss: -5, shares: 1 }
+          { symbol: "AAPL", name: "Apple", daily_profit_loss: 10, daily_profit_loss_percent: 2, shares: 2 },
+          { symbol: "MSFT", name: "Microsoft", daily_profit_loss: -5, daily_profit_loss_percent: -1, shares: 1 }
         ]
       }
     ], {
@@ -35,7 +35,7 @@ describe("mergeHoldingSnapshotsForMovers", () => {
     });
 
     expect(movers).toHaveLength(2);
-    expect(movers[0]).toMatchObject({ symbol: "AAPL", dailyProfitLoss: 10, shares: 2 });
+    expect(movers[0]).toMatchObject({ symbol: "AAPL", dailyProfitLoss: 10, dailyProfitLossPercent: 2, shares: 2 });
   });
 });
 
@@ -47,7 +47,7 @@ describe("buildMoverDateOptions", () => {
         snapshotDate: "2026-06-12",
         profileId: "us-portfolio",
         currency: "USD",
-        holdings: [{ symbol: "AAPL", name: "Apple", daily_profit_loss: 1, shares: 1 }]
+        holdings: [{ symbol: "AAPL", name: "Apple", daily_profit_loss: 1, daily_profit_loss_percent: 0.5, shares: 1 }]
       }],
       { currency: "USD", profileId: "us-portfolio" },
       new Date("2026-06-14T12:00:00.000Z")

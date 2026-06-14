@@ -6,6 +6,7 @@ export type HoldingSnapshotEntry = {
   symbol: string;
   name: string;
   daily_profit_loss: number;
+  daily_profit_loss_percent: number;
   shares: number;
 };
 
@@ -20,8 +21,24 @@ export type MoverHolding = {
   symbol: string;
   name: string;
   dailyProfitLoss: number;
+  dailyProfitLossPercent: number;
   shares: number;
 };
+
+function combineDailyPercent(
+  left: { daily_profit_loss: number; daily_profit_loss_percent: number },
+  right: { daily_profit_loss: number; daily_profit_loss_percent: number }
+) {
+  const leftPrior = left.daily_profit_loss_percent !== 0
+    ? left.daily_profit_loss / (left.daily_profit_loss_percent / 100)
+    : 0;
+  const rightPrior = right.daily_profit_loss_percent !== 0
+    ? right.daily_profit_loss / (right.daily_profit_loss_percent / 100)
+    : 0;
+  const priorValue = leftPrior + rightPrior;
+  const combinedDaily = left.daily_profit_loss + right.daily_profit_loss;
+  return priorValue > 0 ? (combinedDaily / priorValue) * 100 : 0;
+}
 
 export function holdingsSnapshotFromReportRows(rows: PortfolioReportHolding[]): HoldingSnapshotEntry[] {
   return rows
@@ -30,6 +47,7 @@ export function holdingsSnapshotFromReportRows(rows: PortfolioReportHolding[]): 
       symbol: row.symbol,
       name: row.name,
       daily_profit_loss: row.dailyProfitLoss,
+      daily_profit_loss_percent: row.dailyProfitLossPercent,
       shares: row.shares
     }));
 }
@@ -41,11 +59,13 @@ export function parseHoldingsSnapshot(value: unknown): HoldingSnapshotEntry[] {
     const row = item as Record<string, unknown>;
     if (typeof row.symbol !== "string") return [];
     const daily = Number(row.daily_profit_loss);
+    const dailyPercent = Number(row.daily_profit_loss_percent);
     const shares = Number(row.shares);
     return [{
       symbol: row.symbol,
       name: typeof row.name === "string" ? row.name : row.symbol,
       daily_profit_loss: Number.isFinite(daily) ? daily : 0,
+      daily_profit_loss_percent: Number.isFinite(dailyPercent) ? dailyPercent : 0,
       shares: Number.isFinite(shares) ? shares : 0
     }];
   });
@@ -74,6 +94,10 @@ export function mergeHoldingSnapshotsForMovers(
           symbol: holding.symbol,
           name: holding.name,
           dailyProfitLoss: existing.dailyProfitLoss + holding.daily_profit_loss,
+          dailyProfitLossPercent: combineDailyPercent(
+            { daily_profit_loss: existing.dailyProfitLoss, daily_profit_loss_percent: existing.dailyProfitLossPercent },
+            holding
+          ),
           shares: existing.shares + holding.shares
         });
       } else {
@@ -81,6 +105,7 @@ export function mergeHoldingSnapshotsForMovers(
           symbol: holding.symbol,
           name: holding.name,
           dailyProfitLoss: holding.daily_profit_loss,
+          dailyProfitLossPercent: holding.daily_profit_loss_percent,
           shares: holding.shares
         });
       }

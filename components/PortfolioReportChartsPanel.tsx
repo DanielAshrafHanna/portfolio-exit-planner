@@ -7,7 +7,6 @@ import { ChartLegend } from "@/components/ChartLegend";
 import { reportProfileTabClass } from "@/components/reportTabs";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { buildMoverDateOptions, mergeHoldingSnapshotsForMovers, type HoldingSnapshotDay } from "@/lib/holdingSnapshots";
-import { topHoldingMovers } from "@/lib/portfolioReportCharts";
 import type { WeeklyChartSeries } from "@/lib/portfolioReportCharts";
 import type { PortfolioReport } from "@/lib/portfolioReport";
 import { formatSessionLabel, getDailyPlSessionInfo, regionFromCurrency } from "@/lib/marketSession";
@@ -71,13 +70,20 @@ export function PortfolioReportChartsPanel({
   }, [report?.holdings, selectedProfile]);
 
   const moversByCurrency = useMemo(() => {
-    const grouped = new Map<CurrencyCode, Array<{ symbol: string; name: string; dailyProfitLoss: number; shares: number }>>();
+    const grouped = new Map<CurrencyCode, Array<{
+      symbol: string;
+      name: string;
+      dailyProfitLoss: number;
+      dailyProfitLossPercent: number;
+      shares: number;
+    }>>();
     holdingsForMovers.forEach((holding) => {
       const existing = grouped.get(holding.currency) || [];
       existing.push({
         symbol: holding.symbol,
         name: holding.name,
         dailyProfitLoss: holding.dailyProfitLoss,
+        dailyProfitLossPercent: holding.dailyProfitLossPercent,
         shares: holding.shares
       });
       grouped.set(holding.currency, existing);
@@ -102,14 +108,17 @@ export function PortfolioReportChartsPanel({
       });
 
       const liveHoldings = grouped.get(currency) || [];
-      let movers: Array<{ symbol: string; name: string; dailyProfitLoss: number; shares?: number }> = [];
+      let movers: Array<{
+        symbol: string;
+        name: string;
+        dailyProfitLoss: number;
+        dailyProfitLossPercent: number;
+        shares: number;
+      }> = [];
       let emptyMessage = "No quoted holdings with daily P/L for this day.";
 
       if (selectedDateId === "live") {
-        movers = topHoldingMovers(liveHoldings).map((holding) => {
-          const full = liveHoldings.find((row) => row.symbol === holding.symbol);
-          return { ...holding, shares: full?.shares };
-        });
+        movers = liveHoldings;
       } else {
         const historical = mergeHoldingSnapshotsForMovers(holdingSnapshots, {
           currency,
@@ -119,10 +128,7 @@ export function PortfolioReportChartsPanel({
         if (!historical.length) {
           emptyMessage = `No saved mover breakdown for ${formatSessionLabel(selectedDateId)} yet. Open the report on a market day after updating, or pick Latest (live).`;
         }
-        movers = topHoldingMovers(historical).map((holding) => {
-          const full = historical.find((row) => row.symbol === holding.symbol);
-          return { ...holding, shares: full?.shares };
-        });
+        movers = historical;
       }
 
       return {
