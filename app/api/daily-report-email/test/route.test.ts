@@ -29,7 +29,8 @@ vi.mock("@/lib/portfolioReport", () => ({
 }));
 
 vi.mock("@/lib/portfolioReportHistory", () => ({
-  fetchUserWeeklyChartSeries: mockFetchSeries
+  fetchUserWeeklyChartSeries: mockFetchSeries,
+  snapshotHistoryRowsFromReport: vi.fn(() => [])
 }));
 
 vi.mock("@/lib/portfolioSnapshots", () => ({

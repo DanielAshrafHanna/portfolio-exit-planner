@@ -3,7 +3,7 @@ import { z } from "zod";
 import { cloudSettingsFromRow, profilesFromCloudPortfolioRow, type CloudPortfolioRow } from "@/lib/cloudPortfolio";
 import { dailyReportEmailPrefsFromSettings, isValidReportEmail, normalizeReportEmail } from "@/lib/dailyReportEmailPrefs";
 import { sendDailyReportEmail } from "@/lib/emailReport";
-import { fetchUserWeeklyChartSeries } from "@/lib/portfolioReportHistory";
+import { fetchUserWeeklyChartSeries, snapshotHistoryRowsFromReport } from "@/lib/portfolioReportHistory";
 import { buildPortfolioReport } from "@/lib/portfolioReport";
 import { snapshotsFromReport, prepareReportForSnapshot, upsertPortfolioSnapshots } from "@/lib/portfolioSnapshots";
 import { defaultProfiles } from "@/lib/profileUtils";
@@ -63,8 +63,14 @@ export async function POST(request: Request) {
       await upsertPortfolioSnapshots(supabase, snapshotsFromReport(user.id, snapshotReport));
     }
 
+    const snapshotNow = new Date(snapshotReport.generatedAt);
+    const profileNames = new Map(profiles.map((profile) => [profile.id, profile.name] as const));
+    const freshSnapshots = row?.user_id
+      ? snapshotHistoryRowsFromReport(user.id, snapshotReport, profileNames, snapshotNow)
+      : [];
+
     const series = row?.user_id
-      ? await fetchUserWeeklyChartSeries(supabase, user.id, row, { now: new Date(snapshotReport.generatedAt) })
+      ? await fetchUserWeeklyChartSeries(supabase, user.id, row, { now: snapshotNow, freshSnapshots })
       : [];
 
     const delivery = await sendDailyReportEmail({

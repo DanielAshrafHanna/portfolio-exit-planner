@@ -300,7 +300,7 @@ Per-user opt-in emails after the US market-close cron (`0 22 * * *` UTC with `fr
 | **Recipients** | Any valid address the user enters — not limited to the Resend account owner |
 | **Content** | HTML + plain text: portfolio summary, top movers, inline SVG 7-day P/L charts |
 | **Test send** | `POST /api/daily-report-email/test` (auth required); subject prefix `[Test]` |
-| **Cron loop** | After snapshots, `sendOptedInDailyReportEmails` emails each opted-in cloud user with holdings |
+| **Cron loop** | After US-close snapshots finish (`fresh=1` at 22:00 UTC), emails use the same run's fresh snapshot rows merged into 7-day chart history |
 
 ### Production email domain
 

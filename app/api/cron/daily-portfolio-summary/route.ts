@@ -18,14 +18,22 @@ export async function GET(request: Request) {
 
   try {
     const freshQuotes = new URL(request.url).searchParams.get("fresh") === "1";
+    const now = new Date();
     const supabase = createSupabaseAdminClient();
+
+    // Always snapshot first. Emails run only on the US market-close cron (fresh=1),
+    // after every user's close-of-day snapshot finishes in this same request.
     const summary = await runDailyPortfolioSnapshotsForAllUsers(supabase, {
       shareQuoteCache: !freshQuotes,
-      freshQuotes
+      freshQuotes,
+      now
     });
 
     const emails = freshQuotes
-      ? await sendOptedInDailyReportEmails(supabase, summary.results, summary.portfolioRows)
+      ? await sendOptedInDailyReportEmails(supabase, summary.results, summary.portfolioRows, {
+        now,
+        requireSuccessfulSnapshot: true
+      })
       : {
         configured: Boolean(process.env.RESEND_API_KEY && process.env.REPORT_FROM_EMAIL),
         attempted: 0,

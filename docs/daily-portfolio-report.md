@@ -93,7 +93,10 @@ Each signed-in cloud user can enable a daily market-close email in **Settings**:
 - `settings.dailyReportEmail` — recipient address (any valid inbox)
 - `settings.dailyReportEmailEnabled` — toggle
 
-After the US-close cron (`0 22 * * *` UTC with `?fresh=1`), the server snapshots all cloud portfolios, then emails users who opted in. Email content includes portfolio summary, top movers, and inline SVG 7-day P/L charts.
+After the US-close cron (`0 22 * * *` UTC with `?fresh=1`), the server:
+
+1. Snapshots every cloud portfolio with fresh post-close quotes
+2. Sends opted-in emails only after those snapshots complete, using the just-written rows for charts
 
 **Test delivery:** Settings → **Send test email** (calls `POST /api/daily-report-email/test`).
 
