@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   chartDateLabel,
+  chartAxisDateLabel,
   getDailyPlSessionInfo,
   getLastTradingDate,
   isTradingWeekday
@@ -50,5 +51,12 @@ describe("chartDateLabel", () => {
   it("marks weekend snapshot dates as closed", () => {
     expect(chartDateLabel("2026-06-13", "US", new Date("2026-06-14T15:00:00.000Z"))).toContain("closed");
     expect(chartDateLabel("2026-06-12", "US", new Date("2026-06-14T15:00:00.000Z"))).not.toContain("closed");
+  });
+});
+
+describe("chartAxisDateLabel", () => {
+  it("uses compact month/day labels without closed suffix", () => {
+    expect(chartAxisDateLabel("2026-06-13", new Date("2026-06-14T15:00:00.000Z"))).toBe("Jun 13");
+    expect(chartAxisDateLabel("2026-06-13", new Date("2026-06-14T15:00:00.000Z"))).not.toContain("closed");
   });
 });

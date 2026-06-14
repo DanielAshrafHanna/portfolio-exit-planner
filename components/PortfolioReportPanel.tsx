@@ -1,20 +1,21 @@
 "use client";
 
 import { AlertTriangle, BarChart3, RefreshCw, TrendingDown, TrendingUp } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { reportProfileTabClass } from "@/components/reportTabs";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { getDailyPlSessionInfo, regionFromCurrency } from "@/lib/marketSession";
 import { formatMoney } from "@/lib/profileUtils";
-import { createSupabaseBrowserClient } from "@/lib/supabaseClient";
 import type { CurrencyCode } from "@/lib/types";
 import type { PortfolioReport, PortfolioReportHolding, PortfolioReportTotals } from "@/lib/portfolioReport";
 
-type ReportResponse = {
-  report?: PortfolioReport;
-  cloudUpdatedAt?: string | null;
-  snapshotWarning?: string;
-  error?: string;
+type Props = {
+  report: PortfolioReport | null;
+  cloudUpdatedAt: string | null;
+  isLoading: boolean;
+  error: string | null;
+  warnings: string[];
+  onRefresh: () => void;
 };
 
 type SortKey = "profitLoss" | "dailyProfitLoss" | "profitLossPercent";
@@ -24,49 +25,16 @@ const sortLabels: Record<Exclude<SortKey, "dailyProfitLoss">, string> = {
   profitLossPercent: "%"
 };
 
-export function PortfolioReportPanel() {
-  const supabase = useMemo(() => createSupabaseBrowserClient(), []);
-  const [report, setReport] = useState<PortfolioReport | null>(null);
-  const [cloudUpdatedAt, setCloudUpdatedAt] = useState<string | null>(null);
+export function PortfolioReportPanel({
+  report,
+  cloudUpdatedAt,
+  isLoading,
+  error,
+  warnings,
+  onRefresh
+}: Props) {
   const [selectedProfileId, setSelectedProfileId] = useState("all");
   const [sortKey, setSortKey] = useState<SortKey>("profitLoss");
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [warnings, setWarnings] = useState<string[]>([]);
-
-  const loadReport = useCallback(async () => {
-    if (!supabase) {
-      setError("Supabase is not configured.");
-      return;
-    }
-    setIsLoading(true);
-    setError(null);
-    try {
-      const { data } = await supabase.auth.getSession();
-      const token = data.session?.access_token;
-      if (!token) throw new Error("Sign in again to refresh the report.");
-      const response = await fetch("/api/portfolio-report", {
-        headers: { Authorization: `Bearer ${token}` },
-        cache: "no-store"
-      });
-      const payload = await response.json() as ReportResponse;
-      if (!response.ok || !payload.report) throw new Error(payload.error || "Report failed to load.");
-      setReport(payload.report);
-      setCloudUpdatedAt(payload.cloudUpdatedAt || null);
-      setWarnings(payload.snapshotWarning ? [payload.snapshotWarning] : []);
-      setSelectedProfileId((existing) => existing === "all" || payload.report?.profiles.some((profile) => profile.id === existing)
-        ? existing
-        : "all");
-    } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "Report failed to load.");
-    } finally {
-      setIsLoading(false);
-    }
-  }, [supabase]);
-
-  useEffect(() => {
-    void loadReport();
-  }, [loadReport]);
 
   const selectedProfile = useMemo(() => (
     report?.profiles.find((profile) => profile.id === selectedProfileId)
@@ -102,7 +70,7 @@ export function PortfolioReportPanel() {
         <button
           className="inline-flex min-h-10 items-center gap-2 rounded-md border border-marine/25 bg-white px-3 py-2 text-sm font-semibold text-marine hover:border-marine/50 disabled:cursor-not-allowed disabled:opacity-60"
           type="button"
-          onClick={() => void loadReport()}
+          onClick={onRefresh}
           disabled={isLoading}
         >
           <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} aria-hidden />
@@ -200,7 +168,7 @@ function TotalsBlock({ totals }: { totals: PortfolioReportTotals }) {
   return (
     <div className="rounded-md border border-ink/10 bg-white p-3">
       <div className="mb-2 flex items-center justify-between gap-2">
-        <div className="text-xs font-semibold uppercase text-ink/50">{totals.currency}</div>
+        <span className="text-xs font-semibold uppercase text-ink/55">{totals.currency}</span>
         {totals.profitLoss >= 0 ? <TrendingUp className="h-4 w-4 text-marine" aria-hidden /> : <TrendingDown className="h-4 w-4 text-coral" aria-hidden />}
       </div>
       <div className="text-lg font-semibold text-ink">{formatMoney(totals.currentValue, totals.currency)}</div>
@@ -220,42 +188,38 @@ function HoldingRow({ holding }: { holding: PortfolioReportHolding }) {
     <tr className="border-t border-ink/8">
       <td className="px-3 py-2">
         <div className="font-semibold text-ink">{holding.symbol}</div>
-        <div className="max-w-36 truncate text-xs text-ink/50">{holding.name || holding.profileName}</div>
+        <div className="text-xs text-ink/55">{holding.name || holding.profileName}</div>
       </td>
-      <td className="px-3 py-2 font-semibold">{formatMoney(holding.currentValue, holding.currency)}</td>
+      <td className="px-3 py-2">{holding.currentPrice ? formatMoney(holding.currentValue, holding.currency) : "N/A"}</td>
       <td className={`px-3 py-2 font-semibold ${toneClass(holding.profitLoss)}`}>
-        {formatSignedMoney(holding.profitLoss, holding.currency)}
-        <div className="text-xs">{formatPercent(holding.profitLossPercent)}</div>
+        {holding.currentPrice ? formatSignedMoney(holding.profitLoss, holding.currency) : "N/A"}
+        <div className="text-xs">{holding.currentPrice ? formatPercent(holding.profitLossPercent) : ""}</div>
       </td>
       <td className={`px-3 py-2 font-semibold ${toneClass(holding.dailyProfitLoss)}`}>
-        {formatSignedMoney(holding.dailyProfitLoss, holding.currency)}
-        <div className="text-xs">{formatPercent(holding.dailyProfitLossPercent)}</div>
+        {holding.currentPrice ? formatSignedMoney(holding.dailyProfitLoss, holding.currency) : "N/A"}
+        <div className="text-xs">{holding.currentPrice ? formatPercent(holding.dailyProfitLossPercent) : ""}</div>
         <div className="text-[10px] font-normal text-ink/45">
           {session.sessionLabel}{session.isMarketClosed ? " · closed" : ""}
         </div>
       </td>
       <td className="px-3 py-2 text-ink/70">{holding.stopPrice ? formatMoney(holding.stopPrice, holding.currency) : "-"}</td>
       <td className="px-3 py-2 text-ink/70">{holding.targetPrice ? formatMoney(holding.targetPrice, holding.currency) : "-"}</td>
-      <td className="px-3 py-2">
-        <div className="inline-flex rounded border border-ink/10 px-2 py-1 text-xs font-semibold text-ink/70">{holding.action || "-"}</div>
-      </td>
+      <td className="px-3 py-2">{holding.action || "-"}</td>
     </tr>
   );
 }
 
 function toneClass(value: number) {
-  if (value > 0) return "text-marine";
-  if (value < 0) return "text-coral";
-  return "text-ink/60";
-}
-
-function formatPercent(value: number) {
-  return `${value > 0 ? "+" : ""}${value.toLocaleString(undefined, { maximumFractionDigits: 2 })}%`;
+  return value > 0 ? "text-marine" : value < 0 ? "text-coral" : "text-ink";
 }
 
 function formatSignedMoney(value: number, currency: CurrencyCode) {
   const prefix = value > 0 ? "+" : value < 0 ? "-" : "";
   return `${prefix}${formatMoney(Math.abs(value), currency)}`;
+}
+
+function formatPercent(value: number) {
+  return `${value > 0 ? "+" : ""}${value.toLocaleString(undefined, { maximumFractionDigits: 2 })}%`;
 }
 
 function formatDateTime(value: string) {

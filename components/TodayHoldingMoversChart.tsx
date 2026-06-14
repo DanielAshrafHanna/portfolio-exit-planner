@@ -2,7 +2,7 @@
 
 import { Bar, BarChart, CartesianGrid, Cell, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import type { CurrencyCode } from "@/lib/types";
-import { formatMoney } from "@/lib/profileUtils";
+import { CHART_MARGIN, formatChartSignedAxis, formatChartSignedMoney } from "@/lib/chartFormat";
 
 type Mover = {
   symbol: string;
@@ -61,15 +61,15 @@ export function TodayHoldingMoversChart({
       </div>
       <div className="h-72 min-w-[280px] w-full overflow-x-auto">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={chartData} layout="vertical" margin={{ top: 8, right: 12, bottom: 4, left: 8 }}>
+          <BarChart data={chartData} layout="vertical" margin={{ ...CHART_MARGIN, left: 8 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#d8ded5" />
             <XAxis
               type="number"
               domain={[min - padding, max + padding]}
-              tickFormatter={(value) => formatSignedAxis(Number(value), currency)}
-              tick={{ fontSize: 11 }}
+              tickFormatter={(value) => formatChartSignedAxis(Number(value), currency)}
+              tick={{ fontSize: 10 }}
             />
-            <YAxis type="category" dataKey="label" width={56} tick={{ fontSize: 11 }} />
+            <YAxis type="category" dataKey="label" width={56} tick={{ fontSize: 10 }} />
             <Tooltip content={<MoversTooltip currency={currency} />} />
             <ReferenceLine x={0} stroke="#17212b" strokeDasharray="4 4" />
             <Bar dataKey="dailyProfitLoss" radius={[0, 4, 4, 0]}>
@@ -103,18 +103,8 @@ function MoversTooltip({
       <div className="font-semibold text-ink">{holding.symbol}</div>
       <div className="text-ink/60">{holding.name}</div>
       <div className={holding.dailyProfitLoss >= 0 ? "text-marine" : "text-coral"}>
-        {formatSignedMoney(holding.dailyProfitLoss, currency)}
+        {formatChartSignedMoney(holding.dailyProfitLoss, currency)}
       </div>
     </div>
   );
-}
-
-function formatSignedAxis(value: number, currency: CurrencyCode) {
-  const prefix = value > 0 ? "+" : value < 0 ? "-" : "";
-  return `${prefix}${formatMoney(Math.abs(value), currency)}`;
-}
-
-function formatSignedMoney(value: number, currency: CurrencyCode) {
-  const prefix = value > 0 ? "+" : value < 0 ? "-" : "";
-  return `${prefix}${formatMoney(Math.abs(value), currency)}`;
 }

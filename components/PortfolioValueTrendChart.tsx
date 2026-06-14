@@ -2,7 +2,8 @@
 
 import type { WeeklyChartSeries } from "@/lib/portfolioReportCharts";
 import type { CurrencyCode } from "@/lib/types";
-import { formatMoney } from "@/lib/profileUtils";
+import { formatMoney, formatMoneyTable } from "@/lib/profileUtils";
+import { CHART_MARGIN } from "@/lib/chartFormat";
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 type Props = {
@@ -32,14 +33,15 @@ export function PortfolioValueTrendChart({ series }: Props) {
       </div>
       <div className="h-64 min-w-[280px] w-full overflow-x-auto">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={chartData} margin={{ top: 8, right: 12, bottom: 4, left: 0 }}>
+          <LineChart data={chartData} margin={CHART_MARGIN}>
             <CartesianGrid strokeDasharray="3 3" stroke="#d8ded5" />
-            <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+            <XAxis dataKey="date" interval="preserveStartEnd" tick={{ fontSize: 10 }} />
             <YAxis
-              tickFormatter={(value) => formatMoney(Number(value), series.currency)}
+              width={48}
+              tickFormatter={(value) => formatMoneyTable(Number(value), series.currency)}
               domain={[domainMin, domainMax]}
               allowDataOverflow
-              tick={{ fontSize: 11 }}
+              tick={{ fontSize: 10 }}
             />
             <Tooltip content={<ValueTooltip currency={series.currency} />} />
             <Line

@@ -1,5 +1,5 @@
 import type { CurrencyCode, MarketRegion } from "./types";
-import { chartDateLabel, isTradingWeekday, regionFromCurrency } from "./marketSession";
+import { chartAxisDateLabel, isTradingWeekday, regionFromCurrency } from "./marketSession";
 
 export type SnapshotHistoryRow = {
   snapshot_date: string;
@@ -89,7 +89,7 @@ export function buildWeeklySeries(
       points: windowDates.map((snapshotDate) => {
         const row = byDate.get(snapshotDate);
         const marketClosed = !isTradingWeekday(region, snapshotDate);
-        const date = chartDateLabel(snapshotDate, region, now);
+        const date = chartAxisDateLabel(snapshotDate, now);
         if (!row) {
           return {
             date,
@@ -144,7 +144,7 @@ export function topHoldingMovers<T extends { symbol: string; name: string; daily
 
 function emptyWeeklyPoints(windowDates: string[], region: MarketRegion, now: Date): WeeklyChartPoint[] {
   return windowDates.map((snapshotDate) => ({
-    date: chartDateLabel(snapshotDate, region, now),
+    date: chartAxisDateLabel(snapshotDate, now),
     snapshotDate,
     dailyProfitLoss: 0,
     dailyProfitLossPercent: 0,

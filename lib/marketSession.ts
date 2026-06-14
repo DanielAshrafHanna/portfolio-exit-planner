@@ -171,3 +171,14 @@ export function chartDateLabel(
   const base = formatSessionLabel(snapshotDate, now);
   return isTradingWeekday(region, snapshotDate) ? base : `${base} · closed`;
 }
+
+/** Short month/day labels for chart axes — closed status stays in tooltips. */
+export function chartAxisDateLabel(snapshotDate: string, now = new Date()) {
+  const currentYear = Number(marketDateString("US", now).slice(0, 4));
+  const dateYear = Number(snapshotDate.slice(0, 4));
+  return new Date(`${snapshotDate}T12:00:00.000Z`).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    ...(dateYear === currentYear ? {} : { year: "numeric" })
+  });
+}

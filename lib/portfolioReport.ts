@@ -88,6 +88,7 @@ export type PortfolioReportQuoteFetcher = (
 type BuildPortfolioReportOptions = {
   now?: Date;
   fetchQuote?: PortfolioReportQuoteFetcher;
+  freshQuotes?: boolean;
 };
 
 export async function buildPortfolioReport(
@@ -95,7 +96,7 @@ export async function buildPortfolioReport(
   options: BuildPortfolioReportOptions = {}
 ): Promise<PortfolioReport> {
   const generatedAt = (options.now || new Date()).toISOString();
-  const fetchQuote = options.fetchQuote || defaultFetchQuote;
+  const fetchQuote = options.fetchQuote || createDefaultFetchQuote(options.freshQuotes === true);
   const reportProfiles = await Promise.all(profiles.map((profile) => buildProfileReport(profile, fetchQuote)));
   const holdings = reportProfiles.flatMap((profile) => profile.holdings);
   const quotedHoldings = holdings.filter((holding) => holding.currentPrice !== undefined);
@@ -272,8 +273,8 @@ function rankByPercent(rows: PortfolioReportHolding[], direction: "asc" | "desc"
   return sorted[0];
 }
 
-async function defaultFetchQuote(symbol: string, region: MarketRegion) {
-  return getQuote(symbol, region, { fresh: true });
+function createDefaultFetchQuote(fresh: boolean): PortfolioReportQuoteFetcher {
+  return (symbol, region) => getQuote(symbol, region, { fresh });
 }
 
 export function reportTone(value: number): ReportTone {

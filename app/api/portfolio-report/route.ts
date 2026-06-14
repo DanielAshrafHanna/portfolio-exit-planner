@@ -31,9 +31,11 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: `Portfolio report failed to load: ${error.message}` }, { status: 500 });
     }
 
+    const url = new URL(request.url);
+    const freshQuotes = url.searchParams.get("fresh") === "1";
     const row = data as CloudPortfolioRow | null;
     const profiles = row ? profilesFromCloudPortfolioRow(row) : defaultProfiles();
-    const report = await buildPortfolioReport(profiles);
+    const report = await buildPortfolioReport(profiles, { freshQuotes });
     const snapshotResult = await upsertPortfolioSnapshots(
       supabase,
       snapshotsFromReport(user.id, report)

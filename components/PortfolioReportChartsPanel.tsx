@@ -1,7 +1,7 @@
 "use client";
 
 import { AlertTriangle, BarChart3, RefreshCw } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { PortfolioValueTrendChart } from "@/components/PortfolioValueTrendChart";
 import { TodayHoldingMoversChart } from "@/components/TodayHoldingMoversChart";
 import { WeeklyCumulativePlChart } from "@/components/WeeklyCumulativePlChart";
@@ -12,86 +12,32 @@ import { topHoldingMovers } from "@/lib/portfolioReportCharts";
 import type { WeeklyChartSeries } from "@/lib/portfolioReportCharts";
 import type { PortfolioReport } from "@/lib/portfolioReport";
 import { getDailyPlSessionInfo, regionFromCurrency } from "@/lib/marketSession";
-import { createSupabaseBrowserClient } from "@/lib/supabaseClient";
 import type { CurrencyCode } from "@/lib/types";
 
-type ReportResponse = {
-  report?: PortfolioReport;
-  cloudUpdatedAt?: string | null;
-  snapshotWarning?: string;
-  error?: string;
+type Props = {
+  report: PortfolioReport | null;
+  historySeries: WeeklyChartSeries[];
+  selectedProfileId: string;
+  onSelectedProfileIdChange: (profileId: string) => void;
+  isLoadingReport: boolean;
+  isLoadingHistory: boolean;
+  error: string | null;
+  warnings: string[];
+  onRefresh: () => void;
 };
 
-type HistoryResponse = {
-  days?: number;
-  profileId?: string;
-  series?: WeeklyChartSeries[];
-  warnings?: string[];
-  error?: string;
-};
-
-export function PortfolioReportChartsPanel() {
-  const supabase = useMemo(() => createSupabaseBrowserClient(), []);
-  const [report, setReport] = useState<PortfolioReport | null>(null);
-  const [historySeries, setHistorySeries] = useState<WeeklyChartSeries[]>([]);
-  const [selectedProfileId, setSelectedProfileId] = useState("all");
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [warnings, setWarnings] = useState<string[]>([]);
-
-  const loadCharts = useCallback(async () => {
-    if (!supabase) {
-      setError("Supabase is not configured.");
-      return;
-    }
-    setIsLoading(true);
-    setError(null);
-    try {
-      const { data } = await supabase.auth.getSession();
-      const token = data.session?.access_token;
-      if (!token) throw new Error("Sign in again to refresh charts.");
-
-      const historyUrl = `/api/portfolio-report/history?days=7&profileId=${encodeURIComponent(selectedProfileId)}`;
-      const [reportResponse, historyResponse] = await Promise.all([
-        fetch("/api/portfolio-report", {
-          headers: { Authorization: `Bearer ${token}` },
-          cache: "no-store"
-        }),
-        fetch(historyUrl, {
-          headers: { Authorization: `Bearer ${token}` },
-          cache: "no-store"
-        })
-      ]);
-
-      const reportPayload = await reportResponse.json() as ReportResponse;
-      const historyPayload = await historyResponse.json() as HistoryResponse;
-
-      if (!reportResponse.ok || !reportPayload.report) {
-        throw new Error(reportPayload.error || "Report failed to load.");
-      }
-      if (!historyResponse.ok) {
-        throw new Error(historyPayload.error || "Report history failed to load.");
-      }
-
-      setReport(reportPayload.report);
-      setHistorySeries(historyPayload.series || []);
-      setWarnings([
-        ...(reportPayload.snapshotWarning ? [reportPayload.snapshotWarning] : []),
-        ...(historyPayload.warnings || [])
-      ]);
-      setSelectedProfileId((existing) => existing === "all" || reportPayload.report?.profiles.some((profile) => profile.id === existing)
-        ? existing
-        : "all");
-    } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "Charts failed to load.");
-    } finally {
-      setIsLoading(false);
-    }
-  }, [selectedProfileId, supabase]);
-
-  useEffect(() => {
-    void loadCharts();
-  }, [loadCharts]);
+export function PortfolioReportChartsPanel({
+  report,
+  historySeries,
+  selectedProfileId,
+  onSelectedProfileIdChange,
+  isLoadingReport,
+  isLoadingHistory,
+  error,
+  warnings,
+  onRefresh
+}: Props) {
+  const isLoading = isLoadingReport || isLoadingHistory;
 
   const selectedProfile = useMemo(() => (
     report?.profiles.find((profile) => profile.id === selectedProfileId)
@@ -142,7 +88,7 @@ export function PortfolioReportChartsPanel() {
         <button
           className="inline-flex min-h-10 items-center gap-2 rounded-md border border-marine/25 bg-white px-3 py-2 text-sm font-semibold text-marine hover:border-marine/50 disabled:cursor-not-allowed disabled:opacity-60"
           type="button"
-          onClick={() => void loadCharts()}
+          onClick={onRefresh}
           disabled={isLoading}
         >
           <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} aria-hidden />
@@ -172,21 +118,23 @@ export function PortfolioReportChartsPanel() {
           </div>
         ) : null}
 
-        {report ? (
+        {report || historySeries.length ? (
           <>
-            <div className="flex gap-2 overflow-x-auto pb-1">
-              <button className={reportProfileTabClass(selectedProfileId === "all")} type="button" onClick={() => setSelectedProfileId("all")}>All</button>
-              {report.profiles.map((profile) => (
-                <button
-                  className={reportProfileTabClass(selectedProfileId === profile.id)}
-                  type="button"
-                  key={profile.id}
-                  onClick={() => setSelectedProfileId(profile.id)}
-                >
-                  {profile.name}
-                </button>
-              ))}
-            </div>
+            {report ? (
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                <button className={reportProfileTabClass(selectedProfileId === "all")} type="button" onClick={() => onSelectedProfileIdChange("all")}>All</button>
+                {report.profiles.map((profile) => (
+                  <button
+                    className={reportProfileTabClass(selectedProfileId === profile.id)}
+                    type="button"
+                    key={profile.id}
+                    onClick={() => onSelectedProfileIdChange(profile.id)}
+                  >
+                    {profile.name}
+                  </button>
+                ))}
+              </div>
+            ) : null}
 
             {historyDataDays < 2 ? (
               <div className="rounded-md border border-ink/10 bg-mint/20 p-3 text-sm text-ink/70">
@@ -196,7 +144,7 @@ export function PortfolioReportChartsPanel() {
 
             <div className="grid gap-4 xl:grid-cols-2">
               {historySeries.map((series) => <WeeklyDailyPlChart series={series} key={`daily-${series.profileId}-${series.currency}`} />)}
-              {moversByCurrency.map((entry) => (
+              {report ? moversByCurrency.map((entry) => (
                 <TodayHoldingMoversChart
                   holdings={entry.movers}
                   currency={entry.currency}
@@ -206,7 +154,7 @@ export function PortfolioReportChartsPanel() {
                   sessionLabel={entry.session.sessionLabel}
                   isMarketClosed={entry.session.isMarketClosed}
                 />
-              ))}
+              )) : null}
               {historySeries.map((series) => <WeeklyCumulativePlChart series={series} key={`cumulative-${series.profileId}-${series.currency}`} />)}
               {historySeries.map((series) => <PortfolioValueTrendChart series={series} key={`value-${series.profileId}-${series.currency}`} />)}
             </div>
