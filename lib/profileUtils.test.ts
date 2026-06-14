@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { displayMarketSymbol, formatMoney, formatMoneyTable, normalizeMarketSymbol } from "./profileUtils";
+import { displayMarketSymbol, ensureMarketProfiles, formatMoney, formatMoneyTable, normalizeMarketSymbol } from "./profileUtils";
 
 describe("market symbol normalization", () => {
   it("keeps US symbols unchanged", () => {
@@ -28,5 +28,21 @@ describe("currency formatting", () => {
   it("formats compact table money without repeating the EGP prefix", () => {
     expect(formatMoneyTable(1234.56, "USD")).toBe("$1,234.56");
     expect(formatMoneyTable(1234567.89, "EGP")).toBe("1,234,567.89");
+  });
+});
+
+describe("ensureMarketProfiles", () => {
+  it("adds the missing Egypt profile when only US is stored", () => {
+    const profiles = ensureMarketProfiles([
+      {
+        id: "us-portfolio",
+        name: "US Portfolio",
+        region: "US",
+        currency: "USD",
+        holdings: [],
+        settings: { fixedTradingFee: 0, percentTradingFee: 0, fxFeePercent: 0 }
+      }
+    ]);
+    expect(profiles.map((profile) => profile.region)).toEqual(["US", "EG"]);
   });
 });

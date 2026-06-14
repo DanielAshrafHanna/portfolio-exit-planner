@@ -23,6 +23,23 @@ export function defaultProfiles(): PortfolioProfile[] {
   ];
 }
 
+/** Keep both market profiles available even if older cloud/local saves only stored one side. */
+export function ensureMarketProfiles(
+  profiles: PortfolioProfile[],
+  fallbackSettings: FeeSettings = DEFAULT_SETTINGS
+): PortfolioProfile[] {
+  if (!profiles.length) return defaultProfiles();
+  const hasUs = profiles.some((profile) => profile.region === "US");
+  const hasEg = profiles.some((profile) => profile.region === "EG");
+  if (hasUs && hasEg) return profiles;
+  const [defaultUs, defaultEg] = defaultProfiles();
+  const settings = profiles[0]?.settings || fallbackSettings;
+  const merged = [...profiles];
+  if (!hasUs) merged.unshift({ ...defaultUs, settings });
+  if (!hasEg) merged.push({ ...defaultEg, settings });
+  return merged;
+}
+
 export function currencyLabel(currency: CurrencyCode) {
   return currency === "EGP" ? "EGP" : "$";
 }

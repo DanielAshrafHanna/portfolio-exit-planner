@@ -1,5 +1,5 @@
 import { totalCostFor } from "./calculations";
-import { DEFAULT_SETTINGS, defaultProfiles } from "./profileUtils";
+import { DEFAULT_SETTINGS, defaultProfiles, ensureMarketProfiles } from "./profileUtils";
 import { filterUnsupportedHoldings } from "./unsupportedTickers";
 import type { EnrichedHolding, FeeSettings, HoldingInput, PortfolioProfile } from "./types";
 import { aiAnalysisSchema, feeSettingsSchema, marketQuoteSchema, newsItemSchema } from "./validation";
@@ -163,6 +163,7 @@ export function loadPortfolioState(values: StoredPortfolioValues): PortfolioStor
   }
 
   if (!profiles.length) profiles = defaultProfiles();
+  profiles = ensureMarketProfiles(profiles, parsedSettings);
   const activeProfileId = profiles.some((profile) => profile.id === values.storedActiveProfileId)
     ? values.storedActiveProfileId!
     : profiles[0]?.id || "us-portfolio";

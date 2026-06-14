@@ -20,6 +20,25 @@ describe("Mubasher EGX quote parsing", () => {
       provider: "mubasher_egx"
     });
   });
+
+  it("reads labeled values when Mubasher renders the number before the label", () => {
+    const quote = parseMubasherEgxQuote(`
+      <div class="market-summary__last-price up-icon-only">134.99</div>
+      <span class="market-summary__block-number">131.69</span>
+      <span class="market-summary__block-text">Previous Close</span>
+      <span class="market-summary__block-number">131.69</span>
+      <span class="market-summary__block-number">4,254,137</span>
+      <span class="market-summary__block-text">Volume</span>
+      <span class="market-summary__block-number">4,254,137</span>
+    `, "COMI");
+
+    expect(quote).toMatchObject({
+      symbol: "COMI",
+      currentPrice: 134.99,
+      previousClose: 131.69,
+      volume: 4254137
+    });
+  });
 });
 
 describe("Yahoo chart quote parsing", () => {

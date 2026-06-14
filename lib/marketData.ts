@@ -178,6 +178,13 @@ export async function getQuote(
         warning: "Egypt quotes are fetched from Mubasher EGX pages because Yahoo Finance can return stale EGX prices."
       };
     }
+    const yahooQuote = await getYahooQuote(marketSymbol, cleanSymbol, options.fresh);
+    if (yahooQuote) {
+      return {
+        data: { ...yahooQuote, symbol: cleanSymbol, stale: true },
+        warning: `Live Mubasher quote unavailable for ${cleanSymbol}; showing Yahoo Finance fallback which may be stale for EGX.`
+      };
+    }
     return {
       data: {
         symbol: cleanSymbol,
@@ -216,7 +223,7 @@ export async function getQuote(
 
 async function getMubasherEgxQuote(symbol: string, fresh = false): Promise<MarketQuote | undefined> {
   try {
-    const response = await mubasherFetch(`${MUBASHER_EGX_URL}/${encodeURIComponent(symbol)}`, fresh);
+    const response = await mubasherFetch(`${MUBASHER_EGX_URL}/${encodeURIComponent(symbol)}/`, fresh);
     if (!response.ok) return undefined;
     return parseMubasherEgxQuote(await response.text(), symbol);
   } catch {
@@ -247,8 +254,15 @@ function numberFromClass(html: string, className: string) {
 
 function numberForLabel(html: string, label: string) {
   const escapedLabel = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const match = html.match(new RegExp(`<span class="market-summary__block-text">\\s*${escapedLabel}\\s*<\\/span>\\s*<span class="market-summary__block-number">\\s*([\\d,.]+)\\s*<\\/span>`, "i"));
-  return match ? parseFormattedNumber(match[1]) : undefined;
+  const patterns = [
+    new RegExp(`<span class="market-summary__block-text">\\s*${escapedLabel}\\s*<\\/span>\\s*<span class="market-summary__block-number">\\s*([\\d,.]+)\\s*<\\/span>`, "i"),
+    new RegExp(`<span class="market-summary__block-number">\\s*([\\d,.]+)\\s*<\\/span>\\s*<span class="market-summary__block-text">\\s*${escapedLabel}\\s*<\\/span>`, "i")
+  ];
+  for (const pattern of patterns) {
+    const match = html.match(pattern);
+    if (match) return parseFormattedNumber(match[1]);
+  }
+  return undefined;
 }
 
 function parseFormattedNumber(value: string) {

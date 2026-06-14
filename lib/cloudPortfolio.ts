@@ -1,4 +1,4 @@
-import { DEFAULT_SETTINGS } from "./profileUtils";
+import { DEFAULT_SETTINGS, ensureMarketProfiles } from "./profileUtils";
 import { coerceFeeSettings, coerceHoldings, coerceProfiles, migrateSinglePortfolio } from "./storageMigration";
 import type { FeeSettings, PortfolioProfile } from "./types";
 
@@ -21,12 +21,13 @@ export function cloudSettingsFromRow(row: CloudPortfolioRow): CloudSettings {
 
 export function profilesFromCloudPortfolioRow(row: CloudPortfolioRow): PortfolioProfile[] {
   const cloudSettings = cloudSettingsFromRow(row);
-  const loadedProfiles = coerceProfiles(row.holdings, DEFAULT_SETTINGS);
-  if (loadedProfiles.length) return loadedProfiles;
+  const settings = coerceFeeSettings(cloudSettings, DEFAULT_SETTINGS);
+  const loadedProfiles = coerceProfiles(row.holdings, settings);
+  if (loadedProfiles.length) return ensureMarketProfiles(loadedProfiles, settings);
 
-  return migrateSinglePortfolio(
-    coerceHoldings(row.holdings),
-    coerceFeeSettings(cloudSettings, DEFAULT_SETTINGS)
+  return ensureMarketProfiles(
+    migrateSinglePortfolio(coerceHoldings(row.holdings), settings),
+    settings
   );
 }
 

@@ -58,10 +58,11 @@ export function PortfolioValueTrendChart({ series }: Props) {
 }
 
 function valueChartDomain(values: number[]): [number, number] {
-  if (!values.length) return [0, 1];
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const span = Math.max(max - min, max * 0.02, 1);
+  const finite = values.filter((value) => Number.isFinite(value));
+  if (!finite.length) return [0, 1];
+  const min = Math.min(...finite);
+  const max = Math.max(...finite);
+  const span = Math.max(max - min, Math.abs(max) * 0.02, 1);
   return [Math.max(0, min - span * 0.1), max + span * 0.1];
 }
 

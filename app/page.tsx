@@ -47,7 +47,8 @@ import {
   writePortfolioCache,
   type PortfolioCacheSnapshot
 } from "@/lib/portfolioStorage";
-import { coerceHoldings, coerceProfiles, emptyPortfolioBootstrap, enrichHolding, migrateSinglePortfolio } from "@/lib/storageMigration";
+import { activeProfileIdFromCloudPortfolioRow, profilesFromCloudPortfolioRow } from "@/lib/cloudPortfolio";
+import { coerceProfiles, emptyPortfolioBootstrap, enrichHolding } from "@/lib/storageMigration";
 import { createSupabaseBrowserClient } from "@/lib/supabaseClient";
 import {
   mergeProfilesForCloudSave,
@@ -667,6 +668,10 @@ export default function Home() {
     }
   }, [holdingsViewOptions, selectedSharedProfileId]);
 
+  useEffect(() => {
+    setSelectedSharedProfileId(OWN_HOLDINGS_VIEW_ID);
+  }, [activeProfileId]);
+
   const updateActiveProfile = (updater: (profile: PortfolioProfile) => PortfolioProfile) => {
     setProfiles((items) => items.map((profile) => profile.id === activeProfile?.id ? updater(profile) : profile));
   };
@@ -1220,7 +1225,7 @@ export default function Home() {
       .eq("user_id", user.id)
       .maybeSingle();
     if (!cloudSnapshot.error && cloudSnapshot.data?.holdings) {
-      const loadedCloudProfiles = coerceProfiles(cloudSnapshot.data.holdings, DEFAULT_SETTINGS);
+      const loadedCloudProfiles = profilesFromCloudPortfolioRow({ holdings: cloudSnapshot.data.holdings, settings: {} });
       if (loadedCloudProfiles.length) cloudProfilesForMerge = sanitizeProfilesForPersistence(loadedCloudProfiles);
     }
     const mergedProfiles = sanitizeProfilesForPersistence(mergeProfilesForCloudSave(
@@ -1322,14 +1327,8 @@ export default function Home() {
     const cloudSettings: CloudSettings = row.settings && typeof row.settings === "object"
       ? row.settings as CloudSettings
       : {};
-    const loadedProfiles = coerceProfiles(row.holdings, DEFAULT_SETTINGS);
-    const rawProfiles = loadedProfiles.length
-      ? loadedProfiles
-      : migrateSinglePortfolio(coerceHoldings(row.holdings), { ...DEFAULT_SETTINGS, ...cloudSettings });
-    const resolvedProfiles = sanitizeProfilesForPersistence(rawProfiles);
-    const resolvedActiveProfileId = loadedProfiles.length
-      ? (loadedProfiles.some((profile) => profile.id === cloudSettings?.activeProfileId) ? cloudSettings.activeProfileId! : loadedProfiles[0].id)
-      : resolvedProfiles[0].id;
+    const resolvedProfiles = sanitizeProfilesForPersistence(profilesFromCloudPortfolioRow(row));
+    const resolvedActiveProfileId = activeProfileIdFromCloudPortfolioRow(row, resolvedProfiles);
     const resolvedDisplayName = normalizeDisplayName(row.display_name || cloudSettings.displayName || friendlyNameForUser(user!));
     const resolvedShareHoldings = Boolean(row.share_holdings ?? cloudSettings.shareHoldings);
     return {
