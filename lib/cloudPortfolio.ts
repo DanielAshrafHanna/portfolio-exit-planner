@@ -2,7 +2,15 @@ import { DEFAULT_SETTINGS, ensureMarketProfiles } from "./profileUtils";
 import { coerceFeeSettings, coerceHoldings, coerceProfiles, migrateSinglePortfolio } from "./storageMigration";
 import type { FeeSettings, PortfolioProfile } from "./types";
 
-type CloudSettings = { activeProfileId?: string; displayName?: string; shareHoldings?: boolean } & Partial<FeeSettings>;
+type CloudSettings = {
+  activeProfileId?: string;
+  displayName?: string;
+  shareHoldings?: boolean;
+  dailyReportEmail?: string;
+  dailyReportEmailEnabled?: boolean;
+} & Partial<FeeSettings>;
+
+export type { CloudSettings };
 
 export type CloudPortfolioRow = {
   holdings: unknown;

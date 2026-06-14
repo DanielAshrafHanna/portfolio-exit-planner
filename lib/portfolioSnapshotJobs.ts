@@ -21,6 +21,7 @@ export type DailySnapshotRunSummary = {
   skipped: number;
   failed: number;
   results: UserSnapshotResult[];
+  portfolioRows: CloudPortfolioRow[];
 };
 
 type RunDailySnapshotOptions = {
@@ -171,6 +172,7 @@ export async function runDailyPortfolioSnapshotsForAllUsers(
     processed,
     skipped,
     failed,
-    results
+    results,
+    portfolioRows: rows
   };
 }

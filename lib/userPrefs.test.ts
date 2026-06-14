@@ -4,7 +4,12 @@ import { parseStoredUserPrefs, resolveUserPrefsForSync, serializeUserPrefs } fro
 describe("userPrefs", () => {
   it("parses stored prefs", () => {
     const prefs = parseStoredUserPrefs(serializeUserPrefs({ displayName: "Chantal", shareHoldings: true }));
-    expect(prefs).toEqual({ displayName: "Chantal", shareHoldings: true });
+    expect(prefs).toEqual({
+      displayName: "Chantal",
+      shareHoldings: true,
+      dailyReportEmail: "",
+      dailyReportEmailEnabled: false
+    });
   });
 
   it("returns null for corrupted prefs", () => {
@@ -30,7 +35,12 @@ describe("userPrefs", () => {
       cloudShareHoldings: true,
       localIsNewer: false
     });
-    expect(resolved).toEqual({ displayName: "Chantal", shareHoldings: true });
+    expect(resolved).toEqual({
+      displayName: "Chantal",
+      shareHoldings: true,
+      dailyReportEmail: "",
+      dailyReportEmailEnabled: false
+    });
   });
 
   it("keeps cloud sharing when local portfolio is newer but sharing was not toggled locally", () => {
@@ -41,7 +51,12 @@ describe("userPrefs", () => {
       localIsNewer: true,
       shareHoldingsTouched: false
     });
-    expect(resolved).toEqual({ displayName: "Chantal", shareHoldings: true });
+    expect(resolved).toEqual({
+      displayName: "Chantal",
+      shareHoldings: true,
+      dailyReportEmail: "",
+      dailyReportEmailEnabled: false
+    });
   });
 
   it("honors a local sharing toggle when local portfolio is newer", () => {
@@ -52,6 +67,11 @@ describe("userPrefs", () => {
       localIsNewer: true,
       shareHoldingsTouched: true
     });
-    expect(resolved).toEqual({ displayName: "Chantal", shareHoldings: false });
+    expect(resolved).toEqual({
+      displayName: "Chantal",
+      shareHoldings: false,
+      dailyReportEmail: "",
+      dailyReportEmailEnabled: false
+    });
   });
 });

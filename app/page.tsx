@@ -19,6 +19,7 @@ import { PortfolioSummary } from "@/components/PortfolioSummary";
 import { QuickAddHolding, type QuickAddHoldingHandle } from "@/components/QuickAddHolding";
 import { SettingsDialog } from "@/components/SettingsDialog";
 import { SettingsPanel } from "@/components/SettingsPanel";
+import { DailyReportEmailSettings } from "@/components/DailyReportEmailSettings";
 import { SharedHoldingsViewer } from "@/components/SharedHoldingsViewer";
 import { defaultSellTargets } from "@/lib/calculations";
 import {
@@ -47,7 +48,8 @@ import {
   writePortfolioCache,
   type PortfolioCacheSnapshot
 } from "@/lib/portfolioStorage";
-import { activeProfileIdFromCloudPortfolioRow, profilesFromCloudPortfolioRow } from "@/lib/cloudPortfolio";
+import { activeProfileIdFromCloudPortfolioRow, cloudSettingsFromRow, profilesFromCloudPortfolioRow, type CloudSettings } from "@/lib/cloudPortfolio";
+import { dailyReportEmailPrefsFromSettings } from "@/lib/dailyReportEmailPrefs";
 import { coerceProfiles, emptyPortfolioBootstrap, enrichHolding } from "@/lib/storageMigration";
 import { createSupabaseBrowserClient } from "@/lib/supabaseClient";
 import {
@@ -186,6 +188,8 @@ type CloudPortfolioPayload = {
   activeProfileId: string;
   displayName?: string;
   shareHoldings?: boolean;
+  dailyReportEmail?: string;
+  dailyReportEmailEnabled?: boolean;
 };
 
 type CloudPortfolioRow = {
@@ -196,8 +200,6 @@ type CloudPortfolioRow = {
   updated_at?: string | null;
   user_id?: string | null;
 };
-
-type CloudSettings = { activeProfileId?: string; displayName?: string; shareHoldings?: boolean } & Partial<FeeSettings>;
 
 async function readJsonResponse<T>(response: Response): Promise<T> {
   try {
@@ -274,12 +276,21 @@ function profilesSyncKey(profiles: PortfolioProfile[], activeProfileId: string, 
   });
 }
 
-function buildCloudPayload(profiles: PortfolioProfile[], activeProfileId: string, displayName: string, shareHoldings: boolean) {
+function buildCloudPayload(
+  profiles: PortfolioProfile[],
+  activeProfileId: string,
+  displayName: string,
+  shareHoldings: boolean,
+  dailyReportEmail = "",
+  dailyReportEmailEnabled = false
+) {
   return JSON.stringify({
     profiles: sanitizeProfilesForPersistence(profiles),
     activeProfileId,
     displayName,
-    shareHoldings
+    shareHoldings,
+    dailyReportEmail,
+    dailyReportEmailEnabled
   });
 }
 
@@ -311,6 +322,8 @@ export default function Home() {
   const [cloudLoadedUserId, setCloudLoadedUserId] = useState<string | null>(null);
   const [displayName, setDisplayName] = useState("Friend");
   const [shareHoldings, setShareHoldings] = useState(false);
+  const [dailyReportEmail, setDailyReportEmail] = useState("");
+  const [dailyReportEmailEnabled, setDailyReportEmailEnabled] = useState(false);
   const [sharedProfiles, setSharedProfiles] = useState<SharedPortfolioProfile[]>([]);
   const [selectedSharedProfileId, setSelectedSharedProfileId] = useState(OWN_HOLDINGS_VIEW_ID);
   const [isLoadingSharedProfiles, setIsLoadingSharedProfiles] = useState(false);
@@ -323,14 +336,24 @@ export default function Home() {
   const hydratedPrefsUserId = useRef<string | null>(null);
   const displayNameSaveTimeout = useRef<number | null>(null);
   const cloudSaveTimeout = useRef<number | null>(null);
-  const pushCloudPortfolioNowRef = useRef<(override?: { displayName?: string; shareHoldings?: boolean }) => Promise<void>>(async () => {});
+  const pushCloudPortfolioNowRef = useRef<(override?: {
+    displayName?: string;
+    shareHoldings?: boolean;
+    dailyReportEmail?: string;
+    dailyReportEmailEnabled?: boolean;
+  }) => Promise<void>>(async () => {});
   const latestSyncKey = useRef("");
   const userEditRevision = useRef(0);
   const profilesRef = useRef(profiles);
   const displayNameRef = useRef(displayName);
   const shareHoldingsRef = useRef(shareHoldings);
+  const dailyReportEmailRef = useRef(dailyReportEmail);
+  const dailyReportEmailEnabledRef = useRef(dailyReportEmailEnabled);
   const cloudShareHoldingsRef = useRef(false);
+  const cloudDailyReportEmailRef = useRef("");
+  const cloudDailyReportEmailEnabledRef = useRef(false);
   const shareHoldingsTouchedRef = useRef(false);
+  const dailyReportEmailTouchedRef = useRef(false);
   const sessionPortfolioEditedRef = useRef(false);
   const sessionEditedHoldingsProfileIdsRef = useRef<Set<string>>(new Set());
   const lastCloudProfilesRef = useRef<PortfolioProfile[]>(defaultProfiles());
@@ -350,10 +373,28 @@ export default function Home() {
   profilesRef.current = profiles;
   displayNameRef.current = displayName;
   shareHoldingsRef.current = shareHoldings;
+  dailyReportEmailRef.current = dailyReportEmail;
+  dailyReportEmailEnabledRef.current = dailyReportEmailEnabled;
 
   const shareHoldingsForCloudSave = () => (
     shareHoldingsTouchedRef.current ? shareHoldingsRef.current : cloudShareHoldingsRef.current
   );
+
+  const dailyReportEmailForCloudSave = () => (
+    dailyReportEmailTouchedRef.current ? dailyReportEmailRef.current : cloudDailyReportEmailRef.current
+  );
+
+  const dailyReportEmailEnabledForCloudSave = () => (
+    dailyReportEmailTouchedRef.current ? dailyReportEmailEnabledRef.current : cloudDailyReportEmailEnabledRef.current
+  );
+
+  const applyDailyReportEmailFromCloud = (email: string, enabled: boolean) => {
+    cloudDailyReportEmailRef.current = email;
+    cloudDailyReportEmailEnabledRef.current = enabled;
+    dailyReportEmailTouchedRef.current = false;
+    setDailyReportEmail(email);
+    setDailyReportEmailEnabled(enabled);
+  };
 
   const applyShareHoldingsFromCloud = (nextShareHoldings: boolean) => {
     cloudShareHoldingsRef.current = nextShareHoldings;
@@ -478,6 +519,8 @@ export default function Home() {
       if (guestPrefs) {
         setDisplayName(guestPrefs.displayName);
         setShareHoldings(guestPrefs.shareHoldings);
+        setDailyReportEmail(guestPrefs.dailyReportEmail || "");
+        setDailyReportEmailEnabled(Boolean(guestPrefs.dailyReportEmailEnabled));
       }
       setIsHydrated(true);
       return;
@@ -501,6 +544,8 @@ export default function Home() {
     if (storedPrefs) {
       setDisplayName(storedPrefs.displayName);
       setShareHoldings(storedPrefs.shareHoldings);
+      setDailyReportEmail(storedPrefs.dailyReportEmail || "");
+      setDailyReportEmailEnabled(Boolean(storedPrefs.dailyReportEmailEnabled));
     } else {
       setDisplayName((existing) => existing === "Friend" ? friendlyNameForUser(user) : existing);
     }
@@ -526,9 +571,11 @@ export default function Home() {
     const prefsKey = user ? userPrefsStorageKey(user.id) : userPrefsStorageKey("guest");
     localStorage.setItem(prefsKey, serializeUserPrefs({
       displayName: normalizeDisplayName(displayName),
-      shareHoldings
+      shareHoldings,
+      dailyReportEmail,
+      dailyReportEmailEnabled
     }));
-  }, [displayName, shareHoldings, isHydrated, user]);
+  }, [displayName, shareHoldings, dailyReportEmail, dailyReportEmailEnabled, isHydrated, user]);
 
   const currentProfilesSyncKey = useMemo(
     () => profilesSyncKey(profiles, activeProfileId, displayName, shareHoldings),
@@ -539,7 +586,10 @@ export default function Home() {
     if (!user) {
       hydratedPrefsUserId.current = null;
       cloudShareHoldingsRef.current = false;
+      cloudDailyReportEmailRef.current = "";
+      cloudDailyReportEmailEnabledRef.current = false;
       shareHoldingsTouchedRef.current = false;
+      dailyReportEmailTouchedRef.current = false;
       sessionPortfolioEditedRef.current = false;
       setCloudSyncStatus("signed-out");
       setCloudSyncMessage("Sign in to enable cloud sync.");
@@ -1237,7 +1287,9 @@ export default function Home() {
       activeProfileId: parsedPayload.activeProfileId,
       profilesVersion: 2,
       displayName: normalizeDisplayName(parsedPayload.displayName || displayName),
-      shareHoldings: Boolean(parsedPayload.shareHoldings)
+      shareHoldings: Boolean(parsedPayload.shareHoldings),
+      dailyReportEmail: parsedPayload.dailyReportEmail || "",
+      dailyReportEmailEnabled: Boolean(parsedPayload.dailyReportEmailEnabled)
     };
     const { error } = await supabase.from("user_portfolios").upsert({
       user_id: user.id,
@@ -1267,6 +1319,8 @@ export default function Home() {
     }
     const savedAt = new Date().toISOString();
     cloudShareHoldingsRef.current = cloudSettings.shareHoldings;
+    cloudDailyReportEmailRef.current = cloudSettings.dailyReportEmail || "";
+    cloudDailyReportEmailEnabledRef.current = Boolean(cloudSettings.dailyReportEmailEnabled);
     cloudPortfolioUpdatedAtRef.current = savedAt;
     cloudHoldingCountRef.current = portfolioHoldingSymbols(mergedProfiles).length;
     lastCloudProfilesRef.current = mergedProfiles;
@@ -1324,17 +1378,17 @@ export default function Home() {
   };
 
   const resolveCloudPortfolioRow = (row: CloudPortfolioRow) => {
-    const cloudSettings: CloudSettings = row.settings && typeof row.settings === "object"
-      ? row.settings as CloudSettings
-      : {};
+    const cloudSettings: CloudSettings = cloudSettingsFromRow(row);
     const resolvedProfiles = sanitizeProfilesForPersistence(profilesFromCloudPortfolioRow(row));
     const resolvedActiveProfileId = activeProfileIdFromCloudPortfolioRow(row, resolvedProfiles);
     const resolvedDisplayName = normalizeDisplayName(row.display_name || cloudSettings.displayName || friendlyNameForUser(user!));
     const resolvedShareHoldings = Boolean(row.share_holdings ?? cloudSettings.shareHoldings);
+    const resolvedDailyReportEmail = dailyReportEmailPrefsFromSettings(cloudSettings);
     return {
       snapshot: portfolioSnapshotFromProfiles(resolvedProfiles, resolvedActiveProfileId, row.updated_at || null),
       resolvedDisplayName,
       resolvedShareHoldings,
+      resolvedDailyReportEmail,
       cloudSettings
     };
   };
@@ -1377,21 +1431,30 @@ export default function Home() {
         return;
       }
 
-      const { snapshot, resolvedDisplayName, resolvedShareHoldings, cloudSettings } = resolveCloudPortfolioRow(data);
+      const { snapshot, resolvedDisplayName, resolvedShareHoldings, resolvedDailyReportEmail, cloudSettings } = resolveCloudPortfolioRow(data);
       const localCache = readPortfolioCache(user.id);
       const resolvedPrefs = resolveUserPrefsForSync({
         local: {
           displayName: normalizeDisplayName(displayNameRef.current),
-          shareHoldings: shareHoldingsRef.current
+          shareHoldings: shareHoldingsRef.current,
+          dailyReportEmail: dailyReportEmailRef.current,
+          dailyReportEmailEnabled: dailyReportEmailEnabledRef.current
         },
         cloudDisplayName: data.display_name ?? cloudSettings.displayName,
         cloudShareHoldings: data.share_holdings ?? cloudSettings.shareHoldings,
+        cloudDailyReportEmail: resolvedDailyReportEmail.dailyReportEmail,
+        cloudDailyReportEmailEnabled: resolvedDailyReportEmail.dailyReportEmailEnabled,
         localIsNewer: Boolean(localCache?.localUpdatedAt && data.updated_at && new Date(localCache.localUpdatedAt) > new Date(data.updated_at)),
-        shareHoldingsTouched: shareHoldingsTouchedRef.current
+        shareHoldingsTouched: shareHoldingsTouchedRef.current,
+        dailyReportEmailTouched: dailyReportEmailTouchedRef.current
       });
       if (localCache && shouldPreferLocalPortfolioCache(localCache, snapshot.profiles, data.updated_at)) {
         cloudShareHoldingsRef.current = resolvedPrefs.shareHoldings;
         if (!shareHoldingsTouchedRef.current) setShareHoldings(resolvedPrefs.shareHoldings);
+        if (!dailyReportEmailTouchedRef.current) applyDailyReportEmailFromCloud(
+          resolvedPrefs.dailyReportEmail || "",
+          Boolean(resolvedPrefs.dailyReportEmailEnabled)
+        );
         setDisplayName(resolvedPrefs.displayName);
         setCloudLoadedUserId(user.id);
         setProfiles(localCache.profiles);
@@ -1415,6 +1478,10 @@ export default function Home() {
       if (keepLocalPortfolio) {
         cloudShareHoldingsRef.current = resolvedPrefs.shareHoldings;
         if (!shareHoldingsTouchedRef.current) setShareHoldings(resolvedPrefs.shareHoldings);
+        if (!dailyReportEmailTouchedRef.current) applyDailyReportEmailFromCloud(
+          resolvedPrefs.dailyReportEmail || "",
+          Boolean(resolvedPrefs.dailyReportEmailEnabled)
+        );
         setDisplayName(resolvedPrefs.displayName);
         setCloudLoadedUserId(user.id);
         setCloudSyncStatus("saving");
@@ -1423,7 +1490,9 @@ export default function Home() {
           profilesRef.current,
           activeProfileIdRef.current,
           resolvedPrefs.displayName,
-          resolvedPrefs.shareHoldings
+          resolvedPrefs.shareHoldings,
+          resolvedPrefs.dailyReportEmail || "",
+          Boolean(resolvedPrefs.dailyReportEmailEnabled)
         );
         const syncKey = profilesSyncKey(
           profilesRef.current,
@@ -1447,6 +1516,12 @@ export default function Home() {
         setDisplayName(resolvedPrefs.displayName);
         applyShareHoldingsFromCloud(resolvedPrefs.shareHoldings);
         cloudShareHoldingsRef.current = resolvedPrefs.shareHoldings;
+      }
+      if (!dailyReportEmailTouchedRef.current) {
+        applyDailyReportEmailFromCloud(
+          resolvedPrefs.dailyReportEmail || "",
+          Boolean(resolvedPrefs.dailyReportEmailEnabled)
+        );
       }
       clearLegacyPortfolioKeys();
       setCloudLoadedUserId(user.id);
@@ -1516,7 +1591,9 @@ export default function Home() {
         profilesRef.current,
         activeProfileIdRef.current,
         displayNameRef.current,
-        resolvedShareHoldings
+        resolvedShareHoldings,
+        dailyReportEmailForCloudSave(),
+        dailyReportEmailEnabledForCloudSave()
       );
       const syncKey = profilesSyncKey(
         profilesRef.current,
@@ -1562,15 +1639,24 @@ export default function Home() {
     setProfiles((items) => items.map((profile) => profile.id === nextProfile.id ? nextProfile : profile));
   };
 
-  const pushCloudPortfolioNow = async (override?: { displayName?: string; shareHoldings?: boolean }) => {
+  const pushCloudPortfolioNow = async (override?: {
+    displayName?: string;
+    shareHoldings?: boolean;
+    dailyReportEmail?: string;
+    dailyReportEmailEnabled?: boolean;
+  }) => {
     if (!supabase || !user || cloudLoadedUserId !== user.id) return;
     const resolvedDisplayName = normalizeDisplayName(override?.displayName ?? displayNameRef.current);
     const resolvedShareHoldings = override?.shareHoldings ?? shareHoldingsForCloudSave();
+    const resolvedDailyReportEmail = override?.dailyReportEmail ?? dailyReportEmailForCloudSave();
+    const resolvedDailyReportEmailEnabled = override?.dailyReportEmailEnabled ?? dailyReportEmailEnabledForCloudSave();
     const payload = buildCloudPayload(
       profilesRef.current,
       activeProfileIdRef.current,
       resolvedDisplayName,
-      resolvedShareHoldings
+      resolvedShareHoldings,
+      resolvedDailyReportEmail,
+      resolvedDailyReportEmailEnabled
     );
     const syncKey = profilesSyncKey(
       profilesRef.current,
@@ -1615,6 +1701,18 @@ export default function Home() {
     cloudShareHoldingsRef.current = nextShareHoldings;
     setShareHoldings(nextShareHoldings);
     void pushCloudPortfolioNow({ shareHoldings: nextShareHoldings });
+  };
+
+  const handleDailyReportEmailChange = (next: { email: string; enabled: boolean }) => {
+    dailyReportEmailTouchedRef.current = true;
+    cloudDailyReportEmailRef.current = next.email;
+    cloudDailyReportEmailEnabledRef.current = next.enabled;
+    setDailyReportEmail(next.email);
+    setDailyReportEmailEnabled(next.enabled);
+    void pushCloudPortfolioNow({
+      dailyReportEmail: next.email,
+      dailyReportEmailEnabled: next.enabled
+    });
   };
 
   const handleQuickAdd = (holding: HoldingInput) => {
@@ -1681,6 +1779,14 @@ export default function Home() {
         syncHint={prefsSyncHint}
         onShareHoldingsChange={handleShareHoldingsChange}
       />
+      <DailyReportEmailSettings
+        signedIn={Boolean(user)}
+        accountEmail={user?.email}
+        email={dailyReportEmail}
+        enabled={dailyReportEmailEnabled}
+        syncHint={prefsSyncHint}
+        onChange={handleDailyReportEmailChange}
+      />
       <SettingsPanel settings={settings} currency={currency} onChange={setSettings} onClear={clearStored} />
       <ImageImport
         onExtracted={(rows) => {
@@ -1721,6 +1827,14 @@ export default function Home() {
         shareHoldings={shareHoldings}
         syncHint={prefsSyncHint}
         onShareHoldingsChange={handleShareHoldingsChange}
+      />
+      <DailyReportEmailSettings
+        signedIn={Boolean(user)}
+        accountEmail={user?.email}
+        email={dailyReportEmail}
+        enabled={dailyReportEmailEnabled}
+        syncHint={prefsSyncHint}
+        onChange={handleDailyReportEmailChange}
       />
       <ProfileSelector
         profiles={profiles}
