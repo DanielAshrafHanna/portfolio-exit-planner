@@ -2,7 +2,7 @@ import { ArrowLeft } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { DashboardShell } from "@/components/DashboardShell";
-import { PortfolioReportPanel } from "@/components/PortfolioReportPanel";
+import { ReportPageContent } from "@/components/ReportPageContent";
 
 export const metadata: Metadata = {
   title: "Daily Report"
@@ -21,7 +21,7 @@ export default function ReportPage() {
         </Link>
       )}
     >
-      <PortfolioReportPanel />
+      <ReportPageContent />
     </DashboardShell>
   );
 }

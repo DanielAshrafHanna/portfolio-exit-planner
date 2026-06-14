@@ -2,6 +2,7 @@
 
 import { AlertTriangle, BarChart3, RefreshCw, TrendingDown, TrendingUp } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { reportProfileTabClass } from "@/components/reportTabs";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { formatMoney } from "@/lib/profileUtils";
 import { createSupabaseBrowserClient } from "@/lib/supabaseClient";
@@ -11,6 +12,7 @@ import type { PortfolioReport, PortfolioReportHolding, PortfolioReportTotals } f
 type ReportResponse = {
   report?: PortfolioReport;
   cloudUpdatedAt?: string | null;
+  snapshotWarning?: string;
   error?: string;
 };
 
@@ -30,6 +32,7 @@ export function PortfolioReportPanel() {
   const [sortKey, setSortKey] = useState<SortKey>("profitLoss");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [warnings, setWarnings] = useState<string[]>([]);
 
   const loadReport = useCallback(async () => {
     if (!supabase) {
@@ -50,6 +53,7 @@ export function PortfolioReportPanel() {
       if (!response.ok || !payload.report) throw new Error(payload.error || "Report failed to load.");
       setReport(payload.report);
       setCloudUpdatedAt(payload.cloudUpdatedAt || null);
+      setWarnings(payload.snapshotWarning ? [payload.snapshotWarning] : []);
       setSelectedProfileId((existing) => existing === "all" || payload.report?.profiles.some((profile) => profile.id === existing)
         ? existing
         : "all");
@@ -111,9 +115,9 @@ export function PortfolioReportPanel() {
         {report ? (
           <>
             <div className="flex gap-2 overflow-x-auto pb-1">
-              <button className={tabClass(selectedProfileId === "all")} type="button" onClick={() => setSelectedProfileId("all")}>All</button>
+              <button className={reportProfileTabClass(selectedProfileId === "all")} type="button" onClick={() => setSelectedProfileId("all")}>All</button>
               {report.profiles.map((profile) => (
-                <button className={tabClass(selectedProfileId === profile.id)} type="button" key={profile.id} onClick={() => setSelectedProfileId(profile.id)}>
+                <button className={reportProfileTabClass(selectedProfileId === profile.id)} type="button" key={profile.id} onClick={() => setSelectedProfileId(profile.id)}>
                   {profile.name}
                 </button>
               ))}
@@ -158,14 +162,14 @@ export function PortfolioReportPanel() {
               </table>
             </div>
 
-            {report.warnings.length ? (
+            {report.warnings.length || warnings.length ? (
               <div className="rounded-md border border-amber/35 bg-amber/10 p-3 text-sm text-ink/75">
                 <div className="mb-1 flex items-center gap-2 font-semibold text-ink">
                   <AlertTriangle className="h-4 w-4 text-amber" aria-hidden />
                   Warnings
                 </div>
                 <ul className="space-y-1">
-                  {report.warnings.map((warning) => <li key={warning}>{warning}</li>)}
+                  {[...new Set([...warnings, ...report.warnings])].map((warning) => <li key={warning}>{warning}</li>)}
                 </ul>
               </div>
             ) : null}
@@ -221,10 +225,6 @@ function HoldingRow({ holding }: { holding: PortfolioReportHolding }) {
       </td>
     </tr>
   );
-}
-
-function tabClass(active: boolean) {
-  return `min-h-9 shrink-0 rounded-md border px-3 py-1.5 text-sm font-semibold ${active ? "border-marine bg-marine text-white" : "border-ink/10 bg-white text-ink/70 hover:border-marine/30"}`;
 }
 
 function toneClass(value: number) {

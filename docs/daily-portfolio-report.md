@@ -4,10 +4,67 @@ The daily portfolio report is generated server-side from Supabase cloud portfoli
 
 ## What It Adds
 
-- `/report`: an interactive signed-in report page with profile tabs, currency totals, sortable holdings, stop/target values, warnings, and saved AI action/risk labels.
-- `/api/portfolio-report`: an authenticated JSON report endpoint for the currently signed-in user.
-- `/api/cron/daily-portfolio-summary`: a Vercel Cron endpoint that builds the configured user's report and optionally emails it.
+- `/report`: an interactive signed-in report page with **Daily report** and **Charts** tabs, profile filters, currency totals, sortable holdings, stop/target values, warnings, and saved AI action/risk labels.
+- `/api/portfolio-report`: an authenticated JSON report endpoint for the currently signed-in user. Also upserts today's per-profile snapshot rows for chart history.
+- `/api/portfolio-report/history`: an authenticated rolling history endpoint (`days=7` by default) for weekly chart data.
+- `/api/cron/daily-portfolio-summary`: a Vercel Cron endpoint that builds the configured user's report, saves daily snapshots, and optionally emails it.
+- `portfolio_daily_snapshots` in Supabase: one row per user/profile/day with daily P/L, portfolio value, and cost-basis P/L.
 - `vercel.json`: schedules the cron at `0 5 * * *`, which is 05:00 UTC. That is around 8:00 AM Cairo during daylight saving time.
+
+## Charts Tab
+
+The **Charts** tab on `/report` includes:
+
+- **Daily P/L this week**: signed bar chart for the rolling last 7 days. Losses render below zero on the y-axis.
+- **Today's top movers**: horizontal bar chart from the live report (works immediately, no history required).
+- **Cumulative weekly P/L**: running 7-day total line chart.
+- **Portfolio value trend**: 7-day gross value line chart.
+
+History is captured when:
+
+1. A signed-in user opens `/report` or refreshes the Charts tab (`/api/portfolio-report`).
+2. The daily cron runs for `PORTFOLIO_REPORT_USER_ID`.
+
+Older days before deployment will show as empty bars until enough market-day snapshots accumulate.
+
+## Supabase Setup For Chart History
+
+Run the updated SQL in [`supabase/schema.sql`](../supabase/schema.sql), including the `portfolio_daily_snapshots` table and RLS policies, then reload the PostgREST schema cache.
+
+## History API
+
+```bash
+curl -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+  "https://portfolio-exit-planner.vercel.app/api/portfolio-report/history?days=7&profileId=all"
+```
+
+Response shape:
+
+```json
+{
+  "days": 7,
+  "profileId": "all",
+  "series": [
+    {
+      "currency": "USD",
+      "profileId": "us-portfolio",
+      "profileName": "US Portfolio",
+      "points": [
+        {
+          "date": "Jun 13",
+          "snapshotDate": "2026-06-13",
+          "dailyProfitLoss": 20,
+          "dailyProfitLossPercent": 1.7,
+          "portfolioValue": 1200,
+          "totalProfitLoss": 200,
+          "hasData": true
+        }
+      ]
+    }
+  ],
+  "warnings": []
+}
+```
 
 ## Required Environment Variables
 

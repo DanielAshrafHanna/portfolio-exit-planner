@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { profilesFromCloudPortfolioRow, type CloudPortfolioRow } from "@/lib/cloudPortfolio";
 import { buildPortfolioReport, type PortfolioReport } from "@/lib/portfolioReport";
+import { snapshotsFromReport, upsertPortfolioSnapshots } from "@/lib/portfolioSnapshots";
 import { createSupabaseAdminClient } from "@/lib/supabaseServer";
 
 export const dynamic = "force-dynamic";
@@ -43,12 +44,17 @@ export async function GET(request: Request) {
     }
 
     const report = await buildPortfolioReport(profilesFromCloudPortfolioRow(data as CloudPortfolioRow));
+    const snapshotResult = await upsertPortfolioSnapshots(
+      supabase,
+      snapshotsFromReport(targetUserId, report)
+    );
     const email = await sendReportEmail(report);
 
     return NextResponse.json({
       ok: true,
       emailed: email.sent,
       emailWarning: email.warning,
+      snapshotWarning: snapshotResult.warning,
       report
     });
   } catch (error) {
