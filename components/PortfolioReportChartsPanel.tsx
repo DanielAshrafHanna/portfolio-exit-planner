@@ -11,6 +11,7 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { topHoldingMovers } from "@/lib/portfolioReportCharts";
 import type { WeeklyChartSeries } from "@/lib/portfolioReportCharts";
 import type { PortfolioReport } from "@/lib/portfolioReport";
+import { getDailyPlSessionInfo, regionFromCurrency } from "@/lib/marketSession";
 import { createSupabaseBrowserClient } from "@/lib/supabaseClient";
 import type { CurrencyCode } from "@/lib/types";
 
@@ -112,10 +113,14 @@ export function PortfolioReportChartsPanel() {
       });
       grouped.set(holding.currency, existing);
     });
-    return [...grouped.entries()].map(([currency, holdings]) => ({
-      currency,
-      movers: topHoldingMovers(holdings)
-    }));
+    return [...grouped.entries()].map(([currency, holdings]) => {
+      const session = getDailyPlSessionInfo(regionFromCurrency(currency));
+      return {
+        currency,
+        movers: topHoldingMovers(holdings),
+        session
+      };
+    });
   }, [holdingsForMovers]);
 
   const historyDataDays = useMemo(() => (
@@ -196,7 +201,10 @@ export function PortfolioReportChartsPanel() {
                   holdings={entry.movers}
                   currency={entry.currency}
                   key={`movers-${entry.currency}`}
-                  title={entry.currency === "USD" ? "Today's top movers (USD)" : "Today's top movers (EGP)"}
+                  title={`${entry.session.moversTitle} (${entry.currency})`}
+                  subtitle={entry.session.subtitle}
+                  sessionLabel={entry.session.sessionLabel}
+                  isMarketClosed={entry.session.isMarketClosed}
                 />
               ))}
               {historySeries.map((series) => <WeeklyCumulativePlChart series={series} key={`cumulative-${series.profileId}-${series.currency}`} />)}

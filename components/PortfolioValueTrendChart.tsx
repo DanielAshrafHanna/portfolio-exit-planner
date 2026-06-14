@@ -9,11 +9,19 @@ type Props = {
   series: WeeklyChartSeries;
 };
 
+type ValueChartPoint = WeeklyChartSeries["points"][number] & {
+  portfolioValue: number | null;
+};
+
 export function PortfolioValueTrendChart({ series }: Props) {
-  const values = series.points.filter((point) => point.hasData).map((point) => point.portfolioValue);
-  const min = values.length ? Math.min(...values) : 0;
-  const max = values.length ? Math.max(...values) : 1;
-  const padding = Math.max((max - min) * 0.1, max * 0.05, 1);
+  const chartData: ValueChartPoint[] = series.points.map((point) => ({
+    ...point,
+    portfolioValue: point.hasData ? point.portfolioValue : null
+  }));
+  const values = series.points
+    .filter((point) => point.hasData)
+    .map((point) => point.portfolioValue);
+  const [domainMin, domainMax] = valueChartDomain(values);
   const title = series.profileName ? `${series.profileName} (${series.currency})` : series.currency;
 
   return (
@@ -24,12 +32,13 @@ export function PortfolioValueTrendChart({ series }: Props) {
       </div>
       <div className="h-64 min-w-[280px] w-full overflow-x-auto">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={series.points} margin={{ top: 8, right: 12, bottom: 4, left: 0 }}>
+          <LineChart data={chartData} margin={{ top: 8, right: 12, bottom: 4, left: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#d8ded5" />
             <XAxis dataKey="date" tick={{ fontSize: 11 }} />
             <YAxis
               tickFormatter={(value) => formatMoney(Number(value), series.currency)}
-              domain={[Math.max(0, min - padding), max + padding]}
+              domain={[domainMin, domainMax]}
+              allowDataOverflow
               tick={{ fontSize: 11 }}
             />
             <Tooltip content={<ValueTooltip currency={series.currency} />} />
@@ -48,6 +57,14 @@ export function PortfolioValueTrendChart({ series }: Props) {
   );
 }
 
+function valueChartDomain(values: number[]): [number, number] {
+  if (!values.length) return [0, 1];
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const span = Math.max(max - min, max * 0.02, 1);
+  return [Math.max(0, min - span * 0.1), max + span * 0.1];
+}
+
 function ValueTooltip({
   active,
   payload,
@@ -63,7 +80,7 @@ function ValueTooltip({
     return (
       <div className="rounded-md border border-ink/10 bg-white px-3 py-2 text-xs text-ink/70 shadow-soft">
         <div className="font-semibold text-ink">{point.date}</div>
-        <div>No snapshot saved</div>
+        <div>{point.marketClosed ? "Market closed" : "No snapshot saved"}</div>
       </div>
     );
   }

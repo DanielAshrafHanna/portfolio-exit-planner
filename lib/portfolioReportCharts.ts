@@ -1,4 +1,5 @@
-import type { CurrencyCode } from "./types";
+import type { CurrencyCode, MarketRegion } from "./types";
+import { chartDateLabel, isTradingWeekday, regionFromCurrency } from "./marketSession";
 
 export type SnapshotHistoryRow = {
   snapshot_date: string;
@@ -20,10 +21,12 @@ export type WeeklyChartPoint = {
   portfolioValue: number;
   totalProfitLoss: number;
   hasData: boolean;
+  marketClosed: boolean;
 };
 
 export type WeeklyChartSeries = {
   currency: CurrencyCode;
+  region: MarketRegion;
   profileId: string;
   profileName?: string;
   points: WeeklyChartPoint[];
@@ -67,40 +70,47 @@ export function buildWeeklySeries(
     const currency = filtered[0]?.currency;
     return [{
       currency: currency || "USD",
+      region: regionFromCurrency(currency || "USD"),
       profileId,
       profileName: filtered[0]?.profile_name,
-      points: emptyWeeklyPoints(windowDates, now)
+      points: emptyWeeklyPoints(windowDates, regionFromCurrency(currency || "USD"), now)
     }];
   }
 
   return [...grouped.entries()].map(([key, rows]) => {
     const [id, currency] = key.split(":");
+    const region = regionFromCurrency(currency as CurrencyCode);
     const byDate = new Map(rows.map((row) => [row.snapshot_date, row]));
     return {
       currency: currency as CurrencyCode,
+      region,
       profileId: id,
       profileName: rows[0]?.profile_name,
       points: windowDates.map((snapshotDate) => {
         const row = byDate.get(snapshotDate);
+        const marketClosed = !isTradingWeekday(region, snapshotDate);
+        const date = chartDateLabel(snapshotDate, region, now);
         if (!row) {
           return {
-            date: formatChartLabel(snapshotDate, now),
+            date,
             snapshotDate,
             dailyProfitLoss: 0,
             dailyProfitLossPercent: 0,
             portfolioValue: 0,
             totalProfitLoss: 0,
-            hasData: false
+            hasData: false,
+            marketClosed
           };
         }
         return {
-          date: formatChartLabel(snapshotDate, now),
+          date,
           snapshotDate,
           dailyProfitLoss: Number(row.daily_profit_loss),
           dailyProfitLossPercent: Number(row.daily_profit_loss_percent),
           portfolioValue: Number(row.portfolio_value),
           totalProfitLoss: Number(row.total_profit_loss),
-          hasData: true
+          hasData: true,
+          marketClosed
         };
       })
     };
@@ -132,28 +142,19 @@ export function topHoldingMovers<T extends { symbol: string; name: string; daily
   }));
 }
 
-function emptyWeeklyPoints(windowDates: string[], now: Date): WeeklyChartPoint[] {
+function emptyWeeklyPoints(windowDates: string[], region: MarketRegion, now: Date): WeeklyChartPoint[] {
   return windowDates.map((snapshotDate) => ({
-    date: formatChartLabel(snapshotDate, now),
+    date: chartDateLabel(snapshotDate, region, now),
     snapshotDate,
     dailyProfitLoss: 0,
     dailyProfitLossPercent: 0,
     portfolioValue: 0,
     totalProfitLoss: 0,
-    hasData: false
+    hasData: false,
+    marketClosed: !isTradingWeekday(region, snapshotDate)
   }));
 }
 
 function formatIsoDate(date: Date) {
   return date.toISOString().slice(0, 10);
-}
-
-function formatChartLabel(snapshotDate: string, now: Date) {
-  const currentYear = now.getUTCFullYear();
-  const dateYear = Number(snapshotDate.slice(0, 4));
-  return new Date(`${snapshotDate}T12:00:00.000Z`).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    ...(dateYear === currentYear ? {} : { year: "numeric" })
-  });
 }

@@ -69,7 +69,10 @@ function CumulativeTooltip({
         {formatSignedMoney(point.cumulativeProfitLoss, currency)}
       </div>
       {point.hasData ? (
-        <div className="text-ink/60">Day: {formatSignedMoney(point.dailyProfitLoss, currency)}</div>
+        <div className="text-ink/60">
+          Day: {formatSignedMoney(point.dailyProfitLoss, currency)}
+          {point.marketClosed ? " · market closed" : ""}
+        </div>
       ) : null}
     </div>
   );

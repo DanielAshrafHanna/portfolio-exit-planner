@@ -14,16 +14,27 @@ type Props = {
   holdings: Mover[];
   currency: CurrencyCode;
   title?: string;
+  subtitle?: string;
+  sessionLabel?: string;
+  isMarketClosed?: boolean;
 };
 
 const GAIN_COLOR = "#145c72";
 const LOSS_COLOR = "#ff7a68";
 
-export function TodayHoldingMoversChart({ holdings, currency, title = "Today's top movers" }: Props) {
+export function TodayHoldingMoversChart({
+  holdings,
+  currency,
+  title = "Today's top movers",
+  subtitle,
+  sessionLabel,
+  isMarketClosed = false
+}: Props) {
   if (!holdings.length) {
     return (
       <div className="rounded-md border border-ink/10 bg-white p-3">
         <h3 className="text-sm font-semibold text-ink">{title}</h3>
+        {subtitle ? <p className="mt-1 text-xs text-ink/55">{subtitle}</p> : null}
         <p className="mt-2 text-sm text-ink/60">No quoted holdings with daily P/L yet.</p>
       </div>
     );
@@ -42,7 +53,11 @@ export function TodayHoldingMoversChart({ holdings, currency, title = "Today's t
     <div className="rounded-md border border-ink/10 bg-white p-3">
       <div className="mb-3">
         <h3 className="text-sm font-semibold text-ink">{title}</h3>
-        <p className="text-xs text-ink/55">Largest daily gainers and losers from the live report</p>
+        <p className="text-xs text-ink/55">
+          {subtitle || "Largest daily gainers and losers from the live report"}
+          {sessionLabel ? ` · ${sessionLabel}` : ""}
+          {isMarketClosed ? " · market closed" : ""}
+        </p>
       </div>
       <div className="h-72 min-w-[280px] w-full overflow-x-auto">
         <ResponsiveContainer width="100%" height="100%">

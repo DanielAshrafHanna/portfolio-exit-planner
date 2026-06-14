@@ -4,6 +4,7 @@ import { AlertTriangle, BarChart3, RefreshCw, TrendingDown, TrendingUp } from "l
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { reportProfileTabClass } from "@/components/reportTabs";
 import { SectionCard } from "@/components/ui/SectionCard";
+import { getDailyPlSessionInfo, regionFromCurrency } from "@/lib/marketSession";
 import { formatMoney } from "@/lib/profileUtils";
 import { createSupabaseBrowserClient } from "@/lib/supabaseClient";
 import type { CurrencyCode } from "@/lib/types";
@@ -18,9 +19,8 @@ type ReportResponse = {
 
 type SortKey = "profitLoss" | "dailyProfitLoss" | "profitLossPercent";
 
-const sortLabels: Record<SortKey, string> = {
+const sortLabels: Record<Exclude<SortKey, "dailyProfitLoss">, string> = {
   profitLoss: "P/L",
-  dailyProfitLoss: "Today",
   profitLossPercent: "%"
 };
 
@@ -78,6 +78,17 @@ export function PortfolioReportPanel() {
   }, [report?.holdings, selectedProfile, sortKey]);
 
   const totals = selectedProfile ? [selectedProfile.totals] : report?.totalsByCurrency || [];
+  const dailyColumnLabel = useMemo(() => {
+    if (selectedProfile) return getDailyPlSessionInfo(selectedProfile.region).columnLabel;
+    return "Session";
+  }, [selectedProfile]);
+  const dailySortLabel = useMemo(() => {
+    if (selectedProfile) {
+      const info = getDailyPlSessionInfo(selectedProfile.region);
+      return info.isMarketClosed ? info.sessionLabel : "Today";
+    }
+    return "Session";
+  }, [selectedProfile]);
   const generatedLabel = report ? formatDateTime(report.generatedAt) : "Not loaded";
   const cloudLabel = cloudUpdatedAt ? formatDateTime(cloudUpdatedAt) : undefined;
 
@@ -130,14 +141,14 @@ export function PortfolioReportPanel() {
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="text-sm font-semibold text-ink">Holdings</div>
               <div className="flex gap-1 rounded-md border border-ink/10 bg-white p-1">
-                {(Object.keys(sortLabels) as SortKey[]).map((key) => (
+                {(["profitLoss", "dailyProfitLoss", "profitLossPercent"] as SortKey[]).map((key) => (
                   <button
                     className={`min-h-8 rounded px-2 text-xs font-semibold ${sortKey === key ? "bg-marine text-white" : "text-ink/65 hover:bg-mint/30"}`}
                     type="button"
                     key={key}
                     onClick={() => setSortKey(key)}
                   >
-                    {sortLabels[key]}
+                    {key === "dailyProfitLoss" ? dailySortLabel : sortLabels[key]}
                   </button>
                 ))}
               </div>
@@ -150,7 +161,7 @@ export function PortfolioReportPanel() {
                     <th className="px-3 py-2">Symbol</th>
                     <th className="px-3 py-2">Value</th>
                     <th className="px-3 py-2">P/L</th>
-                    <th className="px-3 py-2">Today</th>
+                    <th className="px-3 py-2">{dailyColumnLabel}</th>
                     <th className="px-3 py-2">Stop</th>
                     <th className="px-3 py-2">Target</th>
                     <th className="px-3 py-2">AI</th>
@@ -185,6 +196,7 @@ export function PortfolioReportPanel() {
 }
 
 function TotalsBlock({ totals }: { totals: PortfolioReportTotals }) {
+  const session = getDailyPlSessionInfo(regionFromCurrency(totals.currency));
   return (
     <div className="rounded-md border border-ink/10 bg-white p-3">
       <div className="mb-2 flex items-center justify-between gap-2">
@@ -194,7 +206,7 @@ function TotalsBlock({ totals }: { totals: PortfolioReportTotals }) {
       <div className="text-lg font-semibold text-ink">{formatMoney(totals.currentValue, totals.currency)}</div>
       <div className={toneClass(totals.profitLoss)}>{formatSignedMoney(totals.profitLoss, totals.currency)} ({formatPercent(totals.profitLossPercent)})</div>
       <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-ink/60">
-        <span>Today</span><span className={`text-right font-semibold ${toneClass(totals.dailyProfitLoss)}`}>{formatSignedMoney(totals.dailyProfitLoss, totals.currency)}</span>
+        <span>{session.columnLabel}</span><span className={`text-right font-semibold ${toneClass(totals.dailyProfitLoss)}`}>{formatSignedMoney(totals.dailyProfitLoss, totals.currency)}</span>
         <span>Gains</span><span className="text-right font-semibold text-marine">{formatSignedMoney(totals.totalGains, totals.currency)}</span>
         <span>Losses</span><span className="text-right font-semibold text-coral">{formatSignedMoney(totals.totalLosses, totals.currency)}</span>
       </div>
@@ -203,6 +215,7 @@ function TotalsBlock({ totals }: { totals: PortfolioReportTotals }) {
 }
 
 function HoldingRow({ holding }: { holding: PortfolioReportHolding }) {
+  const session = getDailyPlSessionInfo(holding.region);
   return (
     <tr className="border-t border-ink/8">
       <td className="px-3 py-2">
@@ -217,6 +230,9 @@ function HoldingRow({ holding }: { holding: PortfolioReportHolding }) {
       <td className={`px-3 py-2 font-semibold ${toneClass(holding.dailyProfitLoss)}`}>
         {formatSignedMoney(holding.dailyProfitLoss, holding.currency)}
         <div className="text-xs">{formatPercent(holding.dailyProfitLossPercent)}</div>
+        <div className="text-[10px] font-normal text-ink/45">
+          {session.sessionLabel}{session.isMarketClosed ? " · closed" : ""}
+        </div>
       </td>
       <td className="px-3 py-2 text-ink/70">{holding.stopPrice ? formatMoney(holding.stopPrice, holding.currency) : "-"}</td>
       <td className="px-3 py-2 text-ink/70">{holding.targetPrice ? formatMoney(holding.targetPrice, holding.currency) : "-"}</td>

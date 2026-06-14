@@ -26,9 +26,9 @@ describe("buildWeeklySeries", () => {
 
     expect(series).toHaveLength(1);
     expect(series[0].points).toHaveLength(7);
-    expect(series[0].points[0]).toMatchObject({ snapshotDate: "2026-06-07", hasData: false, dailyProfitLoss: 0 });
-    expect(series[0].points[4]).toMatchObject({ snapshotDate: "2026-06-11", hasData: true, dailyProfitLoss: 25 });
-    expect(series[0].points[6]).toMatchObject({ snapshotDate: "2026-06-13", hasData: true, dailyProfitLoss: -10 });
+    expect(series[0].points[0]).toMatchObject({ snapshotDate: "2026-06-07", hasData: false, dailyProfitLoss: 0, marketClosed: true });
+    expect(series[0].points[4]).toMatchObject({ snapshotDate: "2026-06-11", hasData: true, dailyProfitLoss: 25, marketClosed: false });
+    expect(series[0].points[6]).toMatchObject({ snapshotDate: "2026-06-13", hasData: true, dailyProfitLoss: -10, marketClosed: true });
   });
 
   it("keeps currencies separate when profileId is all", () => {
