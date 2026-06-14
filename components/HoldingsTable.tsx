@@ -20,6 +20,7 @@ import { HoldingDetails } from "./HoldingDetails";
 import { HoldingsFitText } from "./HoldingsFitText";
 import { TargetPlanner } from "./TargetPlanner";
 import { StaleQuoteMarker } from "./StaleQuoteMarker";
+import { PriceSessionBadge } from "./PriceSessionBadge";
 
 type Props = {
   holdings: EnrichedHolding[];
@@ -54,10 +55,15 @@ function fitSizesFor(currency: CurrencyCode): FitSizes {
   return { min: 8, max: 12, minSm: 7, maxSm: 10 };
 }
 
-function priceLabel(quote: EnrichedHolding["quote"] | undefined, currency: CurrencyCode) {
+function priceContent(quote: EnrichedHolding["quote"] | undefined, currency: CurrencyCode): ReactNode {
   if (!quote) return "Loading";
   if (!isQuotableQuote(quote)) return "Unavailable";
-  return tableMoney(quote.currentPrice, currency);
+  return (
+    <span className="inline-flex items-center">
+      {tableMoney(quote.currentPrice, currency)}
+      <PriceSessionBadge session={quote.priceSession} />
+    </span>
+  );
 }
 
 const MOBILE_COLUMN_COUNT = 7;
@@ -144,7 +150,7 @@ function mobilePriceCell(quote: EnrichedHolding["quote"] | undefined, currency: 
     ? `${dailyPercent > 0 ? "+" : ""}${dailyPercent}%`
     : "—";
   return mobileStackedCell(
-    priceLabel(quote, currency),
+    priceContent(quote, currency),
     dailyLabel,
     sizes,
     { primaryClass: "text-marine", secondaryClass: valueClass(dailyPercent) }
@@ -506,7 +512,7 @@ export function HoldingsTable({ holdings, settings, currency, onChange, readOnly
                   <td className="px-1.5 py-2 lg:px-2 lg:py-3">{fitText(holding.shares)}</td>
                   <td className="px-1.5 py-2 lg:px-2 lg:py-3">{fitText(tableMoney(holding.averageCost, currency))}</td>
                   <td className="border-l-2 border-ink/15 bg-marine/5 px-1.5 py-2 lg:px-2 lg:py-3">
-                    {fitText(priceLabel(quote, currency), "font-semibold text-marine")}
+                    {fitText(priceContent(quote, currency), "font-semibold text-marine")}
                   </td>
                   <td className="px-1.5 py-2 lg:px-2 lg:py-3">
                     {fitText(metrics.current ? tableMoney(metrics.current.grossValue, currency) : "N/A")}

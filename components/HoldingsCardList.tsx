@@ -6,6 +6,7 @@ import type { CurrencyCode, EnrichedHolding, FeeSettings } from "@/lib/types";
 import { computeHoldingRowMetrics, profitLossTone, badgeTone } from "@/lib/holdingDisplay";
 import { formatMoney } from "@/lib/profileUtils";
 import { StaleQuoteMarker } from "./StaleQuoteMarker";
+import { PriceSessionBadge } from "./PriceSessionBadge";
 import { HoldingDetails } from "./HoldingDetails";
 
 type Props = {
@@ -83,7 +84,12 @@ export function HoldingsCardList({ holdings, settings, currency, onChange, readO
                 <div className="mt-3 grid grid-cols-3 gap-2">
                   <MetricCell
                     label="Price"
-                    value={quote ? formatMoney(quote.currentPrice, currency) : "—"}
+                    value={quote ? (
+                      <span className="inline-flex items-center">
+                        {formatMoney(quote.currentPrice, currency)}
+                        <PriceSessionBadge session={quote.priceSession} />
+                      </span>
+                    ) : "—"}
                   />
                   <MetricCell label="Value" value={metrics.current ? formatMoney(metrics.current.grossValue, currency) : "—"} />
                   <MetricCell

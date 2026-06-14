@@ -3,6 +3,7 @@ export type Confidence = "Low" | "Medium" | "High";
 export type RiskLevel = "Low" | "Medium" | "High" | "Very High";
 export type MarketRegion = "US" | "EG";
 export type CurrencyCode = "USD" | "EGP";
+export type PriceSession = "pre" | "regular" | "post" | "closed";
 
 export type HoldingInput = {
   id: string;
@@ -30,6 +31,7 @@ export type MarketQuote = {
   atr?: number;
   rsi?: number;
   provider: string;
+  priceSession?: PriceSession;
   stale?: boolean;
   error?: string;
 };

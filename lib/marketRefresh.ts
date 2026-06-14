@@ -51,6 +51,15 @@ export function isUsMarketOpen(now = new Date()) {
   return minutes >= 9 * 60 + 30 && minutes < 16 * 60;
 }
 
+export function isUsExtendedHours(now = new Date()) {
+  const weekday = weekdayInTimeZone("America/New_York", now);
+  if (weekday === "Sat" || weekday === "Sun") return false;
+  const minutes = hourMinuteInTimeZone("America/New_York", now);
+  const preMarket = minutes >= 4 * 60 && minutes < 9 * 60 + 30;
+  const postMarket = minutes >= 16 * 60 && minutes < 20 * 60;
+  return preMarket || postMarket;
+}
+
 export function isEgxMarketOpen(now = new Date()) {
   const weekday = weekdayInTimeZone("Africa/Cairo", now);
   if (weekday === "Fri" || weekday === "Sat") return false;
@@ -64,5 +73,7 @@ export function getQuoteRefreshIntervalMs(region: MarketRegion, options: { hidde
   if (region === "EG") {
     return isEgxMarketOpen(now) ? EG_QUOTE_INTERVAL_OPEN_MS : EG_QUOTE_INTERVAL_CLOSED_MS;
   }
-  return isUsMarketOpen(now) ? US_QUOTE_INTERVAL_OPEN_MS : US_QUOTE_INTERVAL_CLOSED_MS;
+  return (isUsMarketOpen(now) || isUsExtendedHours(now))
+    ? US_QUOTE_INTERVAL_OPEN_MS
+    : US_QUOTE_INTERVAL_CLOSED_MS;
 }

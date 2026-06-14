@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  getQuote,
   parseMubasherEgxQuote,
   parseYahooChartQuote,
   providerName,
@@ -171,6 +172,94 @@ describe("Yahoo chart quote parsing", () => {
       volume: 50000000
     });
   });
+
+  it("uses validated after-hours price during POST sessions", () => {
+    const closes = [...Array.from({ length: 23 }, (_, index) => 260 + index), 290.55, 291.58];
+    const quote = parseYahooChartQuote({
+      chart: {
+        result: [{
+          meta: {
+            marketState: "POST",
+            regularMarketPrice: 291.58,
+            postMarketPrice: 292.4,
+            previousClose: 290.55,
+            regularMarketVolume: 50000000
+          },
+          indicators: {
+            quote: [{
+              close: closes,
+              high: closes.map((value) => value + 1),
+              low: closes.map((value) => value - 1),
+              volume: closes.map(() => 900)
+            }]
+          }
+        }]
+      }
+    }, "AAPL");
+
+    expect(quote).toMatchObject({
+      currentPrice: 292.4,
+      priceSession: "post"
+    });
+  });
+
+  it("uses validated pre-market price during PRE sessions", () => {
+    const closes = [...Array.from({ length: 23 }, (_, index) => 260 + index), 290.55, 291.58];
+    const quote = parseYahooChartQuote({
+      chart: {
+        result: [{
+          meta: {
+            marketState: "PRE",
+            regularMarketPrice: 291.58,
+            preMarketPrice: 292.1,
+            previousClose: 290.55
+          },
+          indicators: {
+            quote: [{
+              close: closes,
+              high: closes.map((value) => value + 1),
+              low: closes.map((value) => value - 1),
+              volume: closes.map(() => 900)
+            }]
+          }
+        }]
+      }
+    }, "AAPL");
+
+    expect(quote).toMatchObject({
+      currentPrice: 292.1,
+      priceSession: "pre"
+    });
+  });
+
+  it("skips extended-hours prices for snapshot-style fetches", () => {
+    const closes = [...Array.from({ length: 23 }, (_, index) => 260 + index), 290.55, 291.58];
+    const quote = parseYahooChartQuote({
+      chart: {
+        result: [{
+          meta: {
+            marketState: "POST",
+            regularMarketPrice: 291.58,
+            postMarketPrice: 292.4,
+            previousClose: 290.55
+          },
+          indicators: {
+            quote: [{
+              close: closes,
+              high: closes.map((value) => value + 1),
+              low: closes.map((value) => value - 1),
+              volume: closes.map(() => 900)
+            }]
+          }
+        }]
+      }
+    }, "AAPL", { allowExtendedHours: false });
+
+    expect(quote).toMatchObject({
+      currentPrice: 291.58,
+      priceSession: "regular"
+    });
+  });
 });
 
 describe("quote provider selection", () => {
@@ -195,5 +284,68 @@ describe("quote provider selection", () => {
     vi.stubEnv("ALPHA_VANTAGE_API_KEY", "demo-key");
     expect(usesAlphaVantageQuotes()).toBe(true);
     expect(usesYahooQuoteFallback()).toBe(false);
+  });
+});
+
+describe("Alpha Vantage Yahoo failsafe", () => {
+  const originalFetch = global.fetch;
+  const originalEnv = { ...process.env };
+
+  afterEach(() => {
+    process.env = { ...originalEnv };
+    vi.unstubAllEnvs();
+    global.fetch = originalFetch;
+    vi.restoreAllMocks();
+  });
+
+  it("falls back to Yahoo when Alpha Vantage errors", async () => {
+    vi.stubEnv("MARKET_DATA_PROVIDER", "alpha_vantage");
+    vi.stubEnv("ALPHA_VANTAGE_API_KEY", "demo-key");
+
+    const closes = Array.from({ length: 25 }, (_, index) => 100 + index);
+    const yahooPayload = {
+      chart: {
+        result: [{
+          meta: {
+            regularMarketPrice: 124.5,
+            previousClose: 123,
+            regularMarketVolume: 1000
+          },
+          indicators: {
+            quote: [{
+              close: closes,
+              high: closes.map((value) => value + 1),
+              low: closes.map((value) => value - 1),
+              volume: closes.map(() => 900)
+            }]
+          }
+        }]
+      }
+    };
+
+    global.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("alphavantage.co")) {
+        return {
+          ok: true,
+          json: async () => ({ Note: "Thank you for using Alpha Vantage! Our standard API rate limit is 25 requests per day." })
+        } as Response;
+      }
+      if (url.includes("finance.yahoo.com")) {
+        return {
+          ok: true,
+          json: async () => yahooPayload
+        } as Response;
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    const result = await getQuote("AAPL", "US");
+    expect(result.data).toMatchObject({
+      symbol: "AAPL",
+      currentPrice: 124.5,
+      provider: "yahoo_finance"
+    });
+    expect(result.warning).toContain("Yahoo Finance fallback");
   });
 });

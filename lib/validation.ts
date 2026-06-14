@@ -40,6 +40,7 @@ export const marketQuoteSchema = z.object({
   atr: finiteNumber.min(0).optional(),
   rsi: finiteNumber.min(0).max(100).optional(),
   provider: cleanString(80).min(1),
+  priceSession: z.enum(["pre", "regular", "post", "closed"]).optional(),
   stale: z.boolean().optional(),
   error: cleanString(500).optional()
 });

@@ -1,4 +1,4 @@
-import type { MarketQuote, MarketRegion, NewsItem } from "./types";
+import type { MarketQuote, MarketRegion, NewsItem, PriceSession } from "./types";
 import { normalizeMarketSymbol } from "./profileUtils";
 import { mockNews } from "./sampleData";
 import { getUnsupportedTickerMessage } from "./unsupportedTickers";
@@ -211,7 +211,7 @@ export async function getQuote(
     };
   }
   if (usesYahooQuoteFallback() || options.preferPublicQuote) {
-    const yahooQuote = await getYahooQuote(marketSymbol, cleanSymbol, options.fresh);
+    const yahooQuote = await getYahooQuote(marketSymbol, cleanSymbol, options.fresh, !options.preferPublicQuote);
     if (yahooQuote) {
       return {
         data: { ...yahooQuote, symbol: cleanSymbol },
@@ -230,6 +230,14 @@ export async function getQuote(
   try {
     return { data: await alphaQuote(marketSymbol) };
   } catch (error) {
+    const yahooQuote = await getYahooQuote(marketSymbol, cleanSymbol, options.fresh, !options.preferPublicQuote);
+    if (yahooQuote) {
+      const alphaMessage = error instanceof Error ? error.message : "Failed quote fetch";
+      return {
+        data: { ...yahooQuote, symbol: cleanSymbol },
+        warning: `Alpha Vantage failed for ${cleanSymbol}; using Yahoo Finance fallback. (${alphaMessage})`
+      };
+    }
     const message = error instanceof Error ? error.message : "Failed quote fetch";
     return {
       data: unavailableQuote(cleanSymbol, message),
@@ -346,7 +354,12 @@ export async function getNews(symbol: string, region: MarketRegion = "US"): Prom
   }
 }
 
-async function getYahooQuote(marketSymbol: string, displaySymbol: string, fresh = false): Promise<MarketQuote | undefined> {
+async function getYahooQuote(
+  marketSymbol: string,
+  displaySymbol: string,
+  fresh = false,
+  allowExtendedHours = true
+): Promise<MarketQuote | undefined> {
   for (const host of YAHOO_CHART_HOSTS) {
     try {
       const url = new URL(`${host}/${encodeURIComponent(marketSymbol)}`);
@@ -355,7 +368,7 @@ async function getYahooQuote(marketSymbol: string, displaySymbol: string, fresh 
       const response = await yahooFetch(url.toString(), fresh);
       if (!response.ok) continue;
       const data = await response.json();
-      const quote = parseYahooChartQuote(data, displaySymbol);
+      const quote = parseYahooChartQuote(data, displaySymbol, { allowExtendedHours });
       if (quote) return quote;
     } catch {
       // Try the next Yahoo host.
@@ -364,32 +377,92 @@ async function getYahooQuote(marketSymbol: string, displaySymbol: string, fresh 
   return undefined;
 }
 
+function normalizeYahooMarketState(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim().toUpperCase() : undefined;
+}
+
+function isStaleExtendedCopy(
+  extendedPrice: number,
+  regularMarketPrice: number,
+  latestBarClose: number
+): boolean {
+  return (
+    Math.abs(regularMarketPrice - extendedPrice) / Math.max(extendedPrice, 0.01) <= 0.02
+    && Math.abs(extendedPrice - latestBarClose) / latestBarClose > 0.15
+  );
+}
+
+function isValidExtendedQuote(
+  extendedPrice: number,
+  regularMarketPrice: number,
+  latestBarClose: number
+): boolean {
+  if (extendedPrice <= 0 || regularMarketPrice <= 0 || latestBarClose <= 0) return false;
+  const withinBand = Math.abs(extendedPrice - regularMarketPrice) / regularMarketPrice <= 0.15;
+  if (!withinBand) return false;
+  return !isStaleExtendedCopy(extendedPrice, regularMarketPrice, latestBarClose);
+}
+
 function resolveYahooCurrentPrice(
   regularMarketPrice: number,
   closes: number[],
-  meta?: Record<string, unknown>
-) {
+  meta?: Record<string, unknown>,
+  options: { allowExtendedHours?: boolean } = {}
+): { currentPrice: number; priceSession: PriceSession } {
+  const allowExtendedHours = options.allowExtendedHours !== false;
   const latestBarClose = closes[0];
   if (!latestBarClose || latestBarClose <= 0) {
-    return Number(regularMarketPrice.toFixed(2));
+    return {
+      currentPrice: Number(regularMarketPrice.toFixed(2)),
+      priceSession: "regular"
+    };
+  }
+
+  const marketState = normalizeYahooMarketState(meta?.marketState);
+  const preMarketPrice = meta ? numberValue(meta.preMarketPrice) : undefined;
+  const postMarketPrice = meta ? numberValue(meta.postMarketPrice) : undefined;
+
+  if (allowExtendedHours) {
+    if (marketState === "PRE" || marketState === "PREPRE") {
+      if (preMarketPrice && isValidExtendedQuote(preMarketPrice, regularMarketPrice, latestBarClose)) {
+        return {
+          currentPrice: Number(preMarketPrice.toFixed(2)),
+          priceSession: "pre"
+        };
+      }
+    }
+    if (marketState === "POST" || marketState === "POSTPOST") {
+      if (postMarketPrice && isValidExtendedQuote(postMarketPrice, regularMarketPrice, latestBarClose)) {
+        return {
+          currentPrice: Number(postMarketPrice.toFixed(2)),
+          priceSession: "post"
+        };
+      }
+    }
   }
 
   const extendedPrices = [
-    meta ? numberValue(meta.postMarketPrice) : undefined,
-    meta ? numberValue(meta.preMarketPrice) : undefined
+    postMarketPrice,
+    preMarketPrice
   ].filter((price): price is number => price !== undefined && price > 0);
 
   const nearLatestBar = Math.abs(regularMarketPrice - latestBarClose) / latestBarClose <= 0.03;
   if (nearLatestBar || !extendedPrices.length) {
-    return Number(regularMarketPrice.toFixed(2));
+    const priceSession: PriceSession = marketState === "REGULAR" || nearLatestBar ? "regular" : "closed";
+    return {
+      currentPrice: Number(regularMarketPrice.toFixed(2)),
+      priceSession
+    };
   }
 
   const matchesStaleExtended = extendedPrices.some((extendedPrice) => (
-    Math.abs(regularMarketPrice - extendedPrice) / Math.max(extendedPrice, 0.01) <= 0.02
-    && Math.abs(extendedPrice - latestBarClose) / latestBarClose > 0.15
+    isStaleExtendedCopy(extendedPrice, regularMarketPrice, latestBarClose)
   ));
 
-  return Number((matchesStaleExtended ? latestBarClose : regularMarketPrice).toFixed(2));
+  return {
+    currentPrice: Number((matchesStaleExtended ? latestBarClose : regularMarketPrice).toFixed(2)),
+    priceSession: matchesStaleExtended ? "closed" : "regular"
+  };
 }
 
 function resolveYahooPreviousClose(
@@ -417,7 +490,11 @@ function resolveYahooPreviousClose(
   return deviation > 0.05 ? barPreviousClose : metaPreviousClose;
 }
 
-export function parseYahooChartQuote(data: unknown, symbol: string): MarketQuote | undefined {
+export function parseYahooChartQuote(
+  data: unknown,
+  symbol: string,
+  options: { allowExtendedHours?: boolean } = {}
+): MarketQuote | undefined {
   const chart = isRecord(data) ? data.chart : undefined;
   const result = isRecord(chart) && Array.isArray(chart.result) ? chart.result[0] : undefined;
   const meta = isRecord(result) && isRecord(result.meta) ? result.meta : undefined;
@@ -441,7 +518,7 @@ export function parseYahooChartQuote(data: unknown, symbol: string): MarketQuote
   if (!rows.length) return undefined;
 
   const closes = rows.map((row) => row.close);
-  const currentPrice = resolveYahooCurrentPrice(regularMarketPrice, closes, meta);
+  const { currentPrice, priceSession } = resolveYahooCurrentPrice(regularMarketPrice, closes, meta, options);
   const previousClose = Number(resolveYahooPreviousClose(currentPrice, closes, meta).toFixed(2));
   const dailyChangePercent = previousClose > 0 ? Number((((currentPrice - previousClose) / previousClose) * 100).toFixed(2)) : 0;
   const week52High = meta ? numberValue(meta.fiftyTwoWeekHigh) : undefined;
@@ -453,6 +530,7 @@ export function parseYahooChartQuote(data: unknown, symbol: string): MarketQuote
     currentPrice,
     dailyChangePercent,
     previousClose,
+    priceSession,
     companyName: quoteCompanyNameFromMeta(meta),
     week52High: week52High !== undefined ? Number(week52High.toFixed(2)) : Math.round(Math.max(...closes.slice(0, 252)) * 100) / 100,
     week52Low: week52Low !== undefined ? Number(week52Low.toFixed(2)) : Math.round(Math.min(...closes.slice(0, 252)) * 100) / 100,

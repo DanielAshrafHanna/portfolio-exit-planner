@@ -3,8 +3,10 @@ import {
   applyLiveQuotes,
   getQuoteRefreshIntervalMs,
   isEgxMarketOpen,
+  isUsExtendedHours,
   isUsMarketOpen,
   liveQuoteKey,
+  US_QUOTE_INTERVAL_CLOSED_MS,
   US_QUOTE_INTERVAL_OPEN_MS
 } from "./marketRefresh";
 import type { EnrichedHolding, MarketQuote } from "./types";
@@ -43,6 +45,17 @@ describe("marketRefresh", () => {
     const open = new Date("2026-06-09T18:00:00.000Z");
     expect(isUsMarketOpen(open)).toBe(true);
     expect(getQuoteRefreshIntervalMs("US", { now: open })).toBe(US_QUOTE_INTERVAL_OPEN_MS);
+  });
+
+  it("uses the faster US refresh interval during extended hours", () => {
+    const preMarket = new Date("2026-06-09T12:00:00.000Z");
+    expect(isUsExtendedHours(preMarket)).toBe(true);
+    expect(isUsMarketOpen(preMarket)).toBe(false);
+    expect(getQuoteRefreshIntervalMs("US", { now: preMarket })).toBe(US_QUOTE_INTERVAL_OPEN_MS);
+
+    const overnight = new Date("2026-06-09T03:00:00.000Z");
+    expect(isUsExtendedHours(overnight)).toBe(false);
+    expect(getQuoteRefreshIntervalMs("US", { now: overnight })).toBe(US_QUOTE_INTERVAL_CLOSED_MS);
   });
 
   it("detects EGX hours on a Cairo session morning", () => {
