@@ -1,11 +1,9 @@
 "use client";
 
-import { AlertTriangle, BarChart3, RefreshCw } from "lucide-react";
+import { AlertTriangle, BarChart3, Loader2, RefreshCw } from "lucide-react";
+import dynamic from "next/dynamic";
 import { useMemo } from "react";
-import { PortfolioValueTrendChart } from "@/components/PortfolioValueTrendChart";
-import { TodayHoldingMoversChart } from "@/components/TodayHoldingMoversChart";
-import { WeeklyCumulativePlChart } from "@/components/WeeklyCumulativePlChart";
-import { WeeklyDailyPlChart } from "@/components/WeeklyDailyPlChart";
+import { ChartLegend } from "@/components/ChartLegend";
 import { reportProfileTabClass } from "@/components/reportTabs";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { topHoldingMovers } from "@/lib/portfolioReportCharts";
@@ -13,6 +11,25 @@ import type { WeeklyChartSeries } from "@/lib/portfolioReportCharts";
 import type { PortfolioReport } from "@/lib/portfolioReport";
 import { getDailyPlSessionInfo, regionFromCurrency } from "@/lib/marketSession";
 import type { CurrencyCode } from "@/lib/types";
+
+const ChartFallback = () => <div className="h-64 animate-pulse rounded-md bg-surface-muted" />;
+
+const WeeklyDailyPlChart = dynamic(
+  () => import("@/components/WeeklyDailyPlChart").then((mod) => mod.WeeklyDailyPlChart),
+  { ssr: false, loading: ChartFallback }
+);
+const WeeklyCumulativePlChart = dynamic(
+  () => import("@/components/WeeklyCumulativePlChart").then((mod) => mod.WeeklyCumulativePlChart),
+  { ssr: false, loading: ChartFallback }
+);
+const PortfolioValueTrendChart = dynamic(
+  () => import("@/components/PortfolioValueTrendChart").then((mod) => mod.PortfolioValueTrendChart),
+  { ssr: false, loading: ChartFallback }
+);
+const TodayHoldingMoversChart = dynamic(
+  () => import("@/components/TodayHoldingMoversChart").then((mod) => mod.TodayHoldingMoversChart),
+  { ssr: false, loading: ChartFallback }
+);
 
 type Props = {
   report: PortfolioReport | null;
@@ -38,6 +55,7 @@ export function PortfolioReportChartsPanel({
   onRefresh
 }: Props) {
   const isLoading = isLoadingReport || isLoadingHistory;
+  const hasData = Boolean(report) || historySeries.length > 0;
 
   const selectedProfile = useMemo(() => (
     report?.profiles.find((profile) => profile.id === selectedProfileId)
@@ -83,13 +101,14 @@ export function PortfolioReportChartsPanel({
       icon={BarChart3}
       eyebrow="Report"
       title="Charts"
-      description="Live movers update instantly. Weekly history is saved when you open the report or when the daily cron runs."
+      description="Live movers reflect the latest quotes. Weekly history is saved when you open the report or when the daily cron runs."
       action={(
         <button
           className="inline-flex min-h-10 items-center gap-2 rounded-md border border-marine/25 bg-white px-3 py-2 text-sm font-semibold text-marine hover:border-marine/50 disabled:cursor-not-allowed disabled:opacity-60"
           type="button"
           onClick={onRefresh}
           disabled={isLoading}
+          aria-busy={isLoading}
         >
           <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} aria-hidden />
           Refresh
@@ -118,16 +137,24 @@ export function PortfolioReportChartsPanel({
           </div>
         ) : null}
 
-        {report || historySeries.length ? (
+        {hasData ? (
           <>
             {report ? (
-              <div className="flex gap-2 overflow-x-auto pb-1">
-                <button className={reportProfileTabClass(selectedProfileId === "all")} type="button" onClick={() => onSelectedProfileIdChange("all")}>All</button>
+              <div className="flex gap-2 overflow-x-auto pb-1" role="group" aria-label="Filter charts by portfolio">
+                <button
+                  className={reportProfileTabClass(selectedProfileId === "all")}
+                  type="button"
+                  aria-pressed={selectedProfileId === "all"}
+                  onClick={() => onSelectedProfileIdChange("all")}
+                >
+                  All
+                </button>
                 {report.profiles.map((profile) => (
                   <button
                     className={reportProfileTabClass(selectedProfileId === profile.id)}
                     type="button"
                     key={profile.id}
+                    aria-pressed={selectedProfileId === profile.id}
                     onClick={() => onSelectedProfileIdChange(profile.id)}
                   >
                     {profile.name}
@@ -136,32 +163,44 @@ export function PortfolioReportChartsPanel({
               </div>
             ) : null}
 
+            <ChartLegend />
+
             {historyDataDays < 2 ? (
               <div className="rounded-md border border-ink/10 bg-mint/20 p-3 text-sm text-ink/70">
                 Weekly charts fill in as daily snapshots are saved. Check back after a few market days.
               </div>
             ) : null}
 
-            <div className="grid gap-4 xl:grid-cols-2">
-              {historySeries.map((series) => <WeeklyDailyPlChart series={series} key={`daily-${series.profileId}-${series.currency}`} />)}
-              {report ? moversByCurrency.map((entry) => (
-                <TodayHoldingMoversChart
-                  holdings={entry.movers}
-                  currency={entry.currency}
-                  key={`movers-${entry.currency}`}
-                  title={`${entry.session.moversTitle} (${entry.currency})`}
-                  subtitle={entry.session.subtitle}
-                  sessionLabel={entry.session.sessionLabel}
-                  isMarketClosed={entry.session.isMarketClosed}
-                />
-              )) : null}
-              {historySeries.map((series) => <WeeklyCumulativePlChart series={series} key={`cumulative-${series.profileId}-${series.currency}`} />)}
-              {historySeries.map((series) => <PortfolioValueTrendChart series={series} key={`value-${series.profileId}-${series.currency}`} />)}
+            <div className="relative" aria-busy={isLoading}>
+              {isLoading ? (
+                <div className="pointer-events-none absolute inset-0 z-10 flex items-start justify-center rounded-md bg-white/55">
+                  <span className="mt-6 inline-flex items-center gap-2 rounded-full border border-marine/20 bg-white px-3 py-1 text-xs font-semibold text-marine shadow-soft">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                    Updating charts
+                  </span>
+                </div>
+              ) : null}
+              <div className={`grid gap-4 transition-opacity xl:grid-cols-2 ${isLoading ? "opacity-60" : "opacity-100"}`}>
+                {historySeries.map((series) => <WeeklyDailyPlChart series={series} key={`daily-${series.profileId}-${series.currency}`} />)}
+                {report ? moversByCurrency.map((entry) => (
+                  <TodayHoldingMoversChart
+                    holdings={entry.movers}
+                    currency={entry.currency}
+                    key={`movers-${entry.currency}`}
+                    title={`${entry.session.moversTitle} (${entry.currency})`}
+                    subtitle={entry.session.subtitle}
+                    sessionLabel={entry.session.sessionLabel}
+                    isMarketClosed={entry.session.isMarketClosed}
+                  />
+                )) : null}
+                {historySeries.map((series) => <WeeklyCumulativePlChart series={series} key={`cumulative-${series.profileId}-${series.currency}`} />)}
+                {historySeries.map((series) => <PortfolioValueTrendChart series={series} key={`value-${series.profileId}-${series.currency}`} />)}
+              </div>
             </div>
           </>
         ) : (
-          <div className="grid gap-4 md:grid-cols-2">
-            {[0, 1, 2, 3].map((item) => <div className="h-64 animate-pulse rounded-md bg-white" key={item} />)}
+          <div className="grid gap-4 xl:grid-cols-2" aria-busy={isLoading}>
+            {[0, 1, 2, 3].map((item) => <div className="h-64 animate-pulse rounded-md bg-surface-muted" key={item} />)}
           </div>
         )}
       </div>

@@ -34,6 +34,13 @@ describe("daily profit/loss", () => {
     expect(result.profitLossPercent).toBe(0);
     expect(result.priorValue).toBe(0);
   });
+
+  it("returns zero daily P/L when the prior close is missing or zero", () => {
+    const result = calculateDailyProfitLoss(10, 120, 0);
+    expect(result.profitLoss).toBe(0);
+    expect(result.profitLossPercent).toBe(0);
+    expect(result.priorValue).toBe(0);
+  });
 });
 
 describe("profit/loss", () => {

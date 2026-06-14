@@ -50,6 +50,25 @@ describe("buildWeeklySeries", () => {
     expect(series).toHaveLength(1);
     expect(series[0].profileId).toBe("us-portfolio");
   });
+
+  it("anchors the rolling window to each region's local market date near a UTC midnight boundary", () => {
+    // 01:00 UTC: still Jun 12 in New York, already Jun 13 in Cairo.
+    const nearMidnight = new Date("2026-06-13T01:00:00.000Z");
+
+    const usSeries = buildWeeklySeries([
+      row({ snapshot_date: "2026-06-12", daily_profit_loss: 5, profile_id: "us-portfolio", currency: "USD" })
+    ], { days: 7, profileId: "us-portfolio", now: nearMidnight });
+    const usLast = usSeries[0].points.at(-1);
+    expect(usLast?.snapshotDate).toBe("2026-06-12");
+    expect(usLast?.hasData).toBe(true);
+
+    const egSeries = buildWeeklySeries([
+      row({ snapshot_date: "2026-06-13", daily_profit_loss: 5, profile_id: "eg-portfolio", currency: "EGP", profile_name: "Egypt" })
+    ], { days: 7, profileId: "eg-portfolio", now: nearMidnight });
+    const egLast = egSeries[0].points.at(-1);
+    expect(egLast?.snapshotDate).toBe("2026-06-13");
+    expect(egLast?.hasData).toBe(true);
+  });
 });
 
 describe("buildCumulativePoints", () => {

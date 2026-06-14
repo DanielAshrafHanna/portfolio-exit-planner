@@ -19,10 +19,13 @@ export function calculatePositionValue(shares: number, price: number) {
 
 export function calculateDailyProfitLoss(shares: number, currentPrice: number, previousClose: number) {
   const priorValue = calculatePositionValue(shares, previousClose);
+  if (priorValue <= 0) {
+    // Without a valid prior close (missing/zero), a daily change is not measurable.
+    // Returning 0 avoids counting the entire position value as a single-day move.
+    return { profitLoss: 0, profitLossPercent: 0, priorValue: 0 };
+  }
   const profitLoss = roundMoney(shares * (currentPrice - previousClose));
-  const profitLossPercent = priorValue > 0
-    ? roundMoney((profitLoss / priorValue) * 100)
-    : 0;
+  const profitLossPercent = roundMoney((profitLoss / priorValue) * 100);
   return { profitLoss, profitLossPercent, priorValue };
 }
 

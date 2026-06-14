@@ -1,5 +1,5 @@
 import type { CurrencyCode, MarketRegion } from "./types";
-import { chartAxisDateLabel, isTradingWeekday, regionFromCurrency } from "./marketSession";
+import { chartAxisDateLabel, isTradingWeekday, marketDateString, regionFromCurrency } from "./marketSession";
 
 export type SnapshotHistoryRow = {
   snapshot_date: string;
@@ -32,10 +32,18 @@ export type WeeklyChartSeries = {
   points: WeeklyChartPoint[];
 };
 
-export function rollingSnapshotDates(days: number, now = new Date()) {
+/**
+ * Builds the rolling window of snapshot date keys for a market region.
+ * The anchor is the region's *local* market date (NY for US, Cairo for EG), so the
+ * window aligns with how snapshots are keyed in `snapshotDateForRegion`. Using a UTC
+ * anchor here would misalign buckets near midnight and drop or fabricate days.
+ */
+export function rollingSnapshotDates(days: number, region: MarketRegion, now = new Date()) {
+  const anchorKey = marketDateString(region, now);
+  const anchor = new Date(`${anchorKey}T12:00:00.000Z`);
   const dates: string[] = [];
   for (let offset = days - 1; offset >= 0; offset -= 1) {
-    const date = new Date(now);
+    const date = new Date(anchor);
     date.setUTCDate(date.getUTCDate() - offset);
     dates.push(formatIsoDate(date));
   }
@@ -53,7 +61,6 @@ export function buildWeeklySeries(
   const days = options.days ?? 7;
   const profileId = options.profileId ?? "all";
   const now = options.now ?? new Date();
-  const windowDates = rollingSnapshotDates(days, now);
   const filtered = profileId === "all"
     ? snapshots
     : snapshots.filter((row) => row.profile_id === profileId);
@@ -67,19 +74,21 @@ export function buildWeeklySeries(
   });
 
   if (!grouped.size && profileId !== "all") {
-    const currency = filtered[0]?.currency;
+    const currency = filtered[0]?.currency || "USD";
+    const region = regionFromCurrency(currency);
     return [{
-      currency: currency || "USD",
-      region: regionFromCurrency(currency || "USD"),
+      currency,
+      region,
       profileId,
       profileName: filtered[0]?.profile_name,
-      points: emptyWeeklyPoints(windowDates, regionFromCurrency(currency || "USD"), now)
+      points: emptyWeeklyPoints(rollingSnapshotDates(days, region, now), region, now)
     }];
   }
 
   return [...grouped.entries()].map(([key, rows]) => {
     const [id, currency] = key.split(":");
     const region = regionFromCurrency(currency as CurrencyCode);
+    const windowDates = rollingSnapshotDates(days, region, now);
     const byDate = new Map(rows.map((row) => [row.snapshot_date, row]));
     return {
       currency: currency as CurrencyCode,

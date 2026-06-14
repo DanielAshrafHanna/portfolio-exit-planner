@@ -27,6 +27,7 @@ type HistoryResponse = {
 
 export function ReportPageContent() {
   const [activeTab, setActiveTab] = useState<ReportTab>("daily");
+  const [hasViewedCharts, setHasViewedCharts] = useState(false);
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
   const [report, setReport] = useState<PortfolioReport | null>(null);
   const [historySeries, setHistorySeries] = useState<WeeklyChartSeries[]>([]);
@@ -108,12 +109,19 @@ export function ReportPageContent() {
     void loadHistory(selectedProfileId);
   }, [loadHistory, loadReport, selectedProfileId]);
 
+  const showCharts = () => {
+    setActiveTab("charts");
+    setHasViewedCharts(true);
+  };
+
   return (
     <div className="space-y-4">
-      <div className="flex gap-2 overflow-x-auto pb-1">
+      <div className="flex gap-2 overflow-x-auto pb-1" role="tablist" aria-label="Report views">
         <button
           className={reportTabClass(activeTab === "daily")}
           type="button"
+          role="tab"
+          aria-selected={activeTab === "daily"}
           onClick={() => setActiveTab("daily")}
         >
           Daily report
@@ -121,35 +129,41 @@ export function ReportPageContent() {
         <button
           className={reportTabClass(activeTab === "charts")}
           type="button"
-          onClick={() => setActiveTab("charts")}
+          role="tab"
+          aria-selected={activeTab === "charts"}
+          onClick={showCharts}
         >
           Charts
         </button>
       </div>
 
-      <div className={activeTab === "daily" ? "" : "hidden"}>
+      <div className={activeTab === "daily" ? "" : "hidden"} role="tabpanel">
         <PortfolioReportPanel
           report={report}
           cloudUpdatedAt={cloudUpdatedAt}
           isLoading={isLoadingReport}
           error={error}
           warnings={warnings}
-          onRefresh={() => refreshAll(true)}
-        />
-      </div>
-      <div className={activeTab === "charts" ? "" : "hidden"}>
-        <PortfolioReportChartsPanel
-          report={report}
-          historySeries={historySeries}
           selectedProfileId={selectedProfileId}
           onSelectedProfileIdChange={setSelectedProfileId}
-          isLoadingReport={isLoadingReport}
-          isLoadingHistory={isLoadingHistory}
-          error={error}
-          warnings={warnings}
           onRefresh={() => refreshAll(true)}
         />
       </div>
+      {hasViewedCharts ? (
+        <div className={activeTab === "charts" ? "" : "hidden"} role="tabpanel">
+          <PortfolioReportChartsPanel
+            report={report}
+            historySeries={historySeries}
+            selectedProfileId={selectedProfileId}
+            onSelectedProfileIdChange={setSelectedProfileId}
+            isLoadingReport={isLoadingReport}
+            isLoadingHistory={isLoadingHistory}
+            error={error}
+            warnings={warnings}
+            onRefresh={() => refreshAll(true)}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }

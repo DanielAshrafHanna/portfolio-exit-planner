@@ -15,6 +15,8 @@ type Props = {
   isLoading: boolean;
   error: string | null;
   warnings: string[];
+  selectedProfileId: string;
+  onSelectedProfileIdChange: (profileId: string) => void;
   onRefresh: () => void;
 };
 
@@ -31,9 +33,10 @@ export function PortfolioReportPanel({
   isLoading,
   error,
   warnings,
+  selectedProfileId,
+  onSelectedProfileIdChange,
   onRefresh
 }: Props) {
-  const [selectedProfileId, setSelectedProfileId] = useState("all");
   const [sortKey, setSortKey] = useState<SortKey>("profitLoss");
 
   const selectedProfile = useMemo(() => (
@@ -93,10 +96,10 @@ export function PortfolioReportPanel({
 
         {report ? (
           <>
-            <div className="flex gap-2 overflow-x-auto pb-1">
-              <button className={reportProfileTabClass(selectedProfileId === "all")} type="button" onClick={() => setSelectedProfileId("all")}>All</button>
+            <div className="flex gap-2 overflow-x-auto pb-1" role="group" aria-label="Filter report by portfolio">
+              <button className={reportProfileTabClass(selectedProfileId === "all")} type="button" aria-pressed={selectedProfileId === "all"} onClick={() => onSelectedProfileIdChange("all")}>All</button>
               {report.profiles.map((profile) => (
-                <button className={reportProfileTabClass(selectedProfileId === profile.id)} type="button" key={profile.id} onClick={() => setSelectedProfileId(profile.id)}>
+                <button className={reportProfileTabClass(selectedProfileId === profile.id)} type="button" key={profile.id} aria-pressed={selectedProfileId === profile.id} onClick={() => onSelectedProfileIdChange(profile.id)}>
                   {profile.name}
                 </button>
               ))}

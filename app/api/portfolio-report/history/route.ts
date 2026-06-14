@@ -28,8 +28,15 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const days = parseDays(url.searchParams.get("days"));
     const profileId = url.searchParams.get("profileId") || "all";
-    const windowDates = rollingSnapshotDates(days);
-    const startDate = windowDates[0];
+    const now = new Date();
+    // Snapshots are keyed by each region's local market date. Query from the earliest
+    // region window start (minus a day buffer) so boundary days are never dropped.
+    const usStart = rollingSnapshotDates(days, "US", now)[0];
+    const egStart = rollingSnapshotDates(days, "EG", now)[0];
+    const earliest = usStart < egStart ? usStart : egStart;
+    const buffered = new Date(`${earliest}T12:00:00.000Z`);
+    buffered.setUTCDate(buffered.getUTCDate() - 1);
+    const startDate = buffered.toISOString().slice(0, 10);
 
     const [{ data: portfolioRow }, { data, error }] = await Promise.all([
       supabase
@@ -77,7 +84,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
       days,
       profileId,
-      series: buildWeeklySeries(snapshots, { days, profileId }),
+      series: buildWeeklySeries(snapshots, { days, profileId, now }),
       warnings: []
     });
   } catch (error) {

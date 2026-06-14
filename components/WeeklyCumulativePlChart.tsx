@@ -1,11 +1,19 @@
 "use client";
 
+import { useId, useMemo } from "react";
 import { buildCumulativePoints } from "@/lib/portfolioReportCharts";
 import type { WeeklyChartSeries } from "@/lib/portfolioReportCharts";
 import type { CurrencyCode } from "@/lib/types";
-import { CHART_MARGIN, formatChartSignedAxis, formatChartSignedMoney, plChartDomain } from "@/lib/chartFormat";
+import {
+  CHART_HEIGHT_CLASS,
+  CHART_MARGIN,
+  CHART_THEME,
+  formatChartSignedAxis,
+  formatChartSignedMoney,
+  plChartDomain
+} from "@/lib/chartFormat";
 import { formatSessionLabel } from "@/lib/marketSession";
-import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Area, AreaChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 type Props = {
   series: WeeklyChartSeries;
@@ -16,18 +24,17 @@ type CumulativeChartPoint = Omit<ReturnType<typeof buildCumulativePoints>[number
 };
 
 export function WeeklyCumulativePlChart({ series }: Props) {
-  const points: CumulativeChartPoint[] = buildCumulativePoints(series.points).map((point) => ({
-    ...point,
-    cumulativeProfitLoss: point.hasData ? point.cumulativeProfitLoss : null
-  }));
-  const values = series.points.filter((point) => point.hasData).map((_, index, rows) => {
-    let running = 0;
-    for (let i = 0; i <= index; i += 1) {
-      if (rows[i].hasData) running += rows[i].dailyProfitLoss;
-    }
-    return running;
-  });
-  const [domainMin, domainMax] = plChartDomain(values);
+  const gradientId = useId();
+  const { points, domain } = useMemo(() => {
+    const cumulative = buildCumulativePoints(series.points);
+    const data: CumulativeChartPoint[] = cumulative.map((point) => ({
+      ...point,
+      cumulativeProfitLoss: point.hasData ? point.cumulativeProfitLoss : null
+    }));
+    const values = cumulative.filter((point) => point.hasData).map((point) => point.cumulativeProfitLoss);
+    return { points: data, domain: plChartDomain(values) };
+  }, [series.points]);
+
   const title = series.profileName ? `${series.profileName} (${series.currency})` : series.currency;
 
   return (
@@ -36,28 +43,40 @@ export function WeeklyCumulativePlChart({ series }: Props) {
         <h3 className="text-sm font-semibold text-ink">Cumulative weekly P/L</h3>
         <p className="text-xs text-ink/55">{title} · running total across the last 7 days</p>
       </div>
-      <div className="h-64 min-w-[280px] w-full overflow-x-auto">
+      <div
+        className={`${CHART_HEIGHT_CLASS} min-w-[280px] w-full overflow-x-auto`}
+        role="img"
+        aria-label={`Cumulative weekly profit and loss line chart for ${title}`}
+      >
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={points} margin={CHART_MARGIN}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#d8ded5" />
-            <XAxis dataKey="date" interval="preserveStartEnd" tick={{ fontSize: 10 }} />
+          <AreaChart data={points} margin={CHART_MARGIN}>
+            <defs>
+              <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={CHART_THEME.gain} stopOpacity={0.22} />
+                <stop offset="100%" stopColor={CHART_THEME.gain} stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray={CHART_THEME.gridDash} stroke={CHART_THEME.grid} />
+            <XAxis dataKey="date" interval="preserveStartEnd" tick={CHART_THEME.axisTick} />
             <YAxis
               width={48}
               tickFormatter={(value) => formatChartSignedAxis(Number(value), series.currency)}
-              domain={[domainMin, domainMax]}
-              tick={{ fontSize: 10 }}
+              domain={domain}
+              tick={CHART_THEME.axisTick}
             />
             <Tooltip content={<CumulativeTooltip currency={series.currency} />} />
-            <ReferenceLine y={0} stroke="#17212b" strokeDasharray="4 4" />
-            <Line
+            <ReferenceLine y={0} stroke={CHART_THEME.reference} strokeDasharray={CHART_THEME.referenceDash} />
+            <Area
               type="monotone"
               dataKey="cumulativeProfitLoss"
-              stroke="#145c72"
+              stroke={CHART_THEME.gain}
               strokeWidth={2}
-              dot={{ r: 3, fill: "#145c72" }}
+              fill={`url(#${gradientId})`}
+              dot={{ r: 3, fill: CHART_THEME.gain }}
               connectNulls={false}
+              isAnimationActive={false}
             />
-          </LineChart>
+          </AreaChart>
         </ResponsiveContainer>
       </div>
     </div>

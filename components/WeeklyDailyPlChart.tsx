@@ -1,9 +1,17 @@
 "use client";
 
+import { useMemo } from "react";
 import { Bar, BarChart, CartesianGrid, Cell, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import type { CurrencyCode } from "@/lib/types";
 import type { WeeklyChartSeries } from "@/lib/portfolioReportCharts";
-import { CHART_MARGIN, formatChartSignedAxis, formatChartSignedMoney, plChartDomain } from "@/lib/chartFormat";
+import {
+  CHART_HEIGHT_CLASS,
+  CHART_MARGIN,
+  CHART_THEME,
+  formatChartSignedAxis,
+  formatChartSignedMoney,
+  plChartDomain
+} from "@/lib/chartFormat";
 import { formatSessionLabel } from "@/lib/marketSession";
 
 type Props = {
@@ -14,17 +22,16 @@ type DailyPlChartPoint = Omit<WeeklyChartSeries["points"][number], "dailyProfitL
   dailyProfitLoss: number | null;
 };
 
-const GAIN_COLOR = "#145c72";
-const LOSS_COLOR = "#ff7a68";
-const EMPTY_COLOR = "#d8ded5";
-
 export function WeeklyDailyPlChart({ series }: Props) {
-  const chartData: DailyPlChartPoint[] = series.points.map((point) => ({
-    ...point,
-    dailyProfitLoss: point.hasData ? point.dailyProfitLoss : null
-  }));
-  const values = series.points.filter((point) => point.hasData).map((point) => point.dailyProfitLoss);
-  const [domainMin, domainMax] = plChartDomain(values);
+  const { chartData, domain } = useMemo(() => {
+    const data: DailyPlChartPoint[] = series.points.map((point) => ({
+      ...point,
+      dailyProfitLoss: point.hasData ? point.dailyProfitLoss : null
+    }));
+    const values = series.points.filter((point) => point.hasData).map((point) => point.dailyProfitLoss);
+    return { chartData: data, domain: plChartDomain(values) };
+  }, [series.points]);
+
   const title = series.profileName ? `${series.profileName} (${series.currency})` : series.currency;
 
   return (
@@ -33,24 +40,28 @@ export function WeeklyDailyPlChart({ series }: Props) {
         <h3 className="text-sm font-semibold text-ink">Daily P/L this week</h3>
         <p className="text-xs text-ink/55">{title} · rolling last 7 days</p>
       </div>
-      <div className="h-64 min-w-[280px] w-full overflow-x-auto">
+      <div
+        className={`${CHART_HEIGHT_CLASS} min-w-[280px] w-full overflow-x-auto`}
+        role="img"
+        aria-label={`Daily profit and loss bar chart for ${title} over the last 7 days`}
+      >
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={chartData} margin={CHART_MARGIN}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#d8ded5" />
-            <XAxis dataKey="date" interval="preserveStartEnd" tick={{ fontSize: 10 }} />
+            <CartesianGrid strokeDasharray={CHART_THEME.gridDash} stroke={CHART_THEME.grid} />
+            <XAxis dataKey="date" interval="preserveStartEnd" tick={CHART_THEME.axisTick} />
             <YAxis
               width={48}
               tickFormatter={(value) => formatChartSignedAxis(Number(value), series.currency)}
-              domain={[domainMin, domainMax]}
-              tick={{ fontSize: 10 }}
+              domain={domain}
+              tick={CHART_THEME.axisTick}
             />
-            <Tooltip content={<DailyPlTooltip currency={series.currency} />} />
-            <ReferenceLine y={0} stroke="#17212b" strokeDasharray="4 4" />
-            <Bar dataKey="dailyProfitLoss" radius={[4, 4, 0, 0]}>
+            <Tooltip content={<DailyPlTooltip currency={series.currency} />} cursor={{ fill: "rgba(20,92,114,0.06)" }} />
+            <ReferenceLine y={0} stroke={CHART_THEME.reference} strokeDasharray={CHART_THEME.referenceDash} />
+            <Bar dataKey="dailyProfitLoss" radius={[4, 4, 0, 0]} isAnimationActive={false}>
               {chartData.map((point) => (
                 <Cell
                   key={point.snapshotDate}
-                  fill={!point.hasData || point.marketClosed ? EMPTY_COLOR : point.dailyProfitLoss! >= 0 ? GAIN_COLOR : LOSS_COLOR}
+                  fill={!point.hasData || point.marketClosed ? CHART_THEME.empty : point.dailyProfitLoss! >= 0 ? CHART_THEME.gain : CHART_THEME.loss}
                   fillOpacity={point.hasData && !point.marketClosed ? 1 : 0.35}
                 />
               ))}
