@@ -4,7 +4,6 @@ import { buildPortfolioReport, type PortfolioReport, type PortfolioReportQuoteFe
 import { portfolioHoldingSymbols } from "./portfolioSync";
 import { snapshotsFromReport, upsertPortfolioSnapshots, prepareReportForSnapshot } from "./portfolioSnapshots";
 import { getQuote } from "./marketData";
-import type { MarketRegion } from "./types";
 
 export type UserSnapshotResult = {
   userId: string;
@@ -31,8 +30,17 @@ type RunDailySnapshotOptions = {
   shareQuoteCache?: boolean;
 };
 
+export function createSnapshotQuoteFetcher(
+  options: { freshQuotes?: boolean } = {}
+): PortfolioReportQuoteFetcher {
+  return (symbol, region) => getQuote(symbol, region, {
+    fresh: options.freshQuotes,
+    preferPublicQuote: true
+  });
+}
+
 export function createCachedQuoteFetcher(
-  fetchQuote: PortfolioReportQuoteFetcher = (symbol, region) => getQuote(symbol, region)
+  fetchQuote: PortfolioReportQuoteFetcher = createSnapshotQuoteFetcher()
 ): PortfolioReportQuoteFetcher {
   const cache = new Map<string, ReturnType<PortfolioReportQuoteFetcher>>();
   return (symbol, region) => {
@@ -128,11 +136,11 @@ export async function runDailyPortfolioSnapshotsForAllUsers(
 ): Promise<DailySnapshotRunSummary> {
   const rows = await fetchAllCloudPortfolioRows(supabase);
   const fetchQuote = options.shareQuoteCache === false
-    ? undefined
+    ? createSnapshotQuoteFetcher({ freshQuotes: options.freshQuotes })
     : createCachedQuoteFetcher(
       options.freshQuotes
-        ? (symbol, region: MarketRegion) => getQuote(symbol, region, { fresh: true })
-        : undefined
+        ? createSnapshotQuoteFetcher({ freshQuotes: true })
+        : createSnapshotQuoteFetcher()
     );
 
   const results: UserSnapshotResult[] = [];

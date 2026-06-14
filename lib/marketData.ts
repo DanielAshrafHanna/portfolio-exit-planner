@@ -20,6 +20,8 @@ const YAHOO_FETCH_HEADERS = {
 
 type QuoteFetchOptions = {
   fresh?: boolean;
+  /** Use Yahoo/Mubasher for cron snapshots to preserve Alpha Vantage daily quota. */
+  preferPublicQuote?: boolean;
 };
 
 function mubasherFetch(url: string, fresh = false) {
@@ -208,7 +210,7 @@ export async function getQuote(
       warning: `${cleanSymbol} has no live EGX stock quote. If this is a mutual fund, it is not supported here.`
     };
   }
-  if (usesYahooQuoteFallback()) {
+  if (usesYahooQuoteFallback() || options.preferPublicQuote) {
     const yahooQuote = await getYahooQuote(marketSymbol, cleanSymbol, options.fresh);
     if (yahooQuote) {
       return {
