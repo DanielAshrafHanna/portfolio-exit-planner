@@ -21,6 +21,8 @@ export type WeeklyChartPoint = {
   portfolioValue: number;
   totalProfitLoss: number;
   hasData: boolean;
+  /** True when this calendar day had a trading session and daily P/L should be plotted. */
+  hasPlData: boolean;
   marketClosed: boolean;
 };
 
@@ -108,9 +110,12 @@ export function buildWeeklySeries(
             portfolioValue: 0,
             totalProfitLoss: 0,
             hasData: false,
+            hasPlData: false,
             marketClosed
           };
         }
+        const hasData = true;
+        const hasPlData = !marketClosed;
         return {
           date,
           snapshotDate,
@@ -118,7 +123,8 @@ export function buildWeeklySeries(
           dailyProfitLossPercent: Number(row.daily_profit_loss_percent),
           portfolioValue: Number(row.portfolio_value),
           totalProfitLoss: Number(row.total_profit_loss),
-          hasData: true,
+          hasData,
+          hasPlData,
           marketClosed
         };
       })
@@ -129,10 +135,10 @@ export function buildWeeklySeries(
 export function buildCumulativePoints(points: WeeklyChartPoint[]) {
   let running = 0;
   return points.map((point) => {
-    if (point.hasData) running += point.dailyProfitLoss;
+    if (point.hasPlData) running += point.dailyProfitLoss;
     return {
       ...point,
-      cumulativeProfitLoss: point.hasData ? running : running
+      cumulativeProfitLoss: point.hasPlData ? running : running
     };
   });
 }
@@ -152,16 +158,20 @@ export function topHoldingMovers<T extends { symbol: string; name: string; daily
 }
 
 function emptyWeeklyPoints(windowDates: string[], region: MarketRegion, now: Date): WeeklyChartPoint[] {
-  return windowDates.map((snapshotDate) => ({
-    date: chartAxisDateLabel(snapshotDate, now),
-    snapshotDate,
-    dailyProfitLoss: 0,
-    dailyProfitLossPercent: 0,
-    portfolioValue: 0,
-    totalProfitLoss: 0,
-    hasData: false,
-    marketClosed: !isTradingWeekday(region, snapshotDate)
-  }));
+  return windowDates.map((snapshotDate) => {
+    const marketClosed = !isTradingWeekday(region, snapshotDate);
+    return {
+      date: chartAxisDateLabel(snapshotDate, now),
+      snapshotDate,
+      dailyProfitLoss: 0,
+      dailyProfitLossPercent: 0,
+      portfolioValue: 0,
+      totalProfitLoss: 0,
+      hasData: false,
+      hasPlData: false,
+      marketClosed
+    };
+  });
 }
 
 function formatIsoDate(date: Date) {

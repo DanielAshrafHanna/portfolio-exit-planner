@@ -28,7 +28,21 @@ describe("buildWeeklySeries", () => {
     expect(series[0].points).toHaveLength(7);
     expect(series[0].points[0]).toMatchObject({ snapshotDate: "2026-06-07", hasData: false, dailyProfitLoss: 0, marketClosed: true });
     expect(series[0].points[4]).toMatchObject({ snapshotDate: "2026-06-11", hasData: true, dailyProfitLoss: 25, marketClosed: false });
-    expect(series[0].points[6]).toMatchObject({ snapshotDate: "2026-06-13", hasData: true, dailyProfitLoss: -10, marketClosed: true });
+    expect(series[0].points[6]).toMatchObject({ snapshotDate: "2026-06-13", hasData: true, dailyProfitLoss: -10, marketClosed: true, hasPlData: false });
+  });
+
+  it("does not treat weekend snapshots as plottable daily P/L", () => {
+    const series = buildWeeklySeries([
+      row({ snapshot_date: "2026-06-14", daily_profit_loss: -17.02, daily_profit_loss_percent: -0.86 })
+    ], { days: 7, now: new Date("2026-06-14T19:43:00.000Z") });
+
+    const sunday = series[0].points.find((point) => point.snapshotDate === "2026-06-14");
+    expect(sunday).toMatchObject({
+      hasData: true,
+      marketClosed: true,
+      hasPlData: false,
+      dailyProfitLoss: -17.02
+    });
   });
 
   it("keeps currencies separate when profileId is all", () => {
@@ -74,14 +88,24 @@ describe("buildWeeklySeries", () => {
 describe("buildCumulativePoints", () => {
   it("accumulates signed daily profit and loss", () => {
     const points = buildCumulativePoints([
-      { date: "Jun 11", snapshotDate: "2026-06-11", dailyProfitLoss: 20, dailyProfitLossPercent: 1, portfolioValue: 1000, totalProfitLoss: 100, hasData: true },
-      { date: "Jun 12", snapshotDate: "2026-06-12", dailyProfitLoss: -5, dailyProfitLossPercent: -0.5, portfolioValue: 995, totalProfitLoss: 95, hasData: true },
-      { date: "Jun 13", snapshotDate: "2026-06-13", dailyProfitLoss: 0, dailyProfitLossPercent: 0, portfolioValue: 0, totalProfitLoss: 0, hasData: false }
+      { date: "Jun 11", snapshotDate: "2026-06-11", dailyProfitLoss: 20, dailyProfitLossPercent: 1, portfolioValue: 1000, totalProfitLoss: 100, hasData: true, hasPlData: true, marketClosed: false },
+      { date: "Jun 12", snapshotDate: "2026-06-12", dailyProfitLoss: -5, dailyProfitLossPercent: -0.5, portfolioValue: 995, totalProfitLoss: 95, hasData: true, hasPlData: true, marketClosed: false },
+      { date: "Jun 13", snapshotDate: "2026-06-13", dailyProfitLoss: 0, dailyProfitLossPercent: 0, portfolioValue: 0, totalProfitLoss: 0, hasData: false, hasPlData: false, marketClosed: true }
     ]);
 
     expect(points[0].cumulativeProfitLoss).toBe(20);
     expect(points[1].cumulativeProfitLoss).toBe(15);
     expect(points[2].cumulativeProfitLoss).toBe(15);
+  });
+
+  it("skips weekend snapshot P/L when accumulating", () => {
+    const points = buildCumulativePoints([
+      { date: "Jun 12", snapshotDate: "2026-06-12", dailyProfitLoss: 10, dailyProfitLossPercent: 1, portfolioValue: 1000, totalProfitLoss: 100, hasData: true, hasPlData: true, marketClosed: false },
+      { date: "Jun 14", snapshotDate: "2026-06-14", dailyProfitLoss: -17, dailyProfitLossPercent: -1, portfolioValue: 980, totalProfitLoss: 80, hasData: true, hasPlData: false, marketClosed: true }
+    ]);
+
+    expect(points[0].cumulativeProfitLoss).toBe(10);
+    expect(points[1].cumulativeProfitLoss).toBe(10);
   });
 });
 

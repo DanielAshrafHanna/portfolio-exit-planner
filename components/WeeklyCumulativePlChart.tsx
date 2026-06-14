@@ -29,9 +29,9 @@ export function WeeklyCumulativePlChart({ series }: Props) {
     const cumulative = buildCumulativePoints(series.points);
     const data: CumulativeChartPoint[] = cumulative.map((point) => ({
       ...point,
-      cumulativeProfitLoss: point.hasData ? point.cumulativeProfitLoss : null
+      cumulativeProfitLoss: point.hasPlData ? point.cumulativeProfitLoss : null
     }));
-    const values = cumulative.filter((point) => point.hasData).map((point) => point.cumulativeProfitLoss);
+    const values = cumulative.filter((point) => point.hasPlData).map((point) => point.cumulativeProfitLoss);
     return { points: data, domain: plChartDomain(values) };
   }, [series.points]);
 
@@ -95,11 +95,11 @@ function CumulativeTooltip({
   if (!active || !payload?.length) return null;
   const point = payload[0].payload;
   const dateLabel = formatSessionLabel(point.snapshotDate);
-  if (!point.hasData) {
+  if (!point.hasPlData) {
     return (
       <div className="rounded-md border border-ink/10 bg-white px-3 py-2 text-xs text-ink/70 shadow-soft">
         <div className="font-semibold text-ink">{dateLabel}</div>
-        <div>{point.marketClosed ? "Market closed" : "No snapshot saved"}</div>
+        <div>{point.marketClosed ? "Market closed — no trading session" : "No snapshot saved"}</div>
       </div>
     );
   }

@@ -76,13 +76,14 @@ describe("snapshotDateForRegion", () => {
 });
 
 describe("snapshotsFromReport", () => {
-  it("maps each profile to a daily snapshot row", () => {
-    const rows = snapshotsFromReport("user-1", minimalReport(), new Date("2026-06-13T17:00:00.000Z"));
+  it("maps each profile to a daily snapshot row on a trading day", () => {
+    const rows = snapshotsFromReport("user-1", minimalReport(), new Date("2026-06-10T17:00:00.000Z"));
     expect(rows).toHaveLength(2);
     expect(rows[0]).toMatchObject({
       user_id: "user-1",
       profile_id: "us-portfolio",
       currency: "USD",
+      snapshot_date: "2026-06-10",
       daily_profit_loss: 20,
       portfolio_value: 1200,
       total_profit_loss: 200,
@@ -91,10 +92,38 @@ describe("snapshotsFromReport", () => {
     expect(rows[1]).toMatchObject({
       profile_id: "eg-portfolio",
       currency: "EGP",
+      snapshot_date: "2026-06-10",
       daily_profit_loss: -50,
       total_profit_loss: -200,
       holdings_count: 2
     });
-    expect(rows[0].snapshot_date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it("keys US weekend snapshots to the last trading session with zero daily P/L", () => {
+    const rows = snapshotsFromReport("user-1", minimalReport(), new Date("2026-06-14T19:43:00.000Z"));
+    expect(rows[0]).toMatchObject({
+      profile_id: "us-portfolio",
+      snapshot_date: "2026-06-12",
+      daily_profit_loss: 0,
+      daily_profit_loss_percent: 0,
+      portfolio_value: 1200
+    });
+    // EGX trades on Sundays, so Egypt still records session P/L on this date.
+    expect(rows[1]).toMatchObject({
+      profile_id: "eg-portfolio",
+      snapshot_date: "2026-06-14",
+      daily_profit_loss: -50,
+      daily_profit_loss_percent: -1
+    });
+  });
+
+  it("keys EGX weekend snapshots to the last trading session with zero daily P/L", () => {
+    const rows = snapshotsFromReport("user-1", minimalReport(), new Date("2026-06-13T17:00:00.000Z"));
+    expect(rows[1]).toMatchObject({
+      profile_id: "eg-portfolio",
+      snapshot_date: "2026-06-11",
+      daily_profit_loss: 0,
+      daily_profit_loss_percent: 0
+    });
   });
 });

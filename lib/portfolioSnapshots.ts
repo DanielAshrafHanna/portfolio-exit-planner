@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { PortfolioReport } from "./portfolioReport";
+import { getDailyPlSessionInfo, isTradingWeekday } from "./marketSession";
 import type { CurrencyCode, MarketRegion } from "./types";
 
 export type PortfolioDailySnapshotRow = {
@@ -33,17 +34,23 @@ export function snapshotDateForRegion(now: Date, region: MarketRegion) {
 }
 
 export function snapshotsFromReport(userId: string, report: PortfolioReport, now = new Date(report.generatedAt)): PortfolioDailySnapshotRow[] {
-  return report.profiles.map((profile) => ({
-    user_id: userId,
-    snapshot_date: snapshotDateForRegion(now, profile.region),
-    profile_id: profile.id,
-    currency: profile.currency,
-    daily_profit_loss: profile.totals.dailyProfitLoss,
-    daily_profit_loss_percent: profile.totals.dailyProfitLossPercent,
-    portfolio_value: profile.totals.currentValue,
-    total_profit_loss: profile.totals.profitLoss,
-    holdings_count: profile.totals.quotedHoldingsCount
-  }));
+  return report.profiles.map((profile) => {
+    const session = getDailyPlSessionInfo(profile.region, now);
+    const tradingToday = isTradingWeekday(profile.region, now);
+    // On weekends/non-trading days, quote "daily" P/L is not a real session move — store 0.
+    // Key snapshots by the active trading session date, not the calendar weekend date.
+    return {
+      user_id: userId,
+      snapshot_date: session.sessionDate,
+      profile_id: profile.id,
+      currency: profile.currency,
+      daily_profit_loss: tradingToday ? profile.totals.dailyProfitLoss : 0,
+      daily_profit_loss_percent: tradingToday ? profile.totals.dailyProfitLossPercent : 0,
+      portfolio_value: profile.totals.currentValue,
+      total_profit_loss: profile.totals.profitLoss,
+      holdings_count: profile.totals.quotedHoldingsCount
+    };
+  });
 }
 
 export async function upsertPortfolioSnapshots(

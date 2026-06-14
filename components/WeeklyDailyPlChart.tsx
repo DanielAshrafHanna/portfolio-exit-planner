@@ -26,9 +26,9 @@ export function WeeklyDailyPlChart({ series }: Props) {
   const { chartData, domain } = useMemo(() => {
     const data: DailyPlChartPoint[] = series.points.map((point) => ({
       ...point,
-      dailyProfitLoss: point.hasData ? point.dailyProfitLoss : null
+      dailyProfitLoss: point.hasPlData ? point.dailyProfitLoss : null
     }));
-    const values = series.points.filter((point) => point.hasData).map((point) => point.dailyProfitLoss);
+    const values = series.points.filter((point) => point.hasPlData).map((point) => point.dailyProfitLoss);
     return { chartData: data, domain: plChartDomain(values) };
   }, [series.points]);
 
@@ -61,8 +61,8 @@ export function WeeklyDailyPlChart({ series }: Props) {
               {chartData.map((point) => (
                 <Cell
                   key={point.snapshotDate}
-                  fill={!point.hasData || point.marketClosed ? CHART_THEME.empty : point.dailyProfitLoss! >= 0 ? CHART_THEME.gain : CHART_THEME.loss}
-                  fillOpacity={point.hasData && !point.marketClosed ? 1 : 0.35}
+                  fill={!point.hasPlData ? CHART_THEME.empty : point.dailyProfitLoss! >= 0 ? CHART_THEME.gain : CHART_THEME.loss}
+                  fillOpacity={point.hasPlData ? 1 : 0.35}
                 />
               ))}
             </Bar>
@@ -85,22 +85,11 @@ function DailyPlTooltip({
   if (!active || !payload?.length) return null;
   const point = payload[0].payload;
   const dateLabel = formatSessionLabel(point.snapshotDate);
-  if (!point.hasData) {
+  if (!point.hasPlData) {
     return (
       <div className="rounded-md border border-ink/10 bg-white px-3 py-2 text-xs text-ink/70 shadow-soft">
         <div className="font-semibold text-ink">{dateLabel}</div>
-        <div>{point.marketClosed ? "Market closed" : "No snapshot saved"}</div>
-      </div>
-    );
-  }
-  if (point.marketClosed) {
-    return (
-      <div className="rounded-md border border-ink/10 bg-white px-3 py-2 text-xs shadow-soft">
-        <div className="font-semibold text-ink">{dateLabel}</div>
-        <div className="text-ink/60">Market closed</div>
-        <div className={point.dailyProfitLoss! >= 0 ? "text-marine" : "text-coral"}>
-          {formatChartSignedMoney(point.dailyProfitLoss!, currency)} ({formatPercent(point.dailyProfitLossPercent)})
-        </div>
+        <div>{point.marketClosed ? "Market closed — no trading session" : "No snapshot saved"}</div>
       </div>
     );
   }
