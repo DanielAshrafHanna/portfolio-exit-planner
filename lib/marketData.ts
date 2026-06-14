@@ -233,9 +233,15 @@ export async function getQuote(
     const yahooQuote = await getYahooQuote(marketSymbol, cleanSymbol, options.fresh, !options.preferPublicQuote);
     if (yahooQuote) {
       const alphaMessage = error instanceof Error ? error.message : "Failed quote fetch";
+      const shortAlphaMessage = alphaMessage.includes("spreading out your free API requests")
+        || alphaMessage.includes("premium plans")
+        ? "Alpha Vantage free-tier rate limit reached."
+        : alphaMessage.length > 120
+          ? `${alphaMessage.slice(0, 120)}…`
+          : alphaMessage;
       return {
         data: { ...yahooQuote, symbol: cleanSymbol },
-        warning: `Alpha Vantage failed for ${cleanSymbol}; using Yahoo Finance fallback. (${alphaMessage})`
+        warning: `Alpha Vantage failed for ${cleanSymbol}; using Yahoo Finance fallback. (${shortAlphaMessage})`
       };
     }
     const message = error instanceof Error ? error.message : "Failed quote fetch";

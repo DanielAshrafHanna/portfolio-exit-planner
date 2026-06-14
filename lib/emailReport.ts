@@ -1,5 +1,7 @@
 import { formatSignedMoney, formatPercent, type PortfolioReport, type PortfolioReportHolding } from "./portfolioReport";
+import { resolveEmailChartSeries } from "./emailChartSeries";
 import { topHoldingMovers, type WeeklyChartSeries } from "./portfolioReportCharts";
+import { sanitizeReportWarningsForEmail } from "./reportEmailWarnings";
 import { formatMoney } from "./profileUtils";
 import type { CurrencyCode } from "./types";
 
@@ -21,7 +23,9 @@ export function formatDailyReportEmailText(
   report: PortfolioReport,
   options: { series?: WeeklyChartSeries[]; displayName?: string } = {}
 ) {
-  const lines = [report.textDigest, ""];
+  const emailReport = withEmailSafeReport(report);
+  const chartSeries = resolveEmailChartSeries(emailReport, options.series || []);
+  const lines = [emailReport.textDigest, ""];
   if (options.displayName?.trim()) {
     lines.unshift(`Hi ${options.displayName.trim()},`, "");
   }
@@ -31,7 +35,7 @@ export function formatDailyReportEmailText(
     lines.push("Daily top movers", ...moversLines, "");
   }
 
-  const chartLines = formatChartsSectionText(options.series || []);
+  const chartLines = formatChartsSectionText(chartSeries);
   if (chartLines.length) {
     lines.push("7-day daily P/L", ...chartLines);
   }
@@ -44,14 +48,16 @@ export function formatDailyReportEmailHtml(
   report: PortfolioReport,
   options: { series?: WeeklyChartSeries[]; displayName?: string } = {}
 ) {
-  const generated = new Date(report.generatedAt).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" });
+  const emailReport = withEmailSafeReport(report);
+  const chartSeries = resolveEmailChartSeries(emailReport, options.series || []);
+  const generated = new Date(emailReport.generatedAt).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" });
   const greeting = options.displayName?.trim()
     ? `<p style="margin:0 0 12px;color:#18312b;">Hi ${escapeHtml(options.displayName.trim())},</p>`
     : "";
-  const moversSection = formatMoversSectionHtml(report);
-  const chartsSection = formatChartsSectionHtml(options.series || []);
+  const moversSection = formatMoversSectionHtml(emailReport);
+  const chartsSection = formatChartsSectionHtml(chartSeries);
 
-  const profileCards = report.profiles.map((profile) => `
+  const profileCards = emailReport.profiles.map((profile) => `
     <section style="border:1px solid #d8e6df;border-radius:8px;padding:16px;margin-top:16px;background:#ffffff;">
       <h2 style="margin:0 0 10px;font-size:18px;color:#18312b;">${escapeHtml(profile.name)}</h2>
       ${totalsTable(profile.totals)}
@@ -73,9 +79,9 @@ export function formatDailyReportEmailHtml(
       ${greeting}
       ${moversSection}
       ${chartsSection}
-      ${report.totalsByCurrency.map((totals) => `<section style="border:1px solid #b9d6c9;border-radius:8px;padding:16px;margin-top:12px;background:#edf6f1;"><h2 style="margin:0 0 10px;font-size:16px;">All ${totals.currency} portfolios</h2>${totalsTable(totals)}</section>`).join("")}
+      ${emailReport.totalsByCurrency.map((totals) => `<section style="border:1px solid #b9d6c9;border-radius:8px;padding:16px;margin-top:12px;background:#edf6f1;"><h2 style="margin:0 0 10px;font-size:16px;">All ${totals.currency} portfolios</h2>${totalsTable(totals)}</section>`).join("")}
       ${profileCards}
-      ${report.warnings.length ? `<section style="border:1px solid #e8cf8a;border-radius:8px;padding:16px;margin-top:16px;background:#fff8df;"><h2 style="margin:0 0 8px;font-size:16px;">Warnings</h2><ul>${report.warnings.map((warning) => `<li>${escapeHtml(warning)}</li>`).join("")}</ul></section>` : ""}
+      ${emailReport.warnings.length ? `<section style="border:1px solid #e8cf8a;border-radius:8px;padding:16px;margin-top:16px;background:#fff8df;"><h2 style="margin:0 0 8px;font-size:16px;">Notes</h2><ul>${emailReport.warnings.map((warning) => `<li>${escapeHtml(warning)}</li>`).join("")}</ul></section>` : ""}
       <p style="margin:24px 0 0;font-size:12px;color:#47645b;">Educational summary only — not financial advice. Charts and movers use your saved cloud portfolio.</p>
     </main>
   </body>
@@ -190,19 +196,51 @@ function formatChartsSectionText(series: WeeklyChartSeries[]) {
   });
 }
 
+function withEmailSafeReport(report: PortfolioReport): PortfolioReport {
+  return {
+    ...report,
+    warnings: sanitizeReportWarningsForEmail(report.warnings)
+  };
+}
+
 function formatChartsSectionHtml(series: WeeklyChartSeries[]) {
   const blocks = series.map((item) => {
-    const svg = weeklyPlChartSvg(item);
-    if (!svg) return "";
+    const chart = weeklyPlChartEmailHtml(item);
+    if (!chart) return "";
     const title = item.profileName ? `${item.profileName} (${item.currency})` : `${item.currency} portfolio`;
+    const note = item.points.filter((point) => point.hasPlData).length < 2
+      ? `<p style="margin:8px 0 0;font-size:12px;color:#47645b;">More daily bars appear as portfolio snapshots accumulate.</p>`
+      : "";
     return `
       <section style="border:1px solid #d8e6df;border-radius:8px;padding:16px;margin-top:12px;background:#ffffff;">
         <h2 style="margin:0 0 10px;font-size:16px;color:#18312b;">7-day daily P/L — ${escapeHtml(title)}</h2>
-        ${svg}
+        ${chart}
+        ${note}
       </section>`;
   }).filter(Boolean);
 
   return blocks.join("");
+}
+
+export function weeklyPlChartEmailHtml(series: WeeklyChartSeries) {
+  const points = series.points.filter((point) => point.hasPlData);
+  if (!points.length) return "";
+
+  const maxAbs = Math.max(...points.map((point) => Math.abs(point.dailyProfitLoss)), 1);
+  const barMaxHeight = 88;
+  const cells = points.map((point) => {
+    const height = Math.max(6, Math.round((Math.abs(point.dailyProfitLoss) / maxAbs) * barMaxHeight));
+    const color = point.dailyProfitLoss >= 0 ? "#1f6f5f" : "#d96b5b";
+    const amount = formatSignedMoney(point.dailyProfitLoss, series.currency);
+    return `
+      <td align="center" valign="bottom" style="padding:0 4px 0 4px;vertical-align:bottom;">
+        <div style="font-size:11px;color:#47645b;margin-bottom:4px;">${escapeHtml(amount)}</div>
+        <div style="width:34px;height:${height}px;background:${color};margin:0 auto;border-radius:4px 4px 0 0;"></div>
+        <div style="font-size:11px;color:#47645b;margin-top:6px;">${escapeHtml(point.date)}</div>
+      </td>`;
+  }).join("");
+
+  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;min-height:140px;"><tr>${cells}</tr></table>`;
 }
 
 export function weeklyPlChartSvg(series: WeeklyChartSeries, width = 560, height = 180) {

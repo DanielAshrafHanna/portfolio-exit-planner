@@ -82,7 +82,7 @@ describe("emailReport", () => {
     expect(html).toContain("Hi Chantal");
     expect(html).toContain("Daily top movers");
     expect(html).toContain("7-day daily P/L");
-    expect(html).toContain("<svg");
+    expect(html).toContain("<table");
     expect(text).toContain("Daily top movers");
     expect(text).toContain("7-day daily P/L");
   });

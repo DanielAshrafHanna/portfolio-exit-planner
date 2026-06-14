@@ -1,11 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const { mockGetUser, mockPortfolioSelect, mockBuildPortfolioReport, mockFetchSeries, mockSendDailyReportEmail } = vi.hoisted(() => ({
+const { mockGetUser, mockPortfolioSelect, mockBuildPortfolioReport, mockFetchSeries, mockSendDailyReportEmail, mockPrepareReport, mockUpsertSnapshots } = vi.hoisted(() => ({
   mockGetUser: vi.fn(),
   mockPortfolioSelect: vi.fn(),
   mockBuildPortfolioReport: vi.fn(),
   mockFetchSeries: vi.fn(),
-  mockSendDailyReportEmail: vi.fn()
+  mockSendDailyReportEmail: vi.fn(),
+  mockPrepareReport: vi.fn(),
+  mockUpsertSnapshots: vi.fn()
 }));
 
 vi.mock("@/lib/supabaseServer", () => ({
@@ -28,6 +30,12 @@ vi.mock("@/lib/portfolioReport", () => ({
 
 vi.mock("@/lib/portfolioReportHistory", () => ({
   fetchUserWeeklyChartSeries: mockFetchSeries
+}));
+
+vi.mock("@/lib/portfolioSnapshots", () => ({
+  prepareReportForSnapshot: mockPrepareReport,
+  snapshotsFromReport: vi.fn(() => []),
+  upsertPortfolioSnapshots: mockUpsertSnapshots
 }));
 
 vi.mock("@/lib/emailReport", () => ({
@@ -78,6 +86,8 @@ describe("/api/daily-report-email/test", () => {
       holdings: [],
       warnings: []
     });
+    mockPrepareReport.mockImplementation(async (_supabase, _userId, report) => report);
+    mockUpsertSnapshots.mockResolvedValue({});
     mockFetchSeries.mockResolvedValue([]);
     mockSendDailyReportEmail.mockResolvedValue({ configured: true, sent: true });
 
@@ -87,6 +97,7 @@ describe("/api/daily-report-email/test", () => {
     expect(response.status).toBe(200);
     expect(body.ok).toBe(true);
     expect(body.sentTo).toBe("user@example.com");
+    expect(mockUpsertSnapshots).toHaveBeenCalled();
     expect(mockSendDailyReportEmail).toHaveBeenCalledWith(expect.objectContaining({
       to: "user@example.com",
       subjectPrefix: "[Test]"

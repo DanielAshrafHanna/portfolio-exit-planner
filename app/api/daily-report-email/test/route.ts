@@ -5,6 +5,7 @@ import { dailyReportEmailPrefsFromSettings, isValidReportEmail, normalizeReportE
 import { sendDailyReportEmail } from "@/lib/emailReport";
 import { fetchUserWeeklyChartSeries } from "@/lib/portfolioReportHistory";
 import { buildPortfolioReport } from "@/lib/portfolioReport";
+import { snapshotsFromReport, prepareReportForSnapshot, upsertPortfolioSnapshots } from "@/lib/portfolioSnapshots";
 import { defaultProfiles } from "@/lib/profileUtils";
 import { bearerTokenFromRequest, createSupabaseUserClient } from "@/lib/supabaseServer";
 
@@ -54,13 +55,21 @@ export async function POST(request: Request) {
 
     const profiles = row ? profilesFromCloudPortfolioRow(row) : defaultProfiles();
     const report = await buildPortfolioReport(profiles, { freshQuotes: true });
+    const snapshotReport = row?.user_id
+      ? await prepareReportForSnapshot(supabase, user.id, report)
+      : report;
+
+    if (row?.user_id) {
+      await upsertPortfolioSnapshots(supabase, snapshotsFromReport(user.id, snapshotReport));
+    }
+
     const series = row?.user_id
-      ? await fetchUserWeeklyChartSeries(supabase, user.id, row)
+      ? await fetchUserWeeklyChartSeries(supabase, user.id, row, { now: new Date(snapshotReport.generatedAt) })
       : [];
 
     const delivery = await sendDailyReportEmail({
       to: recipient,
-      report,
+      report: snapshotReport,
       series,
       displayName: row?.display_name || undefined,
       subjectPrefix: "[Test]"
