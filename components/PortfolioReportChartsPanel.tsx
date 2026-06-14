@@ -2,14 +2,15 @@
 
 import { AlertTriangle, BarChart3, Loader2, RefreshCw } from "lucide-react";
 import dynamic from "next/dynamic";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { ChartLegend } from "@/components/ChartLegend";
 import { reportProfileTabClass } from "@/components/reportTabs";
 import { SectionCard } from "@/components/ui/SectionCard";
+import { buildMoverDateOptions, mergeHoldingSnapshotsForMovers, type HoldingSnapshotDay } from "@/lib/holdingSnapshots";
 import { topHoldingMovers } from "@/lib/portfolioReportCharts";
 import type { WeeklyChartSeries } from "@/lib/portfolioReportCharts";
 import type { PortfolioReport } from "@/lib/portfolioReport";
-import { getDailyPlSessionInfo, regionFromCurrency } from "@/lib/marketSession";
+import { formatSessionLabel, getDailyPlSessionInfo, regionFromCurrency } from "@/lib/marketSession";
 import type { CurrencyCode } from "@/lib/types";
 
 const ChartFallback = () => <div className="h-64 animate-pulse rounded-md bg-surface-muted" />;
@@ -34,6 +35,7 @@ const TodayHoldingMoversChart = dynamic(
 type Props = {
   report: PortfolioReport | null;
   historySeries: WeeklyChartSeries[];
+  holdingSnapshots: HoldingSnapshotDay[];
   selectedProfileId: string;
   onSelectedProfileIdChange: (profileId: string) => void;
   isLoadingReport: boolean;
@@ -46,6 +48,7 @@ type Props = {
 export function PortfolioReportChartsPanel({
   report,
   historySeries,
+  holdingSnapshots,
   selectedProfileId,
   onSelectedProfileIdChange,
   isLoadingReport,
@@ -56,6 +59,7 @@ export function PortfolioReportChartsPanel({
 }: Props) {
   const isLoading = isLoadingReport || isLoadingHistory;
   const hasData = Boolean(report) || historySeries.length > 0;
+  const [moversDateByCurrency, setMoversDateByCurrency] = useState<Partial<Record<CurrencyCode, string>>>({});
 
   const selectedProfile = useMemo(() => (
     report?.profiles.find((profile) => profile.id === selectedProfileId)
@@ -67,25 +71,70 @@ export function PortfolioReportChartsPanel({
   }, [report?.holdings, selectedProfile]);
 
   const moversByCurrency = useMemo(() => {
-    const grouped = new Map<CurrencyCode, ReturnType<typeof topHoldingMovers>>();
+    const grouped = new Map<CurrencyCode, Array<{ symbol: string; name: string; dailyProfitLoss: number; shares: number }>>();
     holdingsForMovers.forEach((holding) => {
       const existing = grouped.get(holding.currency) || [];
       existing.push({
         symbol: holding.symbol,
         name: holding.name,
-        dailyProfitLoss: holding.dailyProfitLoss
+        dailyProfitLoss: holding.dailyProfitLoss,
+        shares: holding.shares
       });
       grouped.set(holding.currency, existing);
     });
-    return [...grouped.entries()].map(([currency, holdings]) => {
+
+    const currencies = new Set<CurrencyCode>([
+      ...grouped.keys(),
+      ...historySeries
+        .filter((series) => selectedProfileId === "all" || series.profileId === selectedProfileId)
+        .map((series) => series.currency)
+    ]);
+
+    return [...currencies].sort().map((currency) => {
       const session = getDailyPlSessionInfo(regionFromCurrency(currency));
+      const selectedDateId = moversDateByCurrency[currency] || "live";
+      const snapshotDates = historySeries
+        .filter((series) => series.currency === currency && (selectedProfileId === "all" || series.profileId === selectedProfileId))
+        .flatMap((series) => series.points.filter((point) => point.hasPlData).map((point) => point.snapshotDate));
+      const dateOptions = buildMoverDateOptions(snapshotDates, holdingSnapshots, {
+        currency,
+        profileId: selectedProfileId
+      });
+
+      const liveHoldings = grouped.get(currency) || [];
+      let movers: Array<{ symbol: string; name: string; dailyProfitLoss: number; shares?: number }> = [];
+      let emptyMessage = "No quoted holdings with daily P/L for this day.";
+
+      if (selectedDateId === "live") {
+        movers = topHoldingMovers(liveHoldings).map((holding) => {
+          const full = liveHoldings.find((row) => row.symbol === holding.symbol);
+          return { ...holding, shares: full?.shares };
+        });
+      } else {
+        const historical = mergeHoldingSnapshotsForMovers(holdingSnapshots, {
+          currency,
+          profileId: selectedProfileId,
+          snapshotDate: selectedDateId
+        });
+        if (!historical.length) {
+          emptyMessage = `No saved mover breakdown for ${formatSessionLabel(selectedDateId)} yet. Open the report on a market day after updating, or pick Latest (live).`;
+        }
+        movers = topHoldingMovers(historical).map((holding) => {
+          const full = historical.find((row) => row.symbol === holding.symbol);
+          return { ...holding, shares: full?.shares };
+        });
+      }
+
       return {
         currency,
-        movers: topHoldingMovers(holdings),
-        session
+        movers,
+        session,
+        dateOptions,
+        selectedDateId,
+        emptyMessage
       };
     });
-  }, [holdingsForMovers]);
+  }, [holdingSnapshots, historySeries, holdingsForMovers, moversDateByCurrency, selectedProfileId]);
 
   const historyDataDays = useMemo(() => (
     historySeries.reduce((count, series) => (
@@ -101,7 +150,7 @@ export function PortfolioReportChartsPanel({
       icon={BarChart3}
       eyebrow="Report"
       title="Charts"
-      description="Live movers reflect the latest quotes. Weekly history is saved when you open the report or when the daily cron runs."
+      description="Pick a day for top movers. Latest uses live quotes; past days use saved snapshots from when you opened the report."
       action={(
         <button
           className="inline-flex min-h-10 items-center gap-2 rounded-md border border-marine/25 bg-white px-3 py-2 text-sm font-semibold text-marine hover:border-marine/50 disabled:cursor-not-allowed disabled:opacity-60"
@@ -187,10 +236,14 @@ export function PortfolioReportChartsPanel({
                     holdings={entry.movers}
                     currency={entry.currency}
                     key={`movers-${entry.currency}`}
-                    title={`${entry.session.moversTitle} (${entry.currency})`}
-                    subtitle={entry.session.subtitle}
-                    sessionLabel={entry.session.sessionLabel}
-                    isMarketClosed={entry.session.isMarketClosed}
+                    title={`Top movers · ${entry.currency}`}
+                    subtitle={entry.selectedDateId === "live" ? entry.session.subtitle : `Saved snapshot · ${formatSessionLabel(entry.selectedDateId)}`}
+                    sessionLabel={entry.selectedDateId === "live" ? entry.session.sessionLabel : undefined}
+                    isMarketClosed={entry.selectedDateId === "live" ? entry.session.isMarketClosed : false}
+                    dateOptions={entry.dateOptions}
+                    selectedDateId={entry.selectedDateId}
+                    onDateChange={(dateId) => setMoversDateByCurrency((existing) => ({ ...existing, [entry.currency]: dateId }))}
+                    emptyMessage={entry.emptyMessage}
                   />
                 )) : null}
                 {historySeries.map((series) => <WeeklyCumulativePlChart series={series} key={`cumulative-${series.profileId}-${series.currency}`} />)}

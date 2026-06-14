@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { PortfolioReport } from "./portfolioReport";
+import { holdingsSnapshotFromReportRows } from "./holdingSnapshots";
 import { getDailyPlSessionInfo, isTradingWeekday } from "./marketSession";
 import type { CurrencyCode, MarketRegion } from "./types";
 
@@ -13,6 +14,7 @@ export type PortfolioDailySnapshotRow = {
   portfolio_value: number;
   total_profit_loss: number;
   holdings_count: number;
+  holdings_snapshot: ReturnType<typeof holdingsSnapshotFromReportRows>;
 };
 
 const REGION_TIMEZONES: Record<MarketRegion, string> = {
@@ -48,7 +50,8 @@ export function snapshotsFromReport(userId: string, report: PortfolioReport, now
       daily_profit_loss_percent: tradingToday ? profile.totals.dailyProfitLossPercent : 0,
       portfolio_value: profile.totals.currentValue,
       total_profit_loss: profile.totals.profitLoss,
-      holdings_count: profile.totals.quotedHoldingsCount
+      holdings_count: profile.totals.quotedHoldingsCount,
+      holdings_snapshot: holdingsSnapshotFromReportRows(profile.holdings)
     };
   });
 }
@@ -65,6 +68,19 @@ export async function upsertPortfolioSnapshots(
 
   if (!error) return {};
 
+  if (isMissingHoldingsSnapshotColumn(error.message)) {
+    const legacyRows = rows.map(({ holdings_snapshot: _holdings, ...rest }) => rest);
+    const retry = await supabase
+      .from("portfolio_daily_snapshots")
+      .upsert(legacyRows, { onConflict: "user_id,snapshot_date,profile_id" });
+    if (!retry.error) {
+      return {
+        warning: "Holdings mover history needs the updated Supabase schema. Run the latest SQL, then reload the schema cache."
+      };
+    }
+    return { warning: `Portfolio history failed to save: ${retry.error.message}` };
+  }
+
   if (isMissingSnapshotsTableError(error.message)) {
     return {
       warning: "Portfolio history is not active yet. Run the updated Supabase SQL, then reload the schema cache."
@@ -79,4 +95,9 @@ function isMissingSnapshotsTableError(message: string) {
   return normalized.includes("portfolio_daily_snapshots")
     || normalized.includes("schema cache")
     || normalized.includes("could not find the table");
+}
+
+function isMissingHoldingsSnapshotColumn(message: string) {
+  const normalized = message.toLowerCase();
+  return normalized.includes("holdings_snapshot");
 }

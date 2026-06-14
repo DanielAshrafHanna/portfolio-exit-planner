@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { profilesFromCloudPortfolioRow, type CloudPortfolioRow } from "@/lib/cloudPortfolio";
+import { parseHoldingsSnapshot, type HoldingSnapshotDay } from "@/lib/holdingSnapshots";
 import { buildWeeklySeries, rollingSnapshotDates } from "@/lib/portfolioReportCharts";
 import { bearerTokenFromRequest, createSupabaseUserClient } from "@/lib/supabaseServer";
+import type { CurrencyCode } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -38,7 +40,7 @@ export async function GET(request: Request) {
     buffered.setUTCDate(buffered.getUTCDate() - 1);
     const startDate = buffered.toISOString().slice(0, 10);
 
-    const [{ data: portfolioRow }, { data, error }] = await Promise.all([
+    const [{ data: portfolioRow }, snapshotResult] = await Promise.all([
       supabase
         .from("user_portfolios")
         .select("holdings, settings")
@@ -46,11 +48,24 @@ export async function GET(request: Request) {
         .maybeSingle(),
       supabase
         .from("portfolio_daily_snapshots")
-        .select("snapshot_date, profile_id, currency, daily_profit_loss, daily_profit_loss_percent, portfolio_value, total_profit_loss, holdings_count")
+        .select("snapshot_date, profile_id, currency, daily_profit_loss, daily_profit_loss_percent, portfolio_value, total_profit_loss, holdings_count, holdings_snapshot")
         .eq("user_id", user.id)
         .gte("snapshot_date", startDate)
         .order("snapshot_date", { ascending: true })
     ]);
+
+    let data: Array<Record<string, unknown>> | null = snapshotResult.data as Array<Record<string, unknown>> | null;
+    let error = snapshotResult.error;
+    if (error && isMissingHoldingsSnapshotColumn(error.message)) {
+      const fallback = await supabase
+        .from("portfolio_daily_snapshots")
+        .select("snapshot_date, profile_id, currency, daily_profit_loss, daily_profit_loss_percent, portfolio_value, total_profit_loss, holdings_count")
+        .eq("user_id", user.id)
+        .gte("snapshot_date", startDate)
+        .order("snapshot_date", { ascending: true });
+      data = fallback.data as Array<Record<string, unknown>> | null;
+      error = fallback.error;
+    }
 
     if (error) {
       const message = error.message.toLowerCase();
@@ -59,6 +74,7 @@ export async function GET(request: Request) {
           days,
           profileId,
           series: [],
+          holdingSnapshots: [],
           warnings: ["Portfolio history is not active yet. Run the updated Supabase SQL, then reload the schema cache."]
         });
       }
@@ -81,15 +97,30 @@ export async function GET(request: Request) {
       holdings_count: Number(row.holdings_count)
     }));
 
+    const holdingSnapshots: HoldingSnapshotDay[] = (data || []).map((row) => ({
+      snapshotDate: row.snapshot_date as string,
+      profileId: row.profile_id as string,
+      currency: row.currency as CurrencyCode,
+      holdings: parseHoldingsSnapshot("holdings_snapshot" in row ? row.holdings_snapshot : [])
+    }));
+
     return NextResponse.json({
       days,
       profileId,
       series: buildWeeklySeries(snapshots, { days, profileId, now }),
-      warnings: []
+      holdingSnapshots,
+      warnings: holdingSnapshots.every((day) => !day.holdings.length) && (data || []).length
+        ? ["Historical mover breakdown starts after the next saved report snapshot."]
+        : []
     });
   } catch (error) {
     return NextResponse.json({
       error: error instanceof Error ? error.message : "Portfolio report history failed."
     }, { status: 500 });
   }
+}
+
+function isMissingHoldingsSnapshotColumn(message: string) {
+  const normalized = message.toLowerCase();
+  return normalized.includes("holdings_snapshot") || normalized.includes("column");
 }

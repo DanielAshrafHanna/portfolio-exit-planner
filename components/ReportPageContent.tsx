@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { PortfolioReportChartsPanel } from "@/components/PortfolioReportChartsPanel";
 import { PortfolioReportPanel } from "@/components/PortfolioReportPanel";
 import { reportTabClass } from "@/components/reportTabs";
+import type { HoldingSnapshotDay } from "@/lib/holdingSnapshots";
 import type { WeeklyChartSeries } from "@/lib/portfolioReportCharts";
 import type { PortfolioReport } from "@/lib/portfolioReport";
 import { createSupabaseBrowserClient } from "@/lib/supabaseClient";
@@ -21,6 +22,7 @@ type HistoryResponse = {
   days?: number;
   profileId?: string;
   series?: WeeklyChartSeries[];
+  holdingSnapshots?: HoldingSnapshotDay[];
   warnings?: string[];
   error?: string;
 };
@@ -31,6 +33,7 @@ export function ReportPageContent() {
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
   const [report, setReport] = useState<PortfolioReport | null>(null);
   const [historySeries, setHistorySeries] = useState<WeeklyChartSeries[]>([]);
+  const [holdingSnapshots, setHoldingSnapshots] = useState<HoldingSnapshotDay[]>([]);
   const [cloudUpdatedAt, setCloudUpdatedAt] = useState<string | null>(null);
   const [selectedProfileId, setSelectedProfileId] = useState("all");
   const [isLoadingReport, setIsLoadingReport] = useState(false);
@@ -86,6 +89,7 @@ export function ReportPageContent() {
       const payload = await response.json() as HistoryResponse;
       if (!response.ok) throw new Error(payload.error || "Report history failed to load.");
       setHistorySeries(payload.series || []);
+      setHoldingSnapshots(payload.holdingSnapshots || []);
       if (payload.warnings?.length) {
         setWarnings((existing) => [...new Set([...existing, ...payload.warnings!])]);
       }
@@ -154,6 +158,7 @@ export function ReportPageContent() {
           <PortfolioReportChartsPanel
             report={report}
             historySeries={historySeries}
+            holdingSnapshots={holdingSnapshots}
             selectedProfileId={selectedProfileId}
             onSelectedProfileIdChange={setSelectedProfileId}
             isLoadingReport={isLoadingReport}

@@ -55,9 +55,13 @@ create table if not exists public.portfolio_daily_snapshots (
   portfolio_value numeric not null default 0,
   total_profit_loss numeric not null default 0,
   holdings_count integer not null default 0,
+  holdings_snapshot jsonb not null default '[]'::jsonb,
   created_at timestamptz not null default now(),
   unique (user_id, snapshot_date, profile_id)
 );
+
+alter table public.portfolio_daily_snapshots
+  add column if not exists holdings_snapshot jsonb not null default '[]'::jsonb;
 
 alter table public.portfolio_daily_snapshots enable row level security;
 
