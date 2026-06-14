@@ -1,7 +1,7 @@
 import { formatSignedMoney, formatPercent, type PortfolioReport, type PortfolioReportHolding } from "./portfolioReport";
 import { resolveEmailChartSeries } from "./emailChartSeries";
 import { topHoldingMovers, type WeeklyChartSeries } from "./portfolioReportCharts";
-import { sanitizeReportWarningsForEmail } from "./reportEmailWarnings";
+import { sanitizeReportWarningsForEmail, stripWarningsFromTextDigest } from "./reportEmailWarnings";
 import { formatMoney } from "./profileUtils";
 import type { CurrencyCode } from "./types";
 
@@ -197,9 +197,11 @@ function formatChartsSectionText(series: WeeklyChartSeries[]) {
 }
 
 function withEmailSafeReport(report: PortfolioReport): PortfolioReport {
+  const warnings = sanitizeReportWarningsForEmail(report.warnings);
   return {
     ...report,
-    warnings: sanitizeReportWarningsForEmail(report.warnings)
+    warnings,
+    textDigest: stripWarningsFromTextDigest(report.textDigest)
   };
 }
 

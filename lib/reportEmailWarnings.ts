@@ -1,4 +1,13 @@
-const ALPHA_FALLBACK_PATTERN = /Alpha Vantage failed for ([A-Z0-9.-]+); using Yahoo Finance fallback/i;
+const EMAIL_NOISE_PATTERNS = [
+  /alpha vantage (failed|rate limit|free-tier)/i,
+  /using yahoo finance (fallback|quotes)/i,
+  /egypt quotes are fetched from mubasher/i,
+  /quotes are fetched from yahoo finance/i,
+  /market api key is missing, so quotes are fetched from yahoo/i,
+  /news is fetched from yahoo finance rss/i,
+  /news api key is missing/i,
+  /showing sample news/i
+];
 
 function stripAlphaVantageBoilerplate(warning: string) {
   return warning
@@ -7,42 +16,33 @@ function stripAlphaVantageBoilerplate(warning: string) {
     .trim();
 }
 
+function warningBody(warning: string) {
+  const profileSplit = warning.match(/^([^:]+):\s*(.+)$/);
+  return profileSplit?.[2]?.trim() || warning;
+}
+
+export function isEmailNoiseWarning(warning: string) {
+  const normalized = stripAlphaVantageBoilerplate(warning);
+  const body = warningBody(normalized);
+  return EMAIL_NOISE_PATTERNS.some((pattern) => pattern.test(normalized) || pattern.test(body));
+}
+
+/** Keep only user-actionable warnings in daily emails; hide quote-source transparency noise. */
 export function sanitizeReportWarningsForEmail(warnings: string[]) {
-  const alphaByProfile = new Map<string, Set<string>>();
-  const other: string[] = [];
-  const seenOther = new Set<string>();
+  const seen = new Set<string>();
+  return warnings
+    .map(stripAlphaVantageBoilerplate)
+    .filter(Boolean)
+    .filter((warning) => !isEmailNoiseWarning(warning))
+    .filter((warning) => {
+      if (seen.has(warning)) return false;
+      seen.add(warning);
+      return true;
+    });
+}
 
-  warnings.forEach((raw) => {
-    const warning = stripAlphaVantageBoilerplate(raw.trim());
-    if (!warning) return;
-
-    const profileSplit = warning.match(/^([^:]+):\s*(.+)$/);
-    const profileName = profileSplit?.[1]?.trim();
-    const message = profileSplit?.[2]?.trim() || warning;
-    const alphaMatch = message.match(ALPHA_FALLBACK_PATTERN);
-
-    if (profileName && alphaMatch) {
-      const symbols = alphaByProfile.get(profileName) || new Set<string>();
-      symbols.add(alphaMatch[1]);
-      alphaByProfile.set(profileName, symbols);
-      return;
-    }
-
-    if (!seenOther.has(warning)) {
-      seenOther.add(warning);
-      other.push(warning);
-    }
-  });
-
-  const collapsedAlpha = [...alphaByProfile.entries()].map(([profileName, symbols]) => {
-    const list = [...symbols];
-    if (list.length === 1) {
-      return `${profileName}: Alpha Vantage rate limit hit for ${list[0]}; using Yahoo Finance quotes.`;
-    }
-    const preview = list.slice(0, 4).join(", ");
-    const suffix = list.length > 4 ? ", …" : "";
-    return `${profileName}: Alpha Vantage rate limit hit for ${list.length} symbols (${preview}${suffix}); using Yahoo Finance quotes.`;
-  });
-
-  return [...collapsedAlpha, ...other];
+export function stripWarningsFromTextDigest(textDigest: string) {
+  const marker = "\nWarnings:";
+  const index = textDigest.indexOf(marker);
+  return index >= 0 ? textDigest.slice(0, index).trim() : textDigest;
 }
