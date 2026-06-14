@@ -24,9 +24,11 @@ export async function GET(request: Request) {
   }
 
   try {
+    const freshQuotes = new URL(request.url).searchParams.get("fresh") === "1";
     const supabase = createSupabaseAdminClient();
     const summary = await runDailyPortfolioSnapshotsForAllUsers(supabase, {
-      shareQuoteCache: true
+      shareQuoteCache: !freshQuotes,
+      freshQuotes
     });
 
     const emailUserId = process.env.PORTFOLIO_REPORT_USER_ID?.trim();

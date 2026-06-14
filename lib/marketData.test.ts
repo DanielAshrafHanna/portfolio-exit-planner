@@ -1,5 +1,11 @@
-import { describe, expect, it } from "vitest";
-import { parseMubasherEgxQuote, parseYahooChartQuote } from "./marketData";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  parseMubasherEgxQuote,
+  parseYahooChartQuote,
+  providerName,
+  usesAlphaVantageQuotes,
+  usesYahooQuoteFallback
+} from "./marketData";
 
 describe("Mubasher EGX quote parsing", () => {
   it("reads the current price and previous close from stock pages", () => {
@@ -164,5 +170,30 @@ describe("Yahoo chart quote parsing", () => {
       currentPrice: 291.58,
       volume: 50000000
     });
+  });
+});
+
+describe("quote provider selection", () => {
+  const originalEnv = { ...process.env };
+
+  afterEach(() => {
+    process.env = { ...originalEnv };
+    vi.unstubAllEnvs();
+  });
+
+  it("defaults to yahoo on Vercel when provider is unset", () => {
+    vi.stubEnv("VERCEL", "1");
+    delete process.env.MARKET_DATA_PROVIDER;
+    delete process.env.MARKET_DATA_API_KEY;
+    delete process.env.ALPHA_VANTAGE_API_KEY;
+    expect(providerName()).toBe("yahoo");
+    expect(usesYahooQuoteFallback()).toBe(true);
+  });
+
+  it("uses Alpha Vantage only when provider and API key are configured", () => {
+    vi.stubEnv("MARKET_DATA_PROVIDER", "alpha_vantage");
+    vi.stubEnv("ALPHA_VANTAGE_API_KEY", "demo-key");
+    expect(usesAlphaVantageQuotes()).toBe(true);
+    expect(usesYahooQuoteFallback()).toBe(false);
   });
 });

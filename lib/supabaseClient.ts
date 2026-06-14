@@ -1,15 +1,15 @@
 "use client";
 
 import { createBrowserClient } from "@supabase/ssr";
+import { resolveSupabaseAnonKey, resolveSupabaseUrl } from "./supabasePublicConfig";
 
 export function hasSupabaseConfig() {
-  return Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+  return Boolean(resolveSupabaseUrl() && resolveSupabaseAnonKey());
 }
 
 export function createSupabaseBrowserClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !key) return undefined;
+  const url = resolveSupabaseUrl();
+  const key = resolveSupabaseAnonKey();
   return createBrowserClient(url, key);
 }
 

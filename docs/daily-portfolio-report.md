@@ -9,7 +9,10 @@ The daily portfolio report is generated server-side from Supabase cloud portfoli
 - `/api/portfolio-report/history`: an authenticated rolling history endpoint (`days=7` by default) for weekly chart data.
 - `/api/cron/daily-portfolio-summary`: a Vercel Cron endpoint that saves daily snapshots for **every** cloud portfolio user and optionally emails one configured account.
 - `portfolio_daily_snapshots` in Supabase: one row per user/profile/day with daily P/L, portfolio value, and cost-basis P/L.
-- `vercel.json`: schedules the cron at `0 5 * * *`, which is 05:00 UTC. That is around 8:00 AM Cairo during daylight saving time.
+- `vercel.json`: schedules three crons:
+  - `0 5 * * *` — morning refresh (~8:00 AM Cairo), good for EGX open and pre-US.
+  - `30 13 * * *` — after EGX close (~3:30 PM Cairo).
+  - `0 22 * * *` — after US close with `?fresh=1` for end-of-day quotes.
 
 ## Charts Tab
 
@@ -77,8 +80,8 @@ Response shape:
 | `SUPABASE_SERVICE_ROLE_KEY` | Yes for cron | Server-only key used by the cron route to read the configured user's portfolio. |
 | `CRON_SECRET` | Yes for cron | Bearer token Vercel sends to protect the cron endpoint. |
 | `PORTFOLIO_REPORT_USER_ID` | Optional | Supabase `auth.users.id` for the one account that should receive the optional daily email. Snapshots run for all users without this. |
-| `MARKET_DATA_PROVIDER` | Recommended | Set to `alpha_vantage` for real market data. |
-| `MARKET_DATA_API_KEY` or `ALPHA_VANTAGE_API_KEY` | Recommended | Market data key. Without it, the app falls back to Yahoo/public or sample providers where available. |
+| `MARKET_DATA_PROVIDER` | Recommended | Set to `alpha_vantage` when `ALPHA_VANTAGE_API_KEY` is configured; otherwise `yahoo` (default on Vercel). |
+| `MARKET_DATA_API_KEY` or `ALPHA_VANTAGE_API_KEY` | Recommended | Alpha Vantage key for US quotes/news. Without it, the app uses Yahoo Finance and Mubasher EGX. |
 | `RESEND_API_KEY` | Optional | Enables daily email delivery. |
 | `REPORT_TO_EMAIL` | Optional | Comma-separated recipient list for email delivery. |
 | `REPORT_FROM_EMAIL` | Optional | Verified Resend sender address. |

@@ -1,15 +1,12 @@
 import { createClient } from "@supabase/supabase-js";
+import { resolveSupabaseAnonKey, resolveSupabaseUrl } from "./supabasePublicConfig";
 
 function supabaseUrl() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  if (!url) throw new Error("NEXT_PUBLIC_SUPABASE_URL is not configured.");
-  return url;
+  return resolveSupabaseUrl();
 }
 
 function supabaseAnonKey() {
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!key) throw new Error("NEXT_PUBLIC_SUPABASE_ANON_KEY is not configured.");
-  return key;
+  return resolveSupabaseAnonKey();
 }
 
 function supabaseServiceRoleKey() {

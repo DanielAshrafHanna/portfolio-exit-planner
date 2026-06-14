@@ -3,6 +3,14 @@
     {
       "path": "/api/cron/daily-portfolio-summary",
       "schedule": "0 5 * * *"
+    },
+    {
+      "path": "/api/cron/daily-portfolio-summary",
+      "schedule": "30 13 * * *"
+    },
+    {
+      "path": "/api/cron/daily-portfolio-summary?fresh=1",
+      "schedule": "0 22 * * *"
     }
   ]
 }

@@ -51,12 +51,23 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function providerName() {
-  return process.env.MARKET_DATA_PROVIDER || "mock";
+export function providerName() {
+  const configured = process.env.MARKET_DATA_PROVIDER?.trim();
+  if (configured) return configured;
+  // Deployed builds should prefer live quotes even without Alpha Vantage configured.
+  return process.env.VERCEL ? "yahoo" : "mock";
 }
 
 function apiKey() {
   return process.env.MARKET_DATA_API_KEY || process.env.ALPHA_VANTAGE_API_KEY;
+}
+
+export function usesAlphaVantageQuotes() {
+  return providerName() === "alpha_vantage" && Boolean(apiKey());
+}
+
+export function usesYahooQuoteFallback() {
+  return !usesAlphaVantageQuotes();
 }
 
 function unavailableQuote(symbol: string, error: string): MarketQuote {
@@ -197,12 +208,16 @@ export async function getQuote(
       warning: `${cleanSymbol} has no live EGX stock quote. If this is a mutual fund, it is not supported here.`
     };
   }
-  if (providerName() !== "alpha_vantage" || !apiKey()) {
+  if (usesYahooQuoteFallback()) {
     const yahooQuote = await getYahooQuote(marketSymbol, cleanSymbol, options.fresh);
     if (yahooQuote) {
       return {
         data: { ...yahooQuote, symbol: cleanSymbol },
-        warning: "Market API key is missing, so quotes are fetched from Yahoo Finance's public chart feed."
+        warning: usesAlphaVantageQuotes()
+          ? undefined
+          : providerName() === "yahoo"
+            ? "Quotes are fetched from Yahoo Finance's public chart feed."
+            : "Market API key is missing, so quotes are fetched from Yahoo Finance's public chart feed."
       };
     }
     return {
