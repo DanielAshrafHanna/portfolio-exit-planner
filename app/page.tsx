@@ -54,6 +54,15 @@ import {
   type PortfolioCacheSnapshot
 } from "@/lib/portfolioStorage";
 import { activeProfileIdFromCloudPortfolioRow, cloudSettingsFromRow, profilesFromCloudPortfolioRow, type CloudSettings } from "@/lib/cloudPortfolio";
+import {
+  applyDailyAiCacheToHoldings,
+  buildDailyAiUsageSummary,
+  parseDailyAiCache,
+  upsertDailyAiCacheEntry,
+  type DailyAiCacheState
+} from "@/lib/dailyAiCache";
+import { cacheEntryForProfile, mergeProfilesWithDailyAiCache } from "@/lib/dailyAiPersistence";
+import { readLocalDailyAiCache, writeLocalDailyAiCache } from "@/lib/dailyAiLocalStorage";
 import { dailyReportEmailPrefsFromSettings } from "@/lib/dailyReportEmailPrefs";
 import { coerceProfiles, emptyPortfolioBootstrap, enrichHolding } from "@/lib/storageMigration";
 import { createSupabaseBrowserClient } from "@/lib/supabaseClient";
@@ -185,16 +194,13 @@ type MarketApiResponse = {
   error?: string;
 };
 
-type AnalysisApiResponse = {
-  analysis?: AiAnalysis;
-  warning?: string;
-  error?: string;
-};
-
 type PortfolioAnalysisApiResponse = {
   results?: Array<{ id: string; analysis?: AiAnalysis; fallback?: boolean }>;
   warning?: string;
   error?: string;
+  cached?: boolean;
+  cacheEntry?: DailyAiCacheState["entries"][string];
+  usage?: { marketDate?: string; runType?: "automatic" | "manual"; generatedAt?: string };
 };
 
 type LoginIdentifierResponse = {
@@ -332,6 +338,8 @@ export default function Home() {
   const [activeProfileId, setActiveProfileId] = useState("us-portfolio");
   const [warnings, setWarnings] = useState<string[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [dailyAiCache, setDailyAiCache] = useState<DailyAiCacheState>({ entries: {}, usageByMarketDate: {} });
+  const dailyAiCacheRef = useRef<DailyAiCacheState>({ entries: {}, usageByMarketDate: {} });
   const [analysisSession, setAnalysisSession] = useState<AnalysisSession | null>(null);
   const [isRefreshingMarket, setIsRefreshingMarket] = useState(false);
   const [user, setUser] = useState<User | null>(null);
@@ -532,7 +540,9 @@ export default function Home() {
       latestSyncKey.current = "";
       setCloudLoadedUserId(null);
       const guest = readGuestPortfolioState();
-      setProfiles(guest.profiles);
+      const guestCache = readLocalDailyAiCache("guest");
+      setDailyAiCache(guestCache);
+      setProfiles(mergeProfilesWithDailyAiCache(guest.profiles, guestCache));
       setActiveProfileId(guest.activeProfileId);
       const guestPrefs = readStoredUserPrefs("guest");
       if (guestPrefs) {
@@ -701,6 +711,14 @@ export default function Home() {
   const holdingsAnalysisKey = useMemo(
     () => holdings.map((holding) => `${holding.id}:${holding.symbol}:${holding.analysis ? 1 : 0}`).join("|"),
     [holdings]
+  );
+  useEffect(() => {
+    dailyAiCacheRef.current = dailyAiCache;
+  }, [dailyAiCache]);
+
+  const aiUsageSummary = useMemo(
+    () => buildDailyAiUsageSummary(dailyAiCache, region, activeProfile?.id || activeProfileId),
+    [dailyAiCache, region, activeProfile?.id, activeProfileId]
   );
   const portfolioAnalysisCoverage = useMemo(() => analysisCoverage(holdingsWithLiveQuotes), [holdingsWithLiveQuotes]);
 
@@ -987,7 +1005,7 @@ export default function Home() {
   useEffect(() => {
     if (!isHydrated || !holdings.some((holding) => holding.symbol)) return;
     void refreshLiveQuotes();
-    void refreshMarketData({ showLoading: false, showWarnings: false });
+    void refreshMarketData({ showLoading: false, showWarnings: false, quotesOnly: true });
     // Keyed by symbol/profile fingerprint so quote-only updates do not trigger another refresh.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isHydrated, activeProfileId, region, marketSymbolKey]);
@@ -1071,15 +1089,30 @@ export default function Home() {
     writeAnalysisSession(user?.id ?? "guest", session);
   };
 
-  const analyze = async (options?: { resume?: boolean }) => {
+  const analyze = async (options?: { resume?: boolean; force?: boolean }) => {
     const requestId = analysisRequestId.current + 1;
     analysisRequestId.current = requestId;
     const profileIdAtStart = activeProfile?.id || activeProfileId;
     const inputKeyAtStart = holdingInputKeyRef.current;
     const isLatestAnalysis = () => analysisRequestId.current === requestId && activeProfileIdRef.current === profileIdAtStart && holdingInputKeyRef.current === inputKeyAtStart;
     setIsAnalyzing(true);
-    setWarnings(["Refreshing market data and news before AI analysis."]);
     const userId = user?.id ?? "guest";
+    const cachedEntry = cacheEntryForProfile(dailyAiCacheRef.current, profileIdAtStart, region);
+
+    if (!options?.force && !options?.resume && cachedEntry) {
+      setHoldings((currentItems) => applyDailyAiCacheToHoldings(currentItems, cachedEntry));
+      setWarnings([
+        `Applied today's cached AI analysis (${cachedEntry.runType} run at ${new Date(cachedEntry.generatedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}). Use Refresh AI for a new manual Gemini call.`
+      ]);
+      setIsAnalyzing(false);
+      return;
+    }
+
+    setWarnings([
+      options?.force
+        ? "Running a manual AI refresh (uses an extra Gemini call for this profile)."
+        : "Refreshing quotes before AI analysis. News comes from the grounded AI run, not Alpha Vantage."
+    ]);
     try {
       const withMarket = await refreshMarketData({ showLoading: true, showWarnings: true, quotesOnly: true });
       if (!withMarket || !isLatestAnalysis()) return;
@@ -1140,22 +1173,38 @@ export default function Home() {
           pendingSymbols: [...pendingSymbols]
         }));
 
+        const authHeaders: Record<string, string> = { "Content-Type": "application/json" };
+        if (supabase) {
+          const { data: sessionData } = await supabase.auth.getSession();
+          const token = sessionData.session?.access_token;
+          if (token) authHeaders.Authorization = `Bearer ${token}`;
+        }
+
         const response = await fetch("/api/analyzePortfolio", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: authHeaders,
           body: JSON.stringify({
             region,
             currency,
+            profileId: profileIdAtStart,
+            force: options?.force === true,
+            clientDailyAiCache: dailyAiCacheRef.current,
             items: holdingsToAnalyze.map((holding) => ({
               holding: toHoldingInput(holding),
               quote: holding.quote,
-              news: holding.news
+              news: holding.news.slice(0, 12)
             }))
           })
         });
         const data = await readJsonResponse<PortfolioAnalysisApiResponse>(response);
         if (!response.ok) throw new Error(data.error || "Portfolio analysis failed");
         if (!isLatestAnalysis()) return;
+
+        if (data.cacheEntry) {
+          const nextCache = upsertDailyAiCacheEntry(dailyAiCacheRef.current, data.cacheEntry);
+          setDailyAiCache(nextCache);
+          writeLocalDailyAiCache(userId, nextCache);
+        }
 
         const analysisById = new Map((data.results ?? []).map((item) => [item.id, item.analysis]));
         const merged: AnalyzedHoldingResult[] = holdingsToAnalyze.map((holding) => ({
@@ -1303,7 +1352,8 @@ export default function Home() {
       displayName: normalizeDisplayName(parsedPayload.displayName || displayName),
       shareHoldings: Boolean(parsedPayload.shareHoldings),
       dailyReportEmail: parsedPayload.dailyReportEmail || "",
-      dailyReportEmailEnabled: Boolean(parsedPayload.dailyReportEmailEnabled)
+      dailyReportEmailEnabled: Boolean(parsedPayload.dailyReportEmailEnabled),
+      dailyAiCache: dailyAiCacheRef.current
     };
     const { error } = await supabase.from("user_portfolios").upsert({
       user_id: user.id,
@@ -1521,11 +1571,15 @@ export default function Home() {
         return;
       }
 
-      applyCloudPortfolioSnapshot(snapshot, {
+      applyCloudPortfolioSnapshot({
+        ...snapshot,
+        profiles: mergeProfilesWithDailyAiCache(snapshot.profiles, parseDailyAiCache(cloudSettings.dailyAiCache))
+      }, {
         displayName: resolvedDisplayName,
         shareHoldings: resolvedShareHoldings,
         cloudUpdatedAt: data.updated_at || null
       });
+      setDailyAiCache(parseDailyAiCache(cloudSettings.dailyAiCache));
       if (!shareHoldingsTouchedRef.current) {
         setDisplayName(resolvedPrefs.displayName);
         applyShareHoldingsFromCloud(resolvedPrefs.shareHoldings);
@@ -1977,6 +2031,10 @@ export default function Home() {
         region={region}
         onChange={setInputRows}
         onAnalyze={() => void analyze()}
+        onRefreshAi={() => void analyze({ force: true })}
+        aiUsageLabel={aiUsageSummary.cacheFresh
+          ? `Today's AI is cached (${aiUsageSummary.geminiCallsToday} Gemini call(s) today for this profile). Apply daily AI uses zero extra calls.`
+          : `No fresh AI cache for today (${aiUsageSummary.geminiCallsToday} Gemini call(s) today). Apply daily AI after market close, or use Refresh AI.`}
         isAnalyzing={isAnalyzing}
         isRefreshingMarket={isRefreshingMarket}
         onBlockedTicker={(message) => setWarnings((existing) => [...existing, message])}

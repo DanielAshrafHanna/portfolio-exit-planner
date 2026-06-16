@@ -111,7 +111,7 @@ export function ReportPageContent() {
     }
   }, [selectedProfileId, supabase]);
 
-  const loadAiSummary = useCallback(async () => {
+  const loadAiSummary = useCallback(async (force = false) => {
     if (!supabase) {
       setAiError("Supabase is not configured.");
       return;
@@ -124,6 +124,7 @@ export function ReportPageContent() {
       const token = data.session?.access_token;
       if (!token) throw new Error("Sign in again to run AI analysis.");
       const response = await fetch("/api/portfolio-report/ai-summary", {
+        method: force ? "POST" : "GET",
         headers: { Authorization: `Bearer ${token}` },
         cache: "no-store"
       });
@@ -194,7 +195,8 @@ export function ReportPageContent() {
           isLoading={isLoadingAi}
           error={aiError}
           hasRun={hasRunAi}
-          onRun={() => void loadAiSummary()}
+          onRun={() => void loadAiSummary(false)}
+          onForceRun={() => void loadAiSummary(true)}
         />
       </div>
       {hasViewedCharts ? (

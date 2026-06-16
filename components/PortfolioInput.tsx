@@ -34,6 +34,8 @@ type Props = {
   region?: MarketRegion;
   onChange: (holdings: HoldingInput[]) => void;
   onAnalyze: () => void;
+  onRefreshAi?: () => void;
+  aiUsageLabel?: string;
   isAnalyzing: boolean;
   isRefreshingMarket: boolean;
   onBlockedTicker?: (message: string) => void;
@@ -192,7 +194,7 @@ function MobileHoldingCard({
   );
 }
 
-export function PortfolioInput({ holdings, region = "US", onChange, onAnalyze, isAnalyzing, isRefreshingMarket, onBlockedTicker }: Props) {
+export function PortfolioInput({ holdings, region = "US", onChange, onAnalyze, onRefreshAi, aiUsageLabel, isAnalyzing, isRefreshingMarket, onBlockedTicker }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [numericDrafts, setNumericDrafts] = useState<Record<string, string>>({});
   const [importNotice, setImportNotice] = useState<string | null>(null);
@@ -353,10 +355,24 @@ export function PortfolioInput({ holdings, region = "US", onChange, onAnalyze, i
         disabled={isAnalyzing || holdings.every((holding) => !holding.symbol)}
       >
         <Sparkles className="h-4 w-4" aria-hidden />
-        {isAnalyzing ? "Analyzing..." : "Analyze"}
+        {isAnalyzing ? "Analyzing..." : "Apply daily AI"}
       </button>
+      {onRefreshAi ? (
+        <button
+          className="btn-secondary min-h-10 shrink-0 px-3 py-2 text-xs sm:min-h-11 sm:text-sm"
+          type="button"
+          onClick={onRefreshAi}
+          disabled={isAnalyzing || holdings.every((holding) => !holding.symbol)}
+        >
+          Refresh AI
+        </button>
+      ) : null}
     </div>
   );
+
+  const aiUsageNote = aiUsageLabel ? (
+    <p className="mb-3 text-xs text-ink/55">{aiUsageLabel}</p>
+  ) : null;
 
   return (
     <>
@@ -365,6 +381,7 @@ export function PortfolioInput({ holdings, region = "US", onChange, onAnalyze, i
           {importNotice}
         </p>
       ) : null}
+      {aiUsageNote}
       <section className="overflow-hidden rounded-xl border border-ink/10 bg-white shadow-soft md:hidden">
         <button
           className="flex w-full items-center gap-3 px-4 py-3.5 text-left"

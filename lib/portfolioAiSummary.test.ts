@@ -76,7 +76,29 @@ describe("buildDailyPortfolioAiSummaries", () => {
         { symbol: "INTC", action: "Watch", note: "Down on sector weakness." }
       ],
       watchItems: ["AAPL earnings next week"],
-      sources: [{ title: "Apple update", publisher: "Reuters", url: "https://example.com/a" }]
+      sources: [{ title: "Apple update", publisher: "Reuters", url: "https://example.com/a" }],
+      analyses: [{
+        symbol: "AAPL",
+        assetType: "Stock",
+        action: "Keep",
+        confidence: "Medium",
+        riskLevel: "Medium",
+        newsSentiment: "Neutral",
+        trendStatus: "Bullish",
+        upcomingCatalysts: [],
+        summary: "Hold AAPL.",
+        reasonsToHold: ["Trend is up."],
+        reasonsToSell: ["Watch momentum."],
+        riskFlags: ["No verified upcoming catalyst found."],
+        suggestedActionPlan: {
+          primaryAction: "Keep",
+          explanation: "Use a stop.",
+          suggestedStopLoss: 110,
+          suggestedTakeProfit: 140,
+          reviewAfterCatalyst: false
+        },
+        sourcesUsed: []
+      }]
     }));
 
     const results = await buildDailyPortfolioAiSummaries(report(), { configured: true, generate });

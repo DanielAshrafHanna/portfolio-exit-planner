@@ -8,6 +8,7 @@ type CloudSettings = {
   shareHoldings?: boolean;
   dailyReportEmail?: string;
   dailyReportEmailEnabled?: boolean;
+  dailyAiCache?: unknown;
 } & Partial<FeeSettings>;
 
 export type { CloudSettings };

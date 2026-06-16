@@ -123,6 +123,9 @@ export const portfolioAnalysisItemSchema = z.object({
 export const portfolioAnalysisRequestSchema = z.object({
   region: marketRegionSchema.default("US"),
   currency: z.enum(["USD", "EGP"]).default("USD"),
+  profileId: cleanString(100).optional(),
+  force: z.boolean().optional(),
+  clientDailyAiCache: z.unknown().optional(),
   items: z.array(portfolioAnalysisItemSchema).min(1).max(50)
 });
 

@@ -29,6 +29,7 @@ type Props = {
   error: string | null;
   hasRun: boolean;
   onRun: () => void;
+  onForceRun?: () => void;
 };
 
 const actionTone: Record<AiSummaryHolding["action"], string> = {
@@ -38,7 +39,7 @@ const actionTone: Record<AiSummaryHolding["action"], string> = {
   Sell: "bg-coral/15 text-coral"
 };
 
-export function ReportAiSummary({ summaries, isLoading, error, hasRun, onRun }: Props) {
+export function ReportAiSummary({ summaries, isLoading, error, hasRun, onRun, onForceRun }: Props) {
   return (
     <SectionCard
       variant="secondary"
@@ -46,20 +47,32 @@ export function ReportAiSummary({ summaries, isLoading, error, hasRun, onRun }: 
       eyebrow="AI"
       title="AI market-close analysis"
       action={(
-        <button
-          className="inline-flex min-h-10 items-center gap-2 rounded-md border border-marine/25 bg-white px-3 py-2 text-sm font-semibold text-marine hover:border-marine/50 disabled:cursor-not-allowed disabled:opacity-60"
-          type="button"
-          onClick={onRun}
-          disabled={isLoading}
-        >
-          <Sparkles className={`h-4 w-4 ${isLoading ? "animate-pulse" : ""}`} aria-hidden />
-          {isLoading ? "Analyzing…" : hasRun ? "Re-run analysis" : "Run analysis"}
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            className="inline-flex min-h-10 items-center gap-2 rounded-md border border-marine/25 bg-white px-3 py-2 text-sm font-semibold text-marine hover:border-marine/50 disabled:cursor-not-allowed disabled:opacity-60"
+            type="button"
+            onClick={onRun}
+            disabled={isLoading}
+          >
+            <Sparkles className={`h-4 w-4 ${isLoading ? "animate-pulse" : ""}`} aria-hidden />
+            {isLoading ? "Loading…" : hasRun ? "Reload cached" : "Load cached AI"}
+          </button>
+          {onForceRun ? (
+            <button
+              className="inline-flex min-h-10 items-center gap-2 rounded-md border border-ink/15 bg-white px-3 py-2 text-sm font-semibold text-ink/75 hover:border-ink/30 disabled:cursor-not-allowed disabled:opacity-60"
+              type="button"
+              onClick={onForceRun}
+              disabled={isLoading}
+            >
+              Refresh AI
+            </button>
+          ) : null}
+        </div>
       )}
     >
       <div className="space-y-4 p-3 sm:p-4">
         <p className="text-xs text-ink/55">
-          One grounded AI pass per portfolio: how it moved today, brief hold/sell guidance, and what to watch. Educational only — not financial advice.
+          Daily AI runs automatically at market close (1 Gemini call per profile). Load cached results here, or Refresh AI for a manual call.
         </p>
 
         {error ? (

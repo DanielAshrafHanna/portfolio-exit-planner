@@ -88,7 +88,8 @@ npm run lint
 - Never add order placement, broker connection, auto-trading, or trade execution behavior.
 - AI analysis must use supplied holdings, quote/indicator data, and cost basis, plus news/catalysts that are either supplied or retrieved through Gemini's Google Search grounding tool. Grounded (web-searched) news is allowed only when each news-driven claim is backed by a real, cited source URL in `sourcesUsed`/`sources`.
 - AI must not invent news, dates, analyst changes, catalysts, ETF holdings, or facts. Uncited claims are not allowed. If data cannot be verified, say so and return empty catalysts with the phrase "No verified upcoming catalyst found."
-- Batch portfolio analysis (`/api/analyzePortfolio`) and the daily market-close summary send all holdings in one grounded call per profile to respect rate limits. Each per-symbol result must still be validated and fall back deterministically if malformed.
+- Batch portfolio analysis (`/api/analyzePortfolio`) and the daily market-close email/report share one unified grounded Gemini call per profile per market day. Results are cached in `settings.dailyAiCache` (cloud) or guest `localStorage` and reused for the holdings table until the user clicks **Refresh AI** (`force: true`). Each per-symbol result must still be validated and fall back deterministically if malformed.
+- Track local Gemini call counts in `dailyAiCache.usageByMarketDate` for UI hints only; Google quota is not exposed by the API.
 - Financial calculations must remain deterministic and testable.
 
 ## Testing Expectations
