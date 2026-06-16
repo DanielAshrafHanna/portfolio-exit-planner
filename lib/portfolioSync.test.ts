@@ -89,4 +89,29 @@ describe("portfolio sync policy", () => {
     const merged = mergeProfilesForCloudSave(local, cloud, new Set(["us-portfolio"]));
     expect(merged.find((item) => item.id === "us-portfolio")?.holdings).toHaveLength(0);
   });
+
+  it("does not let a stale, non-empty, untouched profile clobber newer cloud holdings", () => {
+    const local = [profile("us-portfolio", "US", ["AAPL", "NFLX"])];
+    const cloud = [profile("us-portfolio", "US", ["AAPL", "NFLX", "QQQM", "DRAM", "TSM", "NASA", "IBM", "INTC"])];
+    const merged = mergeProfilesForCloudSave(local, cloud, new Set());
+    expect(merged.find((item) => item.id === "us-portfolio")?.holdings.map((holding) => holding.symbol)).toEqual([
+      "AAPL", "NFLX", "QQQM", "DRAM", "TSM", "NASA", "IBM", "INTC"
+    ]);
+  });
+
+  it("keeps local-only additions for an untouched profile while preserving cloud holdings", () => {
+    const local = [profile("us-portfolio", "US", ["AAPL", "MSFT"])];
+    const cloud = [profile("us-portfolio", "US", ["AAPL", "NFLX"])];
+    const merged = mergeProfilesForCloudSave(local, cloud, new Set());
+    expect(merged.find((item) => item.id === "us-portfolio")?.holdings.map((holding) => holding.symbol)).toEqual([
+      "AAPL", "NFLX", "MSFT"
+    ]);
+  });
+
+  it("honors deletions on a profile the user edited this session", () => {
+    const local = [profile("us-portfolio", "US", ["AAPL"])];
+    const cloud = [profile("us-portfolio", "US", ["AAPL", "NFLX"])];
+    const merged = mergeProfilesForCloudSave(local, cloud, new Set(["us-portfolio"]));
+    expect(merged.find((item) => item.id === "us-portfolio")?.holdings.map((holding) => holding.symbol)).toEqual(["AAPL"]);
+  });
 });

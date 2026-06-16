@@ -47,7 +47,35 @@ export function shouldPreferLocalPortfolioCache(
   return new Date(local.localUpdatedAt) > new Date(cloudUpdatedAt);
 }
 
-/** Prevent one device's empty US/Egypt profile from wiping another profile's cloud holdings on save. */
+function holdingSymbolKey(holding: PortfolioProfile["holdings"][number]) {
+  return holding.symbol.trim().toUpperCase();
+}
+
+/**
+ * Union holdings by symbol. `primary` takes precedence for shared symbols;
+ * `secondary` contributes only symbols that `primary` does not already have.
+ */
+function unionHoldingsBySymbol(
+  primary: PortfolioProfile["holdings"],
+  secondary: PortfolioProfile["holdings"]
+): PortfolioProfile["holdings"] {
+  const seen = new Set(primary.map(holdingSymbolKey).filter(Boolean));
+  const extras = secondary.filter((holding) => {
+    const key = holdingSymbolKey(holding);
+    return Boolean(key) && !seen.has(key);
+  });
+  return [...primary, ...extras];
+}
+
+/**
+ * Prevent a stale device from clobbering newer cloud holdings on save.
+ *
+ * - A profile the user actually edited this session is authoritative locally,
+ *   so intentional adds/edits/deletes on this device are honored.
+ * - A profile that was NOT touched this session must never overwrite the cloud
+ *   with stale local data. Cloud holdings win for shared symbols, and any
+ *   local-only symbols (genuine unsynced additions) are preserved via union.
+ */
 export function mergeProfilesForCloudSave(
   local: PortfolioProfile[],
   cloud: PortfolioProfile[],
@@ -57,15 +85,12 @@ export function mergeProfilesForCloudSave(
   const localIds = new Set(local.map((profile) => profile.id));
   const merged = local.map((localProfile) => {
     const cloudProfile = cloudById.get(localProfile.id);
-    const preserveCloudHoldings = Boolean(
-      cloudProfile
-      && profileHoldingCount(localProfile) === 0
-      && profileHoldingCount(cloudProfile) > 0
-      && !editedHoldingsProfileIds.has(localProfile.id)
-    );
-    return preserveCloudHoldings
-      ? { ...localProfile, holdings: cloudProfile!.holdings }
-      : localProfile;
+    if (!cloudProfile) return localProfile;
+    if (editedHoldingsProfileIds.has(localProfile.id)) return localProfile;
+    return {
+      ...cloudProfile,
+      holdings: unionHoldingsBySymbol(cloudProfile.holdings, localProfile.holdings)
+    };
   });
 
   cloud.forEach((cloudProfile) => {
