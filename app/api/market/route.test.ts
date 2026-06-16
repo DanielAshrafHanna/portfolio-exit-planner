@@ -1,13 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { MarketQuote, NewsItem } from "@/lib/types";
+import type { MarketQuote } from "@/lib/types";
 
-const { mockGetNews, mockGetQuote } = vi.hoisted(() => ({
-  mockGetNews: vi.fn(),
+const { mockGetQuote } = vi.hoisted(() => ({
   mockGetQuote: vi.fn()
 }));
 
 vi.mock("@/lib/marketData", () => ({
-  getNews: mockGetNews,
   getQuote: mockGetQuote,
   usesAlphaVantageQuotes: () => false,
   ALPHA_VANTAGE_REQUEST_GAP_MS: 1100
@@ -35,14 +33,6 @@ const quote: MarketQuote = {
   provider: "test"
 };
 
-const news: NewsItem[] = [{
-  headline: "Apple headline",
-  source: "Test News",
-  date: "2026-06-08",
-  url: "https://example.com/aapl",
-  summary: "A summary."
-}];
-
 describe("/api/market", () => {
   afterEach(() => {
     vi.clearAllMocks();
@@ -66,7 +56,6 @@ describe("/api/market", () => {
 
   it("normalizes and deduplicates symbols before fetching", async () => {
     mockGetQuote.mockResolvedValue({ data: quote, warning: "quote warning" });
-    mockGetNews.mockResolvedValue({ data: news, warning: "news warning" });
 
     const response = await POST(jsonRequest({ symbols: [" aapl ", "AAPL"] }));
     const body = await readJson(response);
@@ -74,18 +63,16 @@ describe("/api/market", () => {
     expect(response.status).toBe(200);
     expect(mockGetQuote).toHaveBeenCalledTimes(1);
     expect(mockGetQuote).toHaveBeenCalledWith("AAPL", "US", { fresh: true, preferPublicQuote: false });
-    expect(mockGetNews).toHaveBeenCalledWith("AAPL", "US");
     expect(body.rows).toMatchObject([{
       symbol: "AAPL",
       quote,
-      news,
-      warnings: ["quote warning", "news warning"]
+      news: [],
+      warnings: ["quote warning"]
     }]);
   });
 
   it("handles unexpected market provider failures safely", async () => {
     mockGetQuote.mockRejectedValue(new Error("provider down"));
-    mockGetNews.mockResolvedValue({ data: news });
 
     const response = await POST(jsonRequest({ symbols: ["IBM"] }));
     const body = await readJson(response);
@@ -99,7 +86,7 @@ describe("/api/market", () => {
     expect(rows[0].warnings[0]).toContain("Market fetch failed for IBM");
   });
 
-  it("skips news when quotesOnly is true", async () => {
+  it("uses the public quote provider when quotesOnly is true", async () => {
     mockGetQuote.mockResolvedValue({ data: quote });
 
     const response = await POST(jsonRequest({ symbols: ["AAPL"], quotesOnly: true }));
@@ -107,13 +94,11 @@ describe("/api/market", () => {
 
     expect(response.status).toBe(200);
     expect(mockGetQuote).toHaveBeenCalledWith("AAPL", "US", { fresh: true, preferPublicQuote: true });
-    expect(mockGetNews).not.toHaveBeenCalled();
     expect(body.rows).toMatchObject([{ symbol: "AAPL", quote, news: [] }]);
   });
 
-  it("returns rows with quote, news, and warnings shape", async () => {
+  it("returns rows with quote and warnings shape and never includes news", async () => {
     mockGetQuote.mockResolvedValue({ data: quote });
-    mockGetNews.mockResolvedValue({ data: news });
 
     const response = await POST(jsonRequest({ holdings: [{ symbol: "ibm", region: "US" }] }));
     const body = await readJson(response);
@@ -122,7 +107,7 @@ describe("/api/market", () => {
     expect(body.rows).toMatchObject([{
       symbol: "IBM",
       quote,
-      news,
+      news: [],
       warnings: []
     }]);
   });

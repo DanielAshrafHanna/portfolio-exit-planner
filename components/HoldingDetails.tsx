@@ -1,6 +1,5 @@
 "use client";
 
-import { ExternalLink } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { CurrencyCode, EnrichedHolding, FeeSettings } from "@/lib/types";
 import { calculatePartialSale, calculateProfitLoss, calculateStopLosses, defaultSellTargets, roundMoney } from "@/lib/calculations";
@@ -26,7 +25,7 @@ export function HoldingDetails({ holding, settings, currency, onChange, onApplyS
     return () => window.clearTimeout(timer);
   }, [saleNotice]);
 
-  if (!holding.quote) return <div className="p-4 text-sm text-ink/65">Run analysis to load quote, news, and decision data.</div>;
+  if (!holding.quote) return <div className="p-4 text-sm text-ink/65">Run analysis to load quote and decision data.</div>;
   const stops = calculateStopLosses(holding, holding.quote);
   const targetPrice = holding.selectedTargetPrice || defaultSellTargets(holding.quote.currentPrice, holding.analysis?.suggestedActionPlan.suggestedTakeProfit)[1].price;
   const targetPl = calculateProfitLoss(holding.shares, holding.averageCost, targetPrice, settings);
@@ -89,21 +88,6 @@ export function HoldingDetails({ holding, settings, currency, onChange, onApplyS
             </dl>
           </section>
         </div>
-        <section className="min-w-0 bg-white p-4">
-          <h3 className="mb-3 font-semibold">Recent news</h3>
-          {holding.news.length ? (
-            <div className="grid gap-3">
-              {holding.news.map((item) => (
-                <a className="block min-w-0 border-l-4 border-mint pl-3 text-sm hover:text-marine" href={item.url} target="_blank" rel="noreferrer" key={`${item.headline}-${item.date}`}>
-                  <span className="break-words font-semibold">{item.headline}</span>
-                  <span className="ml-2 inline-flex items-center gap-1 text-xs text-ink/55">{item.source} <ExternalLink className="h-3 w-3" aria-hidden /></span>
-                  <span className="block text-xs text-ink/50">{item.date}</span>
-                  <span className="block break-words text-ink/70">{item.summary}</span>
-                </a>
-              ))}
-            </div>
-          ) : <p className="text-sm text-ink/60">No recent news found.</p>}
-        </section>
       </div>
       <aside className="min-w-0 space-y-4 bg-white p-4">
         <div>

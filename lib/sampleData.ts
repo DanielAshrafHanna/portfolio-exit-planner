@@ -1,4 +1,4 @@
-import type { HoldingInput, MarketQuote, NewsItem } from "./types";
+import type { HoldingInput, MarketQuote } from "./types";
 
 export const sampleHoldings: HoldingInput[] = [
   { id: "tsm", symbol: "TSM", name: "Taiwan Semiconductor Manufacturing", shares: 8, averageCost: 142.5, totalCost: 1140, notes: "Sample holding" },
@@ -26,16 +26,4 @@ export function mockQuote(symbol: string): MarketQuote {
     provider: "mock",
     stale: true
   };
-}
-
-export function mockNews(symbol: string): NewsItem[] {
-  return [
-    {
-      headline: `${symbol} market update uses sample data`,
-      source: "Demo provider",
-      date: new Date().toISOString(),
-      url: "https://example.com/demo-news",
-      summary: "API keys are not configured, so this row is using sample news."
-    }
-  ];
 }

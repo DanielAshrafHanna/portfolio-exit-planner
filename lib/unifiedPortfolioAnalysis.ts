@@ -33,7 +33,11 @@ const UNIFIED_SYSTEM_INSTRUCTION = [
   "Use Google Search for real recent and upcoming news, earnings, and catalysts. Never invent facts, dates, or catalysts.",
   "Every news-driven claim must cite a real URL in sourcesUsed or sources. Uncited claims are not allowed.",
   "For each holding return a full analysis object AND include a portfolio-level overview in the same JSON response.",
-  "Recommend exactly one action per holding: Keep, Watch, Trim, or Sell. No guarantees. Never call this financial advice.",
+  "Ground each recommendation in the supplied price data and recent price action: compare the current price to the 20/50/200-day moving averages, RSI, and 52-week range when present, and use Google Search to confirm the recent multi-day trend (for example several consecutive down days, a breakdown below support, or a recovery).",
+  "In each holding's summary, explicitly describe the recent trend/history (e.g. 'down 4 of the last 5 sessions and below its 20- and 50-day averages') and then state plainly what to do about it and why.",
+  "Set trendStatus from the actual price action, not sentiment. reasonsToHold and reasonsToSell must be concrete and decision-useful.",
+  "Recommend exactly one action per holding: Keep, Watch, Trim, or Sell, and make suggestedActionPlan.explanation a clear, plain-English instruction (what to do, at what level, and what would change your mind). No guarantees. Never call this financial advice.",
+  "The portfolio overview must read like a short daily brief: how the portfolio moved today, the overall posture, and which holdings most need attention.",
   "Return JSON ONLY matching the provided schema."
 ].join(" ");
 
@@ -44,15 +48,15 @@ const PER_HOLDING_SCHEMA = {
   confidence: "Low | Medium | High",
   riskLevel: "Low | Medium | High | Very High",
   newsSentiment: "Positive | Neutral | Negative | Mixed | Unknown",
-  trendStatus: "Bullish | Neutral | Bearish | Unknown",
+  trendStatus: "Bullish | Neutral | Bearish | Unknown (derive from real price action vs moving averages)",
+  summary: "2-3 sentences: describe the recent price trend/history (consecutive up/down days, position vs 20/50/200-day MAs and 52-week range) then say plainly what to do and why",
   upcomingCatalysts: [{ name: "string", date: "string or null", importance: "Low | Medium | High", sourceUrl: "string" }],
-  summary: "short plain-English summary (1-2 sentences)",
   reasonsToHold: ["string"],
   reasonsToSell: ["string"],
   riskFlags: ["string"],
   suggestedActionPlan: {
     primaryAction: "Keep | Watch | Trim | Sell",
-    explanation: "string",
+    explanation: "clear plain-English instruction: what to do now, at what price level, and what would change the decision",
     suggestedStopLoss: "number",
     suggestedTakeProfit: "number",
     reviewAfterCatalyst: "boolean"
@@ -152,6 +156,8 @@ export async function buildUnifiedProfileAnalysis(
         instructions: [
           "Analyze EVERY holding below in analyses[] and include portfolio overview fields in the same JSON object.",
           "Set symbol on each analysis to the exact requested ticker.",
+          "For each holding, use the provided quote indicators (ma20, ma50, ma200, rsi, week52High, week52Low) and Google Search to establish the recent multi-day price trend, then give a clear keep/sell instruction.",
+          "Call out holdings that are falling for several consecutive sessions or breaking below their moving averages, and say what to do.",
           "Keep overview and per-holding notes concise but decision-useful."
         ],
         generatedAt,

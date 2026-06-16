@@ -10,6 +10,7 @@ type Props = {
   compactProfileBar?: ReactNode;
   holdingsView: ReactNode;
   summary: ReactNode;
+  aiBrief?: ReactNode;
   quickAdd: ReactNode;
   emptyState?: ReactNode;
   holdingsTable: ReactNode;
@@ -27,6 +28,7 @@ export function PortfolioWorkspace({
   compactProfileBar,
   holdingsView,
   summary,
+  aiBrief,
   quickAdd,
   emptyState,
   holdingsTable,
@@ -49,6 +51,8 @@ export function PortfolioWorkspace({
       </div>
 
       {summary}
+
+      {aiBrief}
 
       {!readOnly ? (
         <div className="px-1 md:px-0">

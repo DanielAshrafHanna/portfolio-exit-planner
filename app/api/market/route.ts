@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { ALPHA_VANTAGE_REQUEST_GAP_MS, getNews, getQuote, usesAlphaVantageQuotes } from "@/lib/marketData";
+import { ALPHA_VANTAGE_REQUEST_GAP_MS, getQuote, usesAlphaVantageQuotes } from "@/lib/marketData";
 import type { MarketRegion } from "@/lib/types";
 import { marketRequestSchema } from "@/lib/validation";
 
@@ -55,11 +55,8 @@ async function fetchMarketRow({ symbol, region }: { symbol: string; region: Mark
       // Quote-only refreshes (e.g. before grounded AI analysis) skip Alpha Vantage to preserve quota.
       preferPublicQuote: quotesOnly
     });
-    if (quotesOnly) {
-      return { symbol, quote: quote.data, news: [], warnings: [quote.warning].filter(Boolean) };
-    }
-    const news = await getNews(symbol, region);
-    return { symbol, quote: quote.data, news: news.data, warnings: [quote.warning, news.warning].filter(Boolean) };
+    // News is no longer fetched here; the grounded AI analysis sources its own recent news/catalysts.
+    return { symbol, quote: quote.data, news: [], warnings: [quote.warning].filter(Boolean) };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     return {

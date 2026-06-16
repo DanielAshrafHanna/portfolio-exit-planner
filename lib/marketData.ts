@@ -1,6 +1,5 @@
-import type { MarketQuote, MarketRegion, NewsItem, PriceSession } from "./types";
+import type { MarketQuote, MarketRegion, PriceSession } from "./types";
 import { normalizeMarketSymbol } from "./profileUtils";
-import { mockNews } from "./sampleData";
 import { getUnsupportedTickerMessage } from "./unsupportedTickers";
 
 const ALPHA_URL = "https://www.alphavantage.co/query";
@@ -38,10 +37,8 @@ function yahooFetch(url: string, fresh = false) {
   });
 }
 
-const YAHOO_NEWS_RSS = "https://feeds.finance.yahoo.com/rss/2.0/headline";
 /** Alpha Vantage free tier allows ~1 request per second. */
 export const ALPHA_VANTAGE_REQUEST_GAP_MS = 1100;
-const MAX_NEWS_ITEMS = 8;
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -324,63 +321,6 @@ function nullableNumberArray(value: unknown): Array<number | null> {
   return Array.isArray(value) ? value.map((item) => numberValue(item) ?? null) : [];
 }
 
-export async function getNews(symbol: string, region: MarketRegion = "US"): Promise<ProviderResult<NewsItem[]>> {
-  const cleanSymbol = symbol.trim().toUpperCase();
-  const marketSymbol = normalizeMarketSymbol(cleanSymbol, region);
-  if (providerName() !== "alpha_vantage" || !apiKey()) {
-    const yahooNews = await yahooRssNews(marketSymbol);
-    if (yahooNews.length) {
-      return {
-        data: yahooNews,
-        warning: "News is fetched from Yahoo Finance RSS."
-      };
-    }
-    return {
-      data: mockNews(cleanSymbol),
-      warning: "News API key is missing or provider is set to mock. Showing sample news."
-    };
-  }
-  try {
-    const data = await fetchAlpha({ function: "NEWS_SENTIMENT", tickers: marketSymbol, sort: "LATEST", limit: "8" });
-    const cutoff = Date.now() - 14 * 24 * 60 * 60 * 1000;
-    const feed = isRecord(data) && Array.isArray(data.feed) ? data.feed : [];
-    const items = feed.map((item) => {
-      const newsItem = isRecord(item) ? item : {};
-      return {
-        headline: typeof newsItem.title === "string" ? newsItem.title : "",
-        source: typeof newsItem.source === "string" ? newsItem.source : "",
-        date: typeof newsItem.time_published === "string" ? newsItem.time_published : "",
-        url: typeof newsItem.url === "string" ? newsItem.url : "",
-        summary: typeof newsItem.summary === "string" && newsItem.summary ? newsItem.summary : "No summary provided."
-      };
-    }).filter((item: NewsItem) => {
-      const parsed = Date.parse(item.date);
-      return Number.isNaN(parsed) || parsed >= cutoff;
-    }).slice(0, MAX_NEWS_ITEMS);
-    if (items.length) return { data: items };
-    const yahooNews = await yahooRssNews(marketSymbol);
-    if (yahooNews.length) {
-      return {
-        data: yahooNews.slice(0, MAX_NEWS_ITEMS),
-        warning: "Alpha Vantage returned no recent news; using Yahoo Finance RSS."
-      };
-    }
-    return { data: [] };
-  } catch (error) {
-    const yahooNews = await yahooRssNews(marketSymbol);
-    if (yahooNews.length) {
-      return {
-        data: yahooNews.slice(0, MAX_NEWS_ITEMS),
-        warning: `Alpha Vantage news unavailable for ${cleanSymbol}; using Yahoo Finance RSS.`
-      };
-    }
-    return {
-      data: [],
-      warning: `News fetch failed for ${cleanSymbol}: ${error instanceof Error ? error.message : "Unknown error"}`
-    };
-  }
-}
-
 async function getYahooQuote(
   marketSymbol: string,
   displaySymbol: string,
@@ -571,50 +511,3 @@ export function parseYahooChartQuote(
   };
 }
 
-function decodeXml(value: string) {
-  return value
-    .replaceAll("<![CDATA[", "")
-    .replaceAll("]]>", "")
-    .replaceAll("&amp;", "&")
-    .replaceAll("&quot;", "\"")
-    .replaceAll("&#39;", "'")
-    .replaceAll("&lt;", "<")
-    .replaceAll("&gt;", ">")
-    .trim();
-}
-
-function tagValue(item: string, tag: string) {
-  const match = item.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, "i"));
-  return match ? decodeXml(match[1]) : "";
-}
-
-async function yahooRssNews(symbol: string): Promise<NewsItem[]> {
-  try {
-    const url = new URL(YAHOO_NEWS_RSS);
-    url.searchParams.set("s", symbol);
-    url.searchParams.set("region", "US");
-    url.searchParams.set("lang", "en-US");
-    const response = await fetch(url, { next: { revalidate: 900 } });
-    if (!response.ok) return [];
-    const xml = await response.text();
-    const cutoff = Date.now() - 14 * 24 * 60 * 60 * 1000;
-    return [...xml.matchAll(/<item>([\s\S]*?)<\/item>/gi)].slice(0, 8).map((match) => {
-      const item = match[1];
-      const date = tagValue(item, "pubDate");
-      const parsedDate = Date.parse(date);
-      return {
-        headline: tagValue(item, "title"),
-        source: "Yahoo Finance RSS",
-        date: Number.isNaN(parsedDate) ? date : new Date(parsedDate).toISOString(),
-        url: tagValue(item, "link"),
-        summary: tagValue(item, "description") || "No summary provided."
-      };
-    }).filter((item) => {
-      if (!item.headline || !item.url) return false;
-      const parsed = Date.parse(item.date);
-      return Number.isNaN(parsed) || parsed >= cutoff;
-    });
-  } catch {
-    return [];
-  }
-}

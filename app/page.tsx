@@ -14,6 +14,7 @@ import { MobileTabShell } from "@/components/MobileTabShell";
 import { ImageImport } from "@/components/ImageImport";
 import { PortfolioInput } from "@/components/PortfolioInput";
 import { PortfolioWorkspace } from "@/components/PortfolioWorkspace";
+import { AiBriefPanel, type AiBrief } from "@/components/AiBriefPanel";
 import { ProfileSelector } from "@/components/ProfileSelector";
 import { PortfolioSummary } from "@/components/PortfolioSummary";
 import { QuickAddHolding, type QuickAddHoldingHandle } from "@/components/QuickAddHolding";
@@ -104,9 +105,6 @@ function normalizeWarning(warning: string) {
   }
   if (warning.includes("Yahoo Finance's public chart feed")) {
     return "Market API key is missing. Quotes are currently fetched from Yahoo Finance's public chart feed.";
-  }
-  if (warning.includes("Yahoo Finance RSS")) {
-    return "Recent news is currently fetched from Yahoo Finance RSS.";
   }
   return warning;
 }
@@ -720,6 +718,16 @@ export default function Home() {
     () => buildDailyAiUsageSummary(dailyAiCache, region, activeProfile?.id || activeProfileId),
     [dailyAiCache, region, activeProfile?.id, activeProfileId]
   );
+  const aiBrief = useMemo<AiBrief | null>(() => {
+    const entry = aiUsageSummary.profileEntry;
+    if (!entry) return null;
+    return {
+      summary: entry.summary,
+      generatedAt: entry.generatedAt,
+      fallback: entry.fallback,
+      runType: entry.runType
+    };
+  }, [aiUsageSummary.profileEntry]);
   const portfolioAnalysisCoverage = useMemo(() => analysisCoverage(holdingsWithLiveQuotes), [holdingsWithLiveQuotes]);
 
   useEffect(() => {
@@ -2022,6 +2030,7 @@ export default function Home() {
     ),
     holdingsView: <HoldingsViewSelector options={holdingsViewOptions} selectedId={selectedSharedProfileId} onChange={setSelectedSharedProfileId} />,
     summary: <PortfolioSummary holdings={displayedHoldings} settings={displayedSettings} currency={displayedCurrency} />,
+    aiBrief: viewingSharedPortfolio ? null : <AiBriefPanel brief={aiBrief} />,
     quickAdd: quickAddForm,
     holdingsTable,
     analyzing: analysisProgressBanner,
