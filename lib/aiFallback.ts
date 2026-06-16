@@ -11,6 +11,12 @@ export function fallbackAnalysis(holding: HoldingInput, quote: MarketQuote, news
   const stops = calculateStopLosses(holding, quote);
   const targets = defaultSellTargets(quote.currentPrice);
   const noNews = news.length === 0;
+  const trendPhrase = aboveMa20 && !belowMa50
+    ? "Price is above its 20- and 50-day averages."
+    : belowMa50
+      ? "Price is below its 50-day average, a weaker trend."
+      : "Price is near its moving averages.";
+  const positionPhrase = `Position is ${lossPercent >= 0 ? "up" : "down"} ${Math.abs(lossPercent).toFixed(1)}% vs cost basis.`;
 
   return {
     symbol: holding.symbol,
@@ -21,9 +27,7 @@ export function fallbackAnalysis(holding: HoldingInput, quote: MarketQuote, news
     newsSentiment: noNews ? "Unknown" : "Mixed",
     trendStatus,
     upcomingCatalysts: [],
-    summary: noNews
-      ? "No recent news found. This fallback analysis uses only market data and portfolio cost basis."
-      : "Mock analysis based on supplied quote, trend, cost basis, and available headlines.",
+    summary: `Data-only fallback (AI commentary unavailable). ${trendPhrase} ${positionPhrase}`,
     reasonsToHold: [
       aboveMa20 ? "Price is above the 20-day moving average." : "Position can be monitored with a defined stop instead of reacting emotionally.",
       lossPercent > 0 ? "The position is currently profitable." : "Position sizing can be reviewed before deciding."

@@ -50,7 +50,7 @@ describe("geminiClient errors", () => {
 
   it("formats rate limit errors without dumping raw JSON", () => {
     const message = formatGeminiError(new Error('quota exceeded 429 RESOURCE_EXHAUSTED retry in 14s'));
-    expect(message).toContain("Gemini free tier rate limit");
+    expect(message).toContain("Gemini daily quota");
     expect(message).not.toContain("generativelanguage.googleapis.com");
   });
 });

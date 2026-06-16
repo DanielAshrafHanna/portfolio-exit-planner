@@ -1,5 +1,5 @@
 import { fallbackAnalysis } from "./aiFallback";
-import { extractJsonPayload, generateGeminiGroundedJson, isGeminiConfigured } from "./geminiClient";
+import { extractJsonPayload, formatGeminiError, generateGeminiGroundedJson, isGeminiConfigured } from "./geminiClient";
 import type { PortfolioReportProfile } from "./portfolioReport";
 import type { AiAnalysis, HoldingInput, MarketQuote, NewsItem } from "./types";
 import {
@@ -219,7 +219,7 @@ export async function buildUnifiedProfileAnalysis(
       summary: buildFallbackSummary(profile, results),
       results,
       fallback: true,
-      warning: error instanceof Error ? error.message : "Unified AI analysis unavailable."
+      warning: formatGeminiError(error)
     };
   }
 }

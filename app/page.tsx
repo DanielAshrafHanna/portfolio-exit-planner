@@ -100,7 +100,7 @@ function normalizeWarning(warning: string) {
   if (warning.includes("GEMINI_API_KEY")) {
     return "GEMINI_API_KEY is missing. AI/OCR features are using deterministic fallback analysis until the secret is added.";
   }
-  if (warning.includes("Gemini free tier rate limit")) {
+  if (warning.includes("Gemini daily quota")) {
     return warning;
   }
   if (warning.includes("Yahoo Finance's public chart feed")) {
