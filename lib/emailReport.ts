@@ -4,11 +4,18 @@ import { topHoldingMovers, type WeeklyChartSeries } from "./portfolioReportChart
 import { sanitizeReportWarningsForEmail, stripWarningsFromTextDigest } from "./reportEmailWarnings";
 import { formatMoney } from "./profileUtils";
 import type { CurrencyCode } from "./types";
+import type { DailyPortfolioSummaryResult } from "./portfolioAiSummary";
 
 export type EmailDeliveryResult = {
   configured: boolean;
   sent: boolean;
   warning?: string;
+};
+
+type EmailFormatOptions = {
+  series?: WeeklyChartSeries[];
+  displayName?: string;
+  aiSummaries?: DailyPortfolioSummaryResult[];
 };
 
 type SendDailyReportEmailOptions = {
@@ -17,17 +24,23 @@ type SendDailyReportEmailOptions = {
   series?: WeeklyChartSeries[];
   displayName?: string;
   subjectPrefix?: string;
+  aiSummaries?: DailyPortfolioSummaryResult[];
 };
 
 export function formatDailyReportEmailText(
   report: PortfolioReport,
-  options: { series?: WeeklyChartSeries[]; displayName?: string } = {}
+  options: EmailFormatOptions = {}
 ) {
   const emailReport = withEmailSafeReport(report);
   const chartSeries = resolveEmailChartSeries(emailReport, options.series || []);
   const lines = [emailReport.textDigest, ""];
   if (options.displayName?.trim()) {
     lines.unshift(`Hi ${options.displayName.trim()},`, "");
+  }
+
+  const aiLines = formatAiSummarySectionText(options.aiSummaries || []);
+  if (aiLines.length) {
+    lines.push("AI market-close analysis", ...aiLines, "");
   }
 
   const moversLines = formatMoversSectionText(report);
@@ -46,7 +59,7 @@ export function formatDailyReportEmailText(
 
 export function formatDailyReportEmailHtml(
   report: PortfolioReport,
-  options: { series?: WeeklyChartSeries[]; displayName?: string } = {}
+  options: EmailFormatOptions = {}
 ) {
   const emailReport = withEmailSafeReport(report);
   const chartSeries = resolveEmailChartSeries(emailReport, options.series || []);
@@ -54,6 +67,7 @@ export function formatDailyReportEmailHtml(
   const greeting = options.displayName?.trim()
     ? `<p style="margin:0 0 12px;color:#18312b;">Hi ${escapeHtml(options.displayName.trim())},</p>`
     : "";
+  const aiSection = formatAiSummarySectionHtml(options.aiSummaries || []);
   const moversSection = formatMoversSectionHtml(emailReport);
   const chartsSection = formatChartsSectionHtml(chartSeries);
 
@@ -77,6 +91,7 @@ export function formatDailyReportEmailHtml(
       <h1 style="margin:0;font-size:24px;">Daily Portfolio Summary</h1>
       <p style="margin:6px 0 18px;color:#47645b;">${escapeHtml(generated)}</p>
       ${greeting}
+      ${aiSection}
       ${moversSection}
       ${chartsSection}
       ${emailReport.totalsByCurrency.map((totals) => `<section style="border:1px solid #b9d6c9;border-radius:8px;padding:16px;margin-top:12px;background:#edf6f1;"><h2 style="margin:0 0 10px;font-size:16px;">All ${totals.currency} portfolios</h2>${totalsTable(totals)}</section>`).join("")}
@@ -120,11 +135,13 @@ export async function sendDailyReportEmail(options: SendDailyReportEmailOptions)
       subject,
       text: formatDailyReportEmailText(options.report, {
         series: options.series,
-        displayName: options.displayName
+        displayName: options.displayName,
+        aiSummaries: options.aiSummaries
       }),
       html: formatDailyReportEmailHtml(options.report, {
         series: options.series,
-        displayName: options.displayName
+        displayName: options.displayName,
+        aiSummaries: options.aiSummaries
       })
     })
   });
@@ -139,6 +156,55 @@ export async function sendDailyReportEmail(options: SendDailyReportEmailOptions)
   }
 
   return { configured: true, sent: true };
+}
+
+function formatAiSummarySectionText(summaries: DailyPortfolioSummaryResult[]) {
+  return summaries.flatMap((entry) => {
+    const lines = [`${entry.profileName}:`, entry.summary.overview];
+    if (entry.summary.marketContext) lines.push(`Market context: ${entry.summary.marketContext}`);
+    entry.summary.holdings.forEach((holding) => {
+      lines.push(`- ${holding.symbol} (${holding.action}): ${holding.note}`);
+    });
+    if (entry.summary.watchItems.length) {
+      lines.push("Watch:", ...entry.summary.watchItems.map((item) => `- ${item}`));
+    }
+    lines.push("");
+    return lines;
+  });
+}
+
+function formatAiSummarySectionHtml(summaries: DailyPortfolioSummaryResult[]) {
+  const blocks = summaries.map((entry) => {
+    const holdingsRows = entry.summary.holdings.map((holding) => `
+      <tr>
+        <td style="border-bottom:1px solid #eef3f0;padding:6px 4px;font-weight:700;">${escapeHtml(holding.symbol)}</td>
+        <td style="border-bottom:1px solid #eef3f0;padding:6px 4px;">${escapeHtml(holding.action)}</td>
+        <td style="border-bottom:1px solid #eef3f0;padding:6px 4px;color:#47645b;">${escapeHtml(holding.note)}</td>
+      </tr>`).join("");
+    const watch = entry.summary.watchItems.length
+      ? `<p style="margin:10px 0 0;font-size:13px;color:#47645b;"><strong>Watch:</strong> ${escapeHtml(entry.summary.watchItems.join("; "))}</p>`
+      : "";
+    const context = entry.summary.marketContext
+      ? `<p style="margin:8px 0 0;font-size:13px;color:#47645b;">${escapeHtml(entry.summary.marketContext)}</p>`
+      : "";
+    const sources = entry.summary.sources.length
+      ? `<p style="margin:8px 0 0;font-size:11px;color:#7a8c85;">Sources: ${entry.summary.sources.map((source) => `<a href="${escapeHtml(source.url)}" style="color:#1f6f5f;">${escapeHtml(source.title)}</a>`).join(", ")}</p>`
+      : "";
+    return `
+      <section style="border:1px solid #cfe3da;border-radius:8px;padding:16px;margin-top:12px;background:#f3faf6;">
+        <h2 style="margin:0 0 8px;font-size:16px;color:#18312b;">AI market-close analysis — ${escapeHtml(entry.profileName)}</h2>
+        <p style="margin:0;font-size:13px;color:#18312b;">${escapeHtml(entry.summary.overview)}</p>
+        ${context}
+        <table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:10px;">
+          <thead><tr>${["Symbol", "Action", "Why"].map((label) => `<th style="text-align:left;border-bottom:1px solid #d8e6df;padding:6px 4px;color:#47645b;">${label}</th>`).join("")}</tr></thead>
+          <tbody>${holdingsRows}</tbody>
+        </table>
+        ${watch}
+        ${sources}
+      </section>`;
+  });
+
+  return blocks.join("");
 }
 
 function formatMoversSectionText(report: PortfolioReport) {

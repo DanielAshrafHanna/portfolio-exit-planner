@@ -36,7 +36,7 @@ import {
   writeAnalysisSession,
   type AnalysisSession
 } from "@/lib/analysisProgress";
-import { geminiAnalyzeRequestGapMs, geminiModelName } from "@/lib/geminiClient";
+import { geminiModelName } from "@/lib/geminiClient";
 import { applyCompanyNameToHolding } from "@/lib/holdingNames";
 import { applyAnalyzedHoldingResults, type AnalyzedHoldingResult } from "@/lib/holdingMerge";
 import { applyLiveQuotes, getQuoteRefreshIntervalMs, isQuotableQuote, liveQuoteKey } from "@/lib/marketRefresh";
@@ -191,12 +191,16 @@ type AnalysisApiResponse = {
   error?: string;
 };
 
+type PortfolioAnalysisApiResponse = {
+  results?: Array<{ id: string; analysis?: AiAnalysis; fallback?: boolean }>;
+  warning?: string;
+  error?: string;
+};
+
 type LoginIdentifierResponse = {
   email?: string;
   error?: string;
 };
-
-type AnalyzedHoldingResponse = AnalyzedHoldingResult & { warning?: string };
 
 type CloudPortfolioPayload = {
   profiles: PortfolioProfile[];
@@ -1082,12 +1086,10 @@ export default function Home() {
       const aiConfig = await fetch("/api/aiConfig")
         .then((response) => response.json() as Promise<{ requestGapMs?: number; model?: string }>)
         .catch(() => null);
-      const analyzeGapMs = aiConfig?.requestGapMs ?? geminiAnalyzeRequestGapMs();
       const analyzeModel = aiConfig?.model ?? geminiModelName();
       const initialCoverage = analysisCoverage(withMarket);
       const holdingsToAnalyze = withMarket.filter((holding) => isQuotableQuote(holding.quote) && (!options?.resume || !holding.analysis));
       const skippedHoldings = withMarket.filter((holding) => holding.quote !== undefined && !isQuotableQuote(holding.quote));
-      const skippedHoldingsFromResume = withMarket.filter((holding) => isQuotableQuote(holding.quote) && options?.resume && holding.analysis);
       const startingCompleted = options?.resume ? initialCoverage.analyzed : 0;
       const completedSymbols = options?.resume ? [...initialCoverage.analyzedSymbols] : [];
       const pendingSymbols = holdingsToAnalyze.map((holding) => holding.symbol.trim().toUpperCase());
@@ -1123,75 +1125,52 @@ export default function Home() {
         pendingSymbols
       }));
 
-      const analyzed: AnalyzedHoldingResponse[] = skippedHoldingsFromResume.map((holding) => ({
-        id: holding.id,
-        quote: holding.quote,
-        news: holding.news,
-        analysis: holding.analysis
-      }));
-      let analyzedCount = startingCompleted;
-      for (const holding of withMarket) {
-        if (!isLatestAnalysis()) return;
-        if (!isQuotableQuote(holding.quote)) {
-          analyzed.push({ id: holding.id, quote: holding.quote, news: holding.news });
-          continue;
-        }
-        if (options?.resume && holding.analysis) continue;
+      const warningsToAdd: string[] = [];
 
-        const symbol = holding.symbol.trim().toUpperCase();
+      if (holdingsToAnalyze.length) {
         storeAnalysisSession(buildAnalysisSession({
           profileId: profileIdAtStart,
           inputKey: inputKeyAtStart,
           phase: "analyzing",
-          completed: analyzedCount,
+          completed: startingCompleted,
           total: initialCoverage.total,
-          currentSymbol: symbol,
+          currentSymbol: pendingSymbols[0] || null,
           model: analyzeModel,
           completedSymbols: [...completedSymbols],
-          pendingSymbols: pendingSymbols.filter((item) => !completedSymbols.includes(item) && item !== symbol)
+          pendingSymbols: [...pendingSymbols]
         }));
 
-        if (analyzedCount > startingCompleted) {
-          await new Promise((resolve) => window.setTimeout(resolve, analyzeGapMs));
-          if (!isLatestAnalysis()) return;
-        }
-
-        const response = await fetch("/api/analyzeHolding", {
+        const response = await fetch("/api/analyzePortfolio", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ holding, quote: holding.quote, news: holding.news })
+          body: JSON.stringify({
+            region,
+            currency,
+            items: holdingsToAnalyze.map((holding) => ({
+              holding: toHoldingInput(holding),
+              quote: holding.quote,
+              news: holding.news
+            }))
+          })
         });
-        const data = await readJsonResponse<AnalysisApiResponse>(response);
-        if (!response.ok) throw new Error(data.error || `Analysis failed for ${holding.symbol}`);
+        const data = await readJsonResponse<PortfolioAnalysisApiResponse>(response);
+        if (!response.ok) throw new Error(data.error || "Portfolio analysis failed");
+        if (!isLatestAnalysis()) return;
 
-        const result: AnalyzedHoldingResponse = {
+        const analysisById = new Map((data.results ?? []).map((item) => [item.id, item.analysis]));
+        const merged: AnalyzedHoldingResult[] = holdingsToAnalyze.map((holding) => ({
           id: holding.id,
           quote: holding.quote,
           news: holding.news,
-          analysis: data.analysis,
-          warning: data.warning
-        };
-        analyzed.push(result);
-        analyzedCount += 1;
-        completedSymbols.push(symbol);
-        const nextPending = pendingSymbols.filter((item) => !completedSymbols.includes(item));
-
-        setHoldings((currentItems) => applyAnalyzedHoldingResults(currentItems, [result]));
-        storeAnalysisSession(buildAnalysisSession({
-          profileId: profileIdAtStart,
-          inputKey: inputKeyAtStart,
-          phase: "analyzing",
-          completed: analyzedCount,
-          total: initialCoverage.total,
-          currentSymbol: nextPending[0] || null,
-          model: analyzeModel,
-          completedSymbols: [...completedSymbols],
-          pendingSymbols: nextPending
+          analysis: analysisById.get(holding.id) ?? holding.analysis
         }));
+        setHoldings((currentItems) => applyAnalyzedHoldingResults(currentItems, merged));
+        if (data.warning) warningsToAdd.push(data.warning);
       }
+
       if (!isLatestAnalysis()) return;
-      const warningsToAdd = analyzed.map((item) => item.warning).filter((warning): warning is string => Boolean(warning)).map(normalizeWarning);
-      if (warningsToAdd.length) setWarnings((existing) => [...existing, ...warningsToAdd]);
+      const normalizedWarnings = warningsToAdd.filter(Boolean).map(normalizeWarning);
+      if (normalizedWarnings.length) setWarnings((existing) => [...existing, ...normalizedWarnings]);
       clearAnalysisSession(userId);
       setAnalysisSession(null);
     } catch (error) {

@@ -98,6 +98,56 @@ export async function generateGeminiJson(params: {
   return response.text ?? "{}";
 }
 
+/**
+ * Generate JSON with Google Search grounding enabled so the model can cite
+ * real, recent news instead of inventing it. Grounding is incompatible with
+ * forced JSON response mime type, so we instruct JSON-only output and extract
+ * the JSON payload from the response text.
+ */
+export async function generateGeminiGroundedJson(params: {
+  systemInstruction: string;
+  userContent: string;
+  temperature?: number;
+}) {
+  const response = await generateWithRetry(() => getClient().models.generateContent({
+    model: geminiModelName(),
+    contents: params.userContent,
+    config: {
+      systemInstruction: `${params.systemInstruction}\n\nReturn ONLY valid minified JSON with no markdown fences or commentary.`,
+      tools: [{ googleSearch: {} }],
+      temperature: params.temperature ?? 0.2
+    }
+  }));
+  return response.text ?? "{}";
+}
+
+/** Extract a JSON object/array from model text that may include prose or ``` fences. */
+export function extractJsonPayload(raw: string): unknown {
+  if (!raw) return undefined;
+  const direct = tryParseJson(raw);
+  if (direct !== undefined) return direct;
+
+  const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fenced?.[1]) {
+    const parsed = tryParseJson(fenced[1].trim());
+    if (parsed !== undefined) return parsed;
+  }
+
+  const firstBrace = raw.search(/[[{]/);
+  if (firstBrace === -1) return undefined;
+  const lastBrace = Math.max(raw.lastIndexOf("}"), raw.lastIndexOf("]"));
+  if (lastBrace <= firstBrace) return undefined;
+  return tryParseJson(raw.slice(firstBrace, lastBrace + 1));
+}
+
+function tryParseJson(value: string): unknown {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return undefined;
+  }
+}
+
 export async function generateGeminiJsonFromImage(params: {
   systemInstruction: string;
   userText: string;

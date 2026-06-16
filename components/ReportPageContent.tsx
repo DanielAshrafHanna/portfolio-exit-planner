@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { PortfolioReportChartsPanel } from "@/components/PortfolioReportChartsPanel";
 import { PortfolioReportPanel } from "@/components/PortfolioReportPanel";
+import { ReportAiSummary, type AiSummaryEntry } from "@/components/ReportAiSummary";
 import { reportTabClass } from "@/components/reportTabs";
 import type { HoldingSnapshotDay } from "@/lib/holdingSnapshots";
 import type { WeeklyChartSeries } from "@/lib/portfolioReportCharts";
@@ -27,6 +28,12 @@ type HistoryResponse = {
   error?: string;
 };
 
+type AiSummaryResponse = {
+  generatedAt?: string;
+  summaries?: AiSummaryEntry[];
+  error?: string;
+};
+
 export function ReportPageContent() {
   const [activeTab, setActiveTab] = useState<ReportTab>("daily");
   const [hasViewedCharts, setHasViewedCharts] = useState(false);
@@ -40,6 +47,10 @@ export function ReportPageContent() {
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
+  const [aiSummaries, setAiSummaries] = useState<AiSummaryEntry[]>([]);
+  const [isLoadingAi, setIsLoadingAi] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [hasRunAi, setHasRunAi] = useState(false);
 
   const loadReport = useCallback(async (fresh = false) => {
     if (!supabase) {
@@ -100,6 +111,32 @@ export function ReportPageContent() {
     }
   }, [selectedProfileId, supabase]);
 
+  const loadAiSummary = useCallback(async () => {
+    if (!supabase) {
+      setAiError("Supabase is not configured.");
+      return;
+    }
+    setIsLoadingAi(true);
+    setHasRunAi(true);
+    setAiError(null);
+    try {
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      if (!token) throw new Error("Sign in again to run AI analysis.");
+      const response = await fetch("/api/portfolio-report/ai-summary", {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store"
+      });
+      const payload = await response.json() as AiSummaryResponse;
+      if (!response.ok) throw new Error(payload.error || "AI analysis failed.");
+      setAiSummaries(payload.summaries || []);
+    } catch (loadError) {
+      setAiError(loadError instanceof Error ? loadError.message : "AI analysis failed.");
+    } finally {
+      setIsLoadingAi(false);
+    }
+  }, [supabase]);
+
   useEffect(() => {
     void loadReport();
   }, [loadReport]);
@@ -141,7 +178,7 @@ export function ReportPageContent() {
         </button>
       </div>
 
-      <div className={activeTab === "daily" ? "" : "hidden"} role="tabpanel">
+      <div className={activeTab === "daily" ? "space-y-4" : "hidden"} role="tabpanel">
         <PortfolioReportPanel
           report={report}
           cloudUpdatedAt={cloudUpdatedAt}
@@ -151,6 +188,13 @@ export function ReportPageContent() {
           selectedProfileId={selectedProfileId}
           onSelectedProfileIdChange={setSelectedProfileId}
           onRefresh={() => refreshAll(true)}
+        />
+        <ReportAiSummary
+          summaries={aiSummaries}
+          isLoading={isLoadingAi}
+          error={aiError}
+          hasRun={hasRunAi}
+          onRun={() => void loadAiSummary()}
         />
       </div>
       {hasViewedCharts ? (

@@ -111,8 +111,38 @@ export const analysisRequestSchema = z.object({
   news: z.array(newsItemSchema).max(12).default([])
 });
 
+export const portfolioAnalysisItemSchema = z.object({
+  holding: holdingInputSchema,
+  quote: marketQuoteSchema,
+  news: z.array(newsItemSchema).max(12).default([])
+});
+
+export const portfolioAnalysisRequestSchema = z.object({
+  region: marketRegionSchema.default("US"),
+  currency: z.enum(["USD", "EGP"]).default("USD"),
+  items: z.array(portfolioAnalysisItemSchema).min(1).max(50)
+});
+
+export const dailyPortfolioSummarySchema = z.object({
+  overview: cleanString(1200).min(1),
+  marketContext: cleanString(800).catch(""),
+  holdings: z.array(z.object({
+    symbol: cleanString(24).min(1).transform((value) => value.toUpperCase()),
+    action: actionSchema,
+    note: cleanString(400).min(1)
+  })).default([]),
+  watchItems: z.array(cleanString(300).min(1)).default([]),
+  sources: z.array(z.object({
+    title: cleanString(300).min(1),
+    publisher: cleanString(160).catch(""),
+    url: cleanString(1000).min(1)
+  })).default([])
+});
+
 export type MarketRequest = z.infer<typeof marketRequestSchema>;
 export type AnalysisRequest = z.infer<typeof analysisRequestSchema>;
+export type PortfolioAnalysisRequest = z.infer<typeof portfolioAnalysisRequestSchema>;
+export type DailyPortfolioSummary = z.infer<typeof dailyPortfolioSummarySchema>;
 
 export function normalizeAiAnalysis(
   value: unknown,
@@ -126,4 +156,60 @@ export function normalizeAiAnalysis(
     analysis: fallbackAnalysis(holding, quote, news),
     warning: "AI returned malformed analysis JSON. Showing low-confidence deterministic fallback analysis."
   };
+}
+
+export type BatchAnalysisInput = {
+  holding: HoldingInput;
+  quote: MarketQuote;
+  news: NewsItem[];
+};
+
+export type BatchAnalysisResult = {
+  id: string;
+  analysis: AiAnalysis;
+  fallback: boolean;
+};
+
+/** Map an AI batch response (array of analyses) back to each requested holding by symbol. */
+export function normalizeBatchAiAnalyses(
+  value: unknown,
+  items: BatchAnalysisInput[]
+): { results: BatchAnalysisResult[]; fallbackCount: number } {
+  const rawList = extractAnalysisList(value);
+  const bySymbol = new Map<string, unknown>();
+  for (const entry of rawList) {
+    if (entry && typeof entry === "object" && "symbol" in entry) {
+      const symbol = String((entry as { symbol?: unknown }).symbol ?? "").trim().toUpperCase();
+      if (symbol && !bySymbol.has(symbol)) bySymbol.set(symbol, entry);
+    }
+  }
+
+  let fallbackCount = 0;
+  const results = items.map((item) => {
+    const symbol = item.holding.symbol.trim().toUpperCase();
+    const candidate = bySymbol.get(symbol);
+    const parsed = aiAnalysisSchema.safeParse(candidate);
+    if (parsed.success) {
+      return { id: item.holding.id, analysis: parsed.data, fallback: false };
+    }
+    fallbackCount += 1;
+    return {
+      id: item.holding.id,
+      analysis: fallbackAnalysis(item.holding, item.quote, item.news),
+      fallback: true
+    };
+  });
+
+  return { results, fallbackCount };
+}
+
+function extractAnalysisList(value: unknown): unknown[] {
+  if (Array.isArray(value)) return value;
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    if (Array.isArray(record.analyses)) return record.analyses;
+    if (Array.isArray(record.holdings)) return record.holdings;
+    if (Array.isArray(record.results)) return record.results;
+  }
+  return [];
 }

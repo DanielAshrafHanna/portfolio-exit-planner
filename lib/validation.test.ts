@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { analysisRequestSchema, marketRequestSchema, normalizeAiAnalysis } from "./validation";
+import { analysisRequestSchema, marketRequestSchema, normalizeAiAnalysis, normalizeBatchAiAnalyses, portfolioAnalysisRequestSchema } from "./validation";
 
 const holding = {
   id: "1",
@@ -80,5 +80,69 @@ describe("AI response validation", () => {
     expect(result.warning).toBeUndefined();
     expect(result.analysis.symbol).toBe("TSM");
     expect(result.analysis.action).toBe("Watch");
+  });
+});
+
+describe("portfolioAnalysisRequestSchema", () => {
+  it("requires at least one item and caps at 50", () => {
+    expect(portfolioAnalysisRequestSchema.safeParse({ items: [] }).success).toBe(false);
+    expect(portfolioAnalysisRequestSchema.safeParse({
+      items: [{ holding, quote, news: [] }]
+    }).success).toBe(true);
+  });
+});
+
+describe("normalizeBatchAiAnalyses", () => {
+  const items = [
+    { holding, quote, news: [] },
+    { holding: { ...holding, id: "2", symbol: "AAPL" }, quote: { ...quote, symbol: "AAPL" }, news: [] }
+  ];
+
+  function analysis(symbol: string) {
+    return {
+      symbol,
+      assetType: "Stock",
+      action: "Keep",
+      confidence: "Medium",
+      riskLevel: "Medium",
+      newsSentiment: "Neutral",
+      trendStatus: "Bullish",
+      upcomingCatalysts: [],
+      summary: "Hold.",
+      reasonsToHold: ["Trend is up."],
+      reasonsToSell: ["Watch momentum."],
+      riskFlags: ["No verified upcoming catalyst found."],
+      suggestedActionPlan: {
+        primaryAction: "Keep",
+        explanation: "Use a stop.",
+        suggestedStopLoss: 110,
+        suggestedTakeProfit: 140,
+        reviewAfterCatalyst: false
+      },
+      sourcesUsed: []
+    };
+  }
+
+  it("matches analyses to holdings by symbol regardless of order", () => {
+    const { results, fallbackCount } = normalizeBatchAiAnalyses(
+      { analyses: [analysis("AAPL"), analysis("TSM")] },
+      items
+    );
+    expect(fallbackCount).toBe(0);
+    expect(results.map((item) => item.analysis.symbol)).toEqual(["TSM", "AAPL"]);
+    expect(results.every((item) => item.fallback === false)).toBe(true);
+  });
+
+  it("falls back per missing or malformed symbol", () => {
+    const { results, fallbackCount } = normalizeBatchAiAnalyses({ analyses: [analysis("TSM")] }, items);
+    expect(fallbackCount).toBe(1);
+    expect(results.find((item) => item.id === "2")?.fallback).toBe(true);
+    expect(results.find((item) => item.id === "1")?.fallback).toBe(false);
+  });
+
+  it("falls back for all when payload is not a list", () => {
+    const { results, fallbackCount } = normalizeBatchAiAnalyses("nonsense", items);
+    expect(fallbackCount).toBe(2);
+    expect(results.every((item) => item.fallback)).toBe(true);
   });
 });

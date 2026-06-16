@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { cloudSettingsFromRow, profilesFromCloudPortfolioRow, type CloudPortfolioRow } from "./cloudPortfolio";
 import { dailyReportEmailPrefsFromSettings, shouldSendDailyReportEmail } from "./dailyReportEmailPrefs";
 import { sendDailyReportEmail } from "./emailReport";
+import { buildDailyPortfolioAiSummaries } from "./portfolioAiSummary";
 import { fetchUserWeeklyChartSeries, snapshotHistoryRowsFromReport } from "./portfolioReportHistory";
 import type { UserSnapshotResult } from "./portfolioSnapshotJobs";
 
@@ -88,11 +89,13 @@ export async function sendOptedInDailyReportEmails(
       now,
       freshSnapshots
     });
+    const aiSummaries = await buildDailyPortfolioAiSummaries(snapshot.report).catch(() => []);
     const delivery = await sendDailyReportEmail({
       to: prefs.dailyReportEmail,
       report: snapshot.report,
       series,
-      displayName: row.display_name || undefined
+      displayName: row.display_name || undefined,
+      aiSummaries
     });
 
     results.push({

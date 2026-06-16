@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { gapForModel, geminiAnalyzeRequestGapMs, geminiModelName, isGeminiConfigured, isGeminiRateLimitError, formatGeminiError } from "./geminiClient";
+import { extractJsonPayload, gapForModel, geminiModelName, isGeminiConfigured, isGeminiRateLimitError, formatGeminiError } from "./geminiClient";
 
 describe("geminiClient config", () => {
   it("defaults to gemini-3.1-flash-lite for newer free-tier RPM", () => {
@@ -22,6 +22,24 @@ describe("geminiAnalyzeRequestGapMs", () => {
     expect(gapForModel("gemini-3.1-flash-lite")).toBe(4500);
     expect(gapForModel("gemini-3.5-flash")).toBe(13_000);
     expect(gapForModel("gemini-2.5-flash")).toBe(13_000);
+  });
+});
+
+describe("extractJsonPayload", () => {
+  it("parses plain JSON", () => {
+    expect(extractJsonPayload('{"a":1}')).toEqual({ a: 1 });
+  });
+
+  it("parses JSON inside markdown fences", () => {
+    expect(extractJsonPayload('```json\n{"a":1}\n```')).toEqual({ a: 1 });
+  });
+
+  it("extracts JSON embedded in surrounding prose", () => {
+    expect(extractJsonPayload('Here is the result: {"analyses":[]} thanks')).toEqual({ analyses: [] });
+  });
+
+  it("returns undefined for non-JSON text", () => {
+    expect(extractJsonPayload("no json here")).toBeUndefined();
   });
 });
 
