@@ -1,14 +1,25 @@
-import { calculatePartialSale, calculateProfitLoss, roundMoney, totalCostFor } from "./calculations";
+import { calculatePartialSale, calculateProfitLoss, totalCostFor } from "./calculations";
 import type { FeeSettings, HoldingInput } from "./types";
 
 export const SHARE_EPSILON = 0.0001;
 
+/**
+ * Shares and average cost keep up to 6 decimals (not 2-decimal money rounding),
+ * so fractional shares and precise per-share prices like 5.12345 are preserved.
+ * Rounding only trims floating-point noise.
+ */
+const QUANTITY_PRECISION = 1_000_000;
+
+function roundQuantity(value: number) {
+  return Math.round((value + Number.EPSILON) * QUANTITY_PRECISION) / QUANTITY_PRECISION;
+}
+
 export function normalizeShares(shares: number) {
-  return roundMoney(Math.max(0, shares));
+  return roundQuantity(Math.max(0, shares));
 }
 
 export function normalizeAverageCost(averageCost: number) {
-  return roundMoney(Math.max(0, averageCost));
+  return roundQuantity(Math.max(0, averageCost));
 }
 
 /** Keep shares, averageCost, and totalCost consistent. */
@@ -46,9 +57,9 @@ export function mergeBuyIntoHolding(
 
   const oldShares = normalizeShares(existing.shares);
   const oldAvg = normalizeAverageCost(existing.averageCost);
-  const newShares = roundMoney(oldShares + safeBuyShares);
+  const newShares = normalizeShares(oldShares + safeBuyShares);
   const newAvg = newShares > 0
-    ? roundMoney(((oldShares * oldAvg) + (safeBuyShares * safeBuyPrice)) / newShares)
+    ? normalizeAverageCost(((oldShares * oldAvg) + (safeBuyShares * safeBuyPrice)) / newShares)
     : 0;
 
   return reconcileHolding({

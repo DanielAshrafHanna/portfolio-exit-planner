@@ -17,6 +17,12 @@ describe("reconcileHolding", () => {
       totalCost: 0
     });
   });
+
+  it("preserves fractional shares and high-precision average cost", () => {
+    const reconciled = reconcileHolding({ shares: 5.12345, averageCost: 5.12345, totalCost: 0 });
+    expect(reconciled.shares).toBe(5.12345);
+    expect(reconciled.averageCost).toBe(5.12345);
+  });
 });
 
 describe("mergeBuyIntoHolding", () => {

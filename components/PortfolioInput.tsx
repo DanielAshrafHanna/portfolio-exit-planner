@@ -13,7 +13,7 @@ import {
 import { useState } from "react";
 import type { HoldingInput, MarketRegion } from "@/lib/types";
 import { roundMoney, totalCostFor } from "@/lib/calculations";
-import { consolidateHoldingsBySymbol, reconcileHolding } from "@/lib/positionMath";
+import { consolidateHoldingsBySymbol, normalizeAverageCost, reconcileHolding } from "@/lib/positionMath";
 import { isIncompleteNumericInput, parseNumericInput } from "@/lib/numericInput";
 import { filterUnsupportedHoldings, getUnsupportedTickerMessage } from "@/lib/unsupportedTickers";
 
@@ -225,7 +225,7 @@ export function PortfolioInput({ holdings, region = "US", onChange, onAnalyze, i
         const totalCost = roundMoney(Math.max(0, typeof parsed === "number" ? parsed : 0));
         const shares = Math.max(0, next.shares);
         next.totalCost = totalCost;
-        next.averageCost = shares > 0 ? roundMoney(totalCost / shares) : 0;
+        next.averageCost = shares > 0 ? normalizeAverageCost(totalCost / shares) : 0;
       } else if (key === "shares" || key === "averageCost") {
         next.shares = Math.max(0, key === "shares" ? (parsed as number) : next.shares);
         next.averageCost = Math.max(0, key === "averageCost" ? (parsed as number) : next.averageCost);
