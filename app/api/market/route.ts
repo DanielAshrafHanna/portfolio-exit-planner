@@ -1,9 +1,13 @@
 import { NextResponse } from "next/server";
-import { getNews, getQuote } from "@/lib/marketData";
+import { ALPHA_VANTAGE_REQUEST_GAP_MS, getNews, getQuote, usesAlphaVantageQuotes } from "@/lib/marketData";
 import type { MarketRegion } from "@/lib/types";
 import { marketRequestSchema } from "@/lib/validation";
 
 export const dynamic = "force-dynamic";
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 export async function POST(request: Request) {
   try {
@@ -24,16 +28,33 @@ export async function POST(request: Request) {
     const uniqueRows = Array.from(
       new Map(rawRows.filter((row) => row.symbol).map((row) => [`${row.region}:${row.symbol}`, row])).values()
     );
-    const rows = await Promise.all(uniqueRows.map((row) => fetchMarketRow(row, quotesOnly === true)));
+    const rows = usesAlphaVantageQuotes() && quotesOnly !== true
+      ? await fetchMarketRowsSequentially(uniqueRows)
+      : await Promise.all(uniqueRows.map((row) => fetchMarketRow(row, quotesOnly === true)));
     return NextResponse.json({ rows });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Failed market fetch" }, { status: 500 });
   }
 }
 
+async function fetchMarketRowsSequentially(
+  rows: Array<{ symbol: string; region: MarketRegion }>
+) {
+  const results = [];
+  for (let index = 0; index < rows.length; index += 1) {
+    results.push(await fetchMarketRow(rows[index], false));
+    if (index < rows.length - 1) await sleep(ALPHA_VANTAGE_REQUEST_GAP_MS);
+  }
+  return results;
+}
+
 async function fetchMarketRow({ symbol, region }: { symbol: string; region: MarketRegion }, quotesOnly = false) {
   try {
-    const quote = await getQuote(symbol, region, { fresh: true });
+    const quote = await getQuote(symbol, region, {
+      fresh: true,
+      // Quote-only refreshes (e.g. before grounded AI analysis) skip Alpha Vantage to preserve quota.
+      preferPublicQuote: quotesOnly
+    });
     if (quotesOnly) {
       return { symbol, quote: quote.data, news: [], warnings: [quote.warning].filter(Boolean) };
     }

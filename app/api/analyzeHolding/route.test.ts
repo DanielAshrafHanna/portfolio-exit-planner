@@ -74,14 +74,14 @@ describe("/api/analyzeHolding", () => {
     expect(body.error).toBeTruthy();
   });
 
-  it("rejects more than 12 news items", async () => {
+  it("truncates more than 12 news items instead of rejecting", async () => {
     const response = await POST(jsonRequest(validPayload({
       news: Array.from({ length: 13 }, () => validNews[0])
     })));
     const body = await readJson(response);
 
-    expect(response.status).toBe(400);
-    expect(String(body.error)).toContain("Array must contain at most 12");
+    expect(response.status).toBe(200);
+    expect(mockGenerateGeminiJson).toHaveBeenCalled();
   });
 
   it("falls back when GEMINI_API_KEY is missing", async () => {

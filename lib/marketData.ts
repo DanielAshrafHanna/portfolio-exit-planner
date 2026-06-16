@@ -39,6 +39,13 @@ function yahooFetch(url: string, fresh = false) {
 }
 
 const YAHOO_NEWS_RSS = "https://feeds.finance.yahoo.com/rss/2.0/headline";
+/** Alpha Vantage free tier allows ~1 request per second. */
+export const ALPHA_VANTAGE_REQUEST_GAP_MS = 1100;
+const MAX_NEWS_ITEMS = 8;
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 const YAHOO_CHART_HOSTS = [
   "https://query1.finance.yahoo.com/v8/finance/chart",
   "https://query2.finance.yahoo.com/v8/finance/chart"
@@ -126,10 +133,9 @@ function calculateRsi(closes: number[], length = 14) {
 }
 
 async function alphaQuote(symbol: string): Promise<MarketQuote> {
-  const [quoteData, dailyData] = await Promise.all([
-    fetchAlpha({ function: "GLOBAL_QUOTE", symbol }),
-    fetchAlpha({ function: "TIME_SERIES_DAILY_ADJUSTED", symbol, outputsize: "full" })
-  ]);
+  const quoteData = await fetchAlpha({ function: "GLOBAL_QUOTE", symbol });
+  await sleep(ALPHA_VANTAGE_REQUEST_GAP_MS);
+  const dailyData = await fetchAlpha({ function: "TIME_SERIES_DAILY_ADJUSTED", symbol, outputsize: "full" });
   const quote = isRecord(quoteData) && isRecord(quoteData["Global Quote"]) ? quoteData["Global Quote"] : undefined;
   const series = isRecord(dailyData) && isRecord(dailyData["Time Series (Daily)"]) ? dailyData["Time Series (Daily)"] : undefined;
   if (!quote?.["05. price"] || !series) throw new Error(`Invalid ticker or unavailable quote for ${symbol}`);
@@ -350,9 +356,24 @@ export async function getNews(symbol: string, region: MarketRegion = "US"): Prom
     }).filter((item: NewsItem) => {
       const parsed = Date.parse(item.date);
       return Number.isNaN(parsed) || parsed >= cutoff;
-    });
-    return { data: items.length ? items : [] };
+    }).slice(0, MAX_NEWS_ITEMS);
+    if (items.length) return { data: items };
+    const yahooNews = await yahooRssNews(marketSymbol);
+    if (yahooNews.length) {
+      return {
+        data: yahooNews.slice(0, MAX_NEWS_ITEMS),
+        warning: "Alpha Vantage returned no recent news; using Yahoo Finance RSS."
+      };
+    }
+    return { data: [] };
   } catch (error) {
+    const yahooNews = await yahooRssNews(marketSymbol);
+    if (yahooNews.length) {
+      return {
+        data: yahooNews.slice(0, MAX_NEWS_ITEMS),
+        warning: `Alpha Vantage news unavailable for ${cleanSymbol}; using Yahoo Finance RSS.`
+      };
+    }
     return {
       data: [],
       warning: `News fetch failed for ${cleanSymbol}: ${error instanceof Error ? error.message : "Unknown error"}`

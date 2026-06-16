@@ -53,6 +53,9 @@ export const newsItemSchema = z.object({
   summary: cleanString(1000).catch("No summary provided.")
 });
 
+/** Keep prompts bounded; truncate excess headlines instead of rejecting the request. */
+export const cappedNewsListSchema = z.array(newsItemSchema).transform((items) => items.slice(0, 12));
+
 const actionSchema = z.enum(["Keep", "Watch", "Trim", "Sell"]);
 const confidenceSchema = z.enum(["Low", "Medium", "High"]);
 const riskLevelSchema = z.enum(["Low", "Medium", "High", "Very High"]);
@@ -108,13 +111,13 @@ export const marketRequestSchema = z.object({
 export const analysisRequestSchema = z.object({
   holding: holdingInputSchema,
   quote: marketQuoteSchema,
-  news: z.array(newsItemSchema).max(12).default([])
+  news: cappedNewsListSchema.default([])
 });
 
 export const portfolioAnalysisItemSchema = z.object({
   holding: holdingInputSchema,
   quote: marketQuoteSchema,
-  news: z.array(newsItemSchema).max(12).default([])
+  news: cappedNewsListSchema.default([])
 });
 
 export const portfolioAnalysisRequestSchema = z.object({

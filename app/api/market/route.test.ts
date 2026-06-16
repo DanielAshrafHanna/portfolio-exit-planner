@@ -8,7 +8,9 @@ const { mockGetNews, mockGetQuote } = vi.hoisted(() => ({
 
 vi.mock("@/lib/marketData", () => ({
   getNews: mockGetNews,
-  getQuote: mockGetQuote
+  getQuote: mockGetQuote,
+  usesAlphaVantageQuotes: () => false,
+  ALPHA_VANTAGE_REQUEST_GAP_MS: 1100
 }));
 
 import { POST } from "./route";
@@ -71,7 +73,7 @@ describe("/api/market", () => {
 
     expect(response.status).toBe(200);
     expect(mockGetQuote).toHaveBeenCalledTimes(1);
-    expect(mockGetQuote).toHaveBeenCalledWith("AAPL", "US", { fresh: true });
+    expect(mockGetQuote).toHaveBeenCalledWith("AAPL", "US", { fresh: true, preferPublicQuote: false });
     expect(mockGetNews).toHaveBeenCalledWith("AAPL", "US");
     expect(body.rows).toMatchObject([{
       symbol: "AAPL",
@@ -104,7 +106,7 @@ describe("/api/market", () => {
     const body = await readJson(response);
 
     expect(response.status).toBe(200);
-    expect(mockGetQuote).toHaveBeenCalledWith("AAPL", "US", { fresh: true });
+    expect(mockGetQuote).toHaveBeenCalledWith("AAPL", "US", { fresh: true, preferPublicQuote: true });
     expect(mockGetNews).not.toHaveBeenCalled();
     expect(body.rows).toMatchObject([{ symbol: "AAPL", quote, news: [] }]);
   });

@@ -918,7 +918,7 @@ export default function Home() {
     }
   };
 
-  const refreshMarketData = async (options: { showLoading?: boolean; showWarnings?: boolean } = {}) => {
+  const refreshMarketData = async (options: { showLoading?: boolean; showWarnings?: boolean; quotesOnly?: boolean } = {}) => {
     const requestId = marketRequestId.current + 1;
     marketRequestId.current = requestId;
     const profileIdAtStart = activeProfile?.id || activeProfileId;
@@ -934,7 +934,7 @@ export default function Home() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         cache: "no-store",
-        body: JSON.stringify({ holdings: analysisHoldings, region: regionAtStart })
+        body: JSON.stringify({ holdings: analysisHoldings, region: regionAtStart, quotesOnly: options.quotesOnly === true })
       });
       const marketData = await readJsonResponse<MarketApiResponse>(marketResponse);
       if (!marketResponse.ok) throw new Error(marketData.error || "Market refresh failed");
@@ -1081,7 +1081,7 @@ export default function Home() {
     setWarnings(["Refreshing market data and news before AI analysis."]);
     const userId = user?.id ?? "guest";
     try {
-      const withMarket = await refreshMarketData({ showLoading: true, showWarnings: true });
+      const withMarket = await refreshMarketData({ showLoading: true, showWarnings: true, quotesOnly: true });
       if (!withMarket || !isLatestAnalysis()) return;
       const aiConfig = await fetch("/api/aiConfig")
         .then((response) => response.json() as Promise<{ requestGapMs?: number; model?: string }>)

@@ -23,13 +23,18 @@ describe("API request schemas", () => {
     expect(marketRequestSchema.safeParse({ symbols: [] }).success).toBe(false);
   });
 
-  it("rejects oversized market and news batches", () => {
+  it("rejects oversized market symbol batches", () => {
     expect(marketRequestSchema.safeParse({ symbols: Array.from({ length: 51 }, (_, index) => `T${index}`) }).success).toBe(false);
-    expect(analysisRequestSchema.safeParse({
+  });
+
+  it("truncates oversized news batches instead of rejecting", () => {
+    const parsed = analysisRequestSchema.safeParse({
       holding,
       quote,
       news: Array.from({ length: 13 }, () => ({ headline: "News", source: "Source", date: "2026-06-08", url: "https://example.com", summary: "Summary" }))
-    }).success).toBe(false);
+    });
+    expect(parsed.success).toBe(true);
+    expect(parsed.success ? parsed.data.news.length : 0).toBe(12);
   });
 
   it("normalizes valid analysis requests", () => {
