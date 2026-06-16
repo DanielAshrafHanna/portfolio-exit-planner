@@ -41,7 +41,7 @@ export function isGeminiRateLimitError(error: unknown) {
 
 export function formatGeminiError(error: unknown, label = "AI analysis") {
   if (isGeminiRateLimitError(error)) {
-    return "Gemini daily quota reached, so this is data-only fallback analysis (no AI commentary). The quota resets on Google's schedule — try Refresh AI again later, or rely on the cached daily run.";
+    return "Gemini daily quota reached, so this is data-only fallback analysis (no AI commentary). The quota resets on Google's schedule — wait for the next automatic daily run.";
   }
   const message = errorMessage(error).trim();
   return message ? `${label} unavailable: ${message}` : `${label} unavailable.`;

@@ -44,7 +44,7 @@ export function AiBriefPanel({ brief }: Props) {
       <div className="space-y-4 p-3 sm:p-4">
         {fallback ? (
           <p className="rounded-md border border-amber/40 bg-amber/15 px-3 py-2 text-xs text-ink/70">
-            AI commentary is unavailable right now, so this is a data-only recap. Use Refresh AI to try again.
+            AI commentary is unavailable right now, so this is a data-only recap. The next full analysis runs automatically at market close.
           </p>
         ) : null}
 

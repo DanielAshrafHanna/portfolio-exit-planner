@@ -90,7 +90,6 @@ export async function sendOptedInDailyReportEmails(
       freshSnapshots
     });
     const aiRun = await runAndPersistDailyAiForUser(supabase, userId, row, snapshot.report, {
-      runType: "automatic",
       now
     }).catch(() => ({ summaries: [] as Awaited<ReturnType<typeof runAndPersistDailyAiForUser>>["summaries"], warnings: [] as string[] }));
     const aiSummaries = aiRun.summaries;

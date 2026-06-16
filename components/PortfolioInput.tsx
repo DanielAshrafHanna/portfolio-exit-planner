@@ -34,7 +34,6 @@ type Props = {
   region?: MarketRegion;
   onChange: (holdings: HoldingInput[]) => void;
   onAnalyze: () => void;
-  onRefreshAi?: () => void;
   aiUsageLabel?: string;
   isAnalyzing: boolean;
   isRefreshingMarket: boolean;
@@ -194,7 +193,7 @@ function MobileHoldingCard({
   );
 }
 
-export function PortfolioInput({ holdings, region = "US", onChange, onAnalyze, onRefreshAi, aiUsageLabel, isAnalyzing, isRefreshingMarket, onBlockedTicker }: Props) {
+export function PortfolioInput({ holdings, region = "US", onChange, onAnalyze, aiUsageLabel, isAnalyzing, isRefreshingMarket, onBlockedTicker }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [numericDrafts, setNumericDrafts] = useState<Record<string, string>>({});
   const [importNotice, setImportNotice] = useState<string | null>(null);
@@ -355,18 +354,8 @@ export function PortfolioInput({ holdings, region = "US", onChange, onAnalyze, o
         disabled={isAnalyzing || holdings.every((holding) => !holding.symbol)}
       >
         <Sparkles className="h-4 w-4" aria-hidden />
-        {isAnalyzing ? "Analyzing..." : "Apply daily AI"}
+        {isAnalyzing ? "Applying..." : "Apply daily AI"}
       </button>
-      {onRefreshAi ? (
-        <button
-          className="btn-secondary min-h-10 shrink-0 px-3 py-2 text-xs sm:min-h-11 sm:text-sm"
-          type="button"
-          onClick={onRefreshAi}
-          disabled={isAnalyzing || holdings.every((holding) => !holding.symbol)}
-        >
-          Refresh AI
-        </button>
-      ) : null}
     </div>
   );
 
@@ -480,7 +469,7 @@ export function PortfolioInput({ holdings, region = "US", onChange, onAnalyze, o
                   <Download className="h-4 w-4" aria-hidden /> Export CSV
                 </button>
                 <button className="btn-primary px-4 py-2 disabled:opacity-50" type="button" onClick={onAnalyze} disabled={isAnalyzing || holdings.every((holding) => !holding.symbol)}>
-                  <Sparkles className="h-4 w-4" aria-hidden /> {isAnalyzing ? "Analyzing..." : "Run analysis"}
+                  <Sparkles className="h-4 w-4" aria-hidden /> {isAnalyzing ? "Applying..." : "Apply daily AI"}
                 </button>
               </div>
             </div>

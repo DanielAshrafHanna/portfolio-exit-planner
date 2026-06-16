@@ -37,9 +37,9 @@ import {
   writeAnalysisSession,
   type AnalysisSession
 } from "@/lib/analysisProgress";
+import { fallbackAnalysis } from "@/lib/aiFallback";
 import { geminiModelName } from "@/lib/geminiClient";
 import { applyCompanyNameToHolding } from "@/lib/holdingNames";
-import { applyAnalyzedHoldingResults, type AnalyzedHoldingResult } from "@/lib/holdingMerge";
 import { applyLiveQuotes, getQuoteRefreshIntervalMs, isQuotableQuote, liveQuoteKey } from "@/lib/marketRefresh";
 import { sanitizeProfilesForPersistence } from "@/lib/quoteCacheMigration";
 import { DEFAULT_SETTINGS, defaultProfiles, displayMarketSymbol } from "@/lib/profileUtils";
@@ -61,11 +61,10 @@ import {
   buildDailyAiUsageSummary,
   parseDailyAiCache,
   rehydrateFallbackCacheEntry,
-  upsertDailyAiCacheEntry,
   type DailyAiCacheState
 } from "@/lib/dailyAiCache";
 import { cacheEntryForProfile, mergeProfilesWithDailyAiCache } from "@/lib/dailyAiPersistence";
-import { readLocalDailyAiCache, writeLocalDailyAiCache } from "@/lib/dailyAiLocalStorage";
+import { readLocalDailyAiCache } from "@/lib/dailyAiLocalStorage";
 import { dailyReportEmailPrefsFromSettings } from "@/lib/dailyReportEmailPrefs";
 import { coerceProfiles, emptyPortfolioBootstrap, enrichHolding } from "@/lib/storageMigration";
 import { createSupabaseBrowserClient } from "@/lib/supabaseClient";
@@ -195,15 +194,6 @@ type MarketApiRow = {
 type MarketApiResponse = {
   rows?: MarketApiRow[];
   error?: string;
-};
-
-type PortfolioAnalysisApiResponse = {
-  results?: Array<{ id: string; analysis?: AiAnalysis; fallback?: boolean }>;
-  warning?: string;
-  error?: string;
-  cached?: boolean;
-  cacheEntry?: DailyAiCacheState["entries"][string];
-  usage?: { marketDate?: string; runType?: "automatic" | "manual"; generatedAt?: string };
 };
 
 type LoginIdentifierResponse = {
@@ -1103,7 +1093,7 @@ export default function Home() {
     writeAnalysisSession(user?.id ?? "guest", session);
   };
 
-  const analyze = async (options?: { resume?: boolean; force?: boolean }) => {
+  const analyze = async () => {
     const requestId = analysisRequestId.current + 1;
     analysisRequestId.current = requestId;
     const profileIdAtStart = activeProfile?.id || activeProfileId;
@@ -1113,143 +1103,36 @@ export default function Home() {
     const userId = user?.id ?? "guest";
     const cachedEntry = cacheEntryForProfile(dailyAiCacheRef.current, profileIdAtStart, region);
 
-    if (!options?.force && !options?.resume && cachedEntry) {
-      const hydrated = rehydrateFallbackCacheEntry(cachedEntry, batchItemsFromHoldings(holdings));
-      setHoldings((currentItems) => applyDailyAiCacheToHoldings(currentItems, hydrated));
-      setWarnings([
-        `Applied today's cached AI analysis (${cachedEntry.runType} run at ${new Date(cachedEntry.generatedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}). Use Refresh AI for a new manual Gemini call.`
-      ]);
-      setIsAnalyzing(false);
-      return;
-    }
-
-    setWarnings([
-      options?.force
-        ? "Running a manual AI refresh (uses an extra Gemini call for this profile)."
-        : "Refreshing quotes before AI analysis. News comes from the grounded AI run, not Alpha Vantage."
-    ]);
     try {
       const withMarket = await refreshMarketData({ showLoading: true, showWarnings: true, quotesOnly: true });
       if (!withMarket || !isLatestAnalysis()) return;
-      const aiConfig = await fetch("/api/aiConfig")
-        .then((response) => response.json() as Promise<{ requestGapMs?: number; model?: string }>)
-        .catch(() => null);
-      const analyzeModel = aiConfig?.model ?? geminiModelName();
-      const initialCoverage = analysisCoverage(withMarket);
-      const holdingsToAnalyze = withMarket.filter((holding) => isQuotableQuote(holding.quote) && (!options?.resume || !holding.analysis));
-      const skippedHoldings = withMarket.filter((holding) => holding.quote !== undefined && !isQuotableQuote(holding.quote));
-      const startingCompleted = options?.resume ? initialCoverage.analyzed : 0;
-      const completedSymbols = options?.resume ? [...initialCoverage.analyzedSymbols] : [];
-      const pendingSymbols = holdingsToAnalyze.map((holding) => holding.symbol.trim().toUpperCase());
 
-      if (skippedHoldings.length) {
-        const skipWarnings = skippedHoldings.map((holding) => (
-          `${holding.symbol.trim().toUpperCase()} skipped — no live quote available for AI analysis.`
-        ));
-        setWarnings((existing) => [...existing, ...skipWarnings]);
+      const items = batchItemsFromHoldings(withMarket);
+
+      if (cachedEntry) {
+        const hydrated = rehydrateFallbackCacheEntry(cachedEntry, items);
+        setHoldings((currentItems) => applyDailyAiCacheToHoldings(currentItems, hydrated));
+        setWarnings([
+          `Applied today's daily AI analysis (${cachedEntry.runType} run at ${new Date(cachedEntry.generatedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}). Manual refresh is disabled — the next run is automatic at market close.`
+        ]);
+      } else {
+        setHoldings((currentItems) => currentItems.map((holding) => {
+          const row = withMarket.find((item) => item.id === holding.id);
+          if (!row?.quote || !isQuotableQuote(row.quote)) return holding;
+          return {
+            ...holding,
+            quote: row.quote,
+            analysis: fallbackAnalysis(toHoldingInput(holding), row.quote, [])
+          };
+        }));
+        setWarnings([
+          "No daily AI cache for today. Full AI commentary runs automatically at market close. Table rows show data-only analysis from live quotes until then."
+        ]);
       }
 
-      storeAnalysisSession(buildAnalysisSession({
-        profileId: profileIdAtStart,
-        inputKey: inputKeyAtStart,
-        phase: "market",
-        completed: startingCompleted,
-        total: initialCoverage.total,
-        currentSymbol: null,
-        model: analyzeModel,
-        completedSymbols,
-        pendingSymbols
-      }));
-
-      storeAnalysisSession(buildAnalysisSession({
-        profileId: profileIdAtStart,
-        inputKey: inputKeyAtStart,
-        phase: "analyzing",
-        completed: startingCompleted,
-        total: initialCoverage.total,
-        currentSymbol: holdingsToAnalyze[0]?.symbol.trim().toUpperCase() || null,
-        model: analyzeModel,
-        completedSymbols,
-        pendingSymbols
-      }));
-
-      const warningsToAdd: string[] = [];
-
-      if (holdingsToAnalyze.length) {
-        storeAnalysisSession(buildAnalysisSession({
-          profileId: profileIdAtStart,
-          inputKey: inputKeyAtStart,
-          phase: "analyzing",
-          completed: startingCompleted,
-          total: initialCoverage.total,
-          currentSymbol: pendingSymbols[0] || null,
-          model: analyzeModel,
-          completedSymbols: [...completedSymbols],
-          pendingSymbols: [...pendingSymbols]
-        }));
-
-        const authHeaders: Record<string, string> = { "Content-Type": "application/json" };
-        if (supabase) {
-          const { data: sessionData } = await supabase.auth.getSession();
-          const token = sessionData.session?.access_token;
-          if (token) authHeaders.Authorization = `Bearer ${token}`;
-        }
-
-        const response = await fetch("/api/analyzePortfolio", {
-          method: "POST",
-          headers: authHeaders,
-          body: JSON.stringify({
-            region,
-            currency,
-            profileId: profileIdAtStart,
-            force: options?.force === true,
-            clientDailyAiCache: dailyAiCacheRef.current,
-            items: holdingsToAnalyze.map((holding) => ({
-              holding: toHoldingInput(holding),
-              quote: holding.quote,
-              news: holding.news.slice(0, 12)
-            }))
-          })
-        });
-        const data = await readJsonResponse<PortfolioAnalysisApiResponse>(response);
-        if (!response.ok) throw new Error(data.error || "Portfolio analysis failed");
-        if (!isLatestAnalysis()) return;
-
-        if (data.cacheEntry) {
-          const nextCache = upsertDailyAiCacheEntry(dailyAiCacheRef.current, data.cacheEntry);
-          setDailyAiCache(nextCache);
-          writeLocalDailyAiCache(userId, nextCache);
-        }
-
-        const analysisById = new Map((data.results ?? []).map((item) => [item.id, item.analysis]));
-        const merged: AnalyzedHoldingResult[] = holdingsToAnalyze.map((holding) => ({
-          id: holding.id,
-          quote: holding.quote,
-          news: holding.news,
-          analysis: analysisById.get(holding.id) ?? holding.analysis
-        }));
-        setHoldings((currentItems) => applyAnalyzedHoldingResults(currentItems, merged));
-        if (data.warning) warningsToAdd.push(data.warning);
-      }
-
-      if (!isLatestAnalysis()) return;
-      const normalizedWarnings = warningsToAdd.filter(Boolean).map(normalizeWarning).filter((warning): warning is string => Boolean(warning));
-      if (normalizedWarnings.length) setWarnings((existing) => [...existing, ...normalizedWarnings]);
       clearAnalysisSession(userId);
       setAnalysisSession(null);
     } catch (error) {
-      const coverage = analysisCoverage(holdings);
-      storeAnalysisSession(buildAnalysisSession({
-        profileId: profileIdAtStart,
-        inputKey: inputKeyAtStart,
-        phase: "interrupted",
-        completed: coverage.analyzed,
-        total: coverage.total,
-        currentSymbol: null,
-        model: analysisSession?.model ?? geminiModelName(),
-        completedSymbols: coverage.analyzedSymbols,
-        pendingSymbols: coverage.pendingSymbols
-      }));
       setWarnings((existing) => [...existing, error instanceof Error ? error.message : "Analysis failed"]);
     } finally {
       if (analysisRequestId.current === requestId) setIsAnalyzing(false);
@@ -1997,7 +1880,7 @@ export default function Home() {
       pendingSymbols={isAnalyzing ? (analysisSession?.pendingSymbols ?? portfolioAnalysisCoverage.pendingSymbols) : portfolioAnalysisCoverage.pendingSymbols}
       skippedSymbols={portfolioAnalysisCoverage.skippedSymbols}
       isActive={isAnalyzing}
-      onResume={analysisSession?.phase === "interrupted" ? () => void analyze({ resume: true }) : undefined}
+      onResume={analysisSession?.phase === "interrupted" ? () => void analyze() : undefined}
     />
   ) : null;
 
@@ -2047,10 +1930,9 @@ export default function Home() {
         region={region}
         onChange={setInputRows}
         onAnalyze={() => void analyze()}
-        onRefreshAi={() => void analyze({ force: true })}
         aiUsageLabel={aiUsageSummary.cacheFresh
-          ? `Today's AI is cached (${aiUsageSummary.geminiCallsToday} Gemini call(s) today for this profile). Apply daily AI uses zero extra calls.`
-          : `No fresh AI cache for today (${aiUsageSummary.geminiCallsToday} Gemini call(s) today). Apply daily AI after market close, or use Refresh AI.`}
+          ? `Today's daily AI is cached (${aiUsageSummary.automaticRunsToday} automatic Gemini call(s) today). Apply daily AI uses zero API calls.`
+          : `No fresh daily AI cache yet (${aiUsageSummary.automaticRunsToday} automatic call(s) today). Full analysis runs at market close.`}
         isAnalyzing={isAnalyzing}
         isRefreshingMarket={isRefreshingMarket}
         onBlockedTicker={(message) => setWarnings((existing) => [...existing, message])}

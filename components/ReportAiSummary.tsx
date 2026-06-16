@@ -29,7 +29,6 @@ type Props = {
   error: string | null;
   hasRun: boolean;
   onRun: () => void;
-  onForceRun?: () => void;
 };
 
 const actionTone: Record<AiSummaryHolding["action"], string> = {
@@ -39,7 +38,7 @@ const actionTone: Record<AiSummaryHolding["action"], string> = {
   Sell: "bg-coral/15 text-coral"
 };
 
-export function ReportAiSummary({ summaries, isLoading, error, hasRun, onRun, onForceRun }: Props) {
+export function ReportAiSummary({ summaries, isLoading, error, hasRun, onRun }: Props) {
   return (
     <SectionCard
       variant="secondary"
@@ -47,32 +46,20 @@ export function ReportAiSummary({ summaries, isLoading, error, hasRun, onRun, on
       eyebrow="AI"
       title="AI market-close analysis"
       action={(
-        <div className="flex flex-wrap gap-2">
-          <button
-            className="inline-flex min-h-10 items-center gap-2 rounded-md border border-marine/25 bg-white px-3 py-2 text-sm font-semibold text-marine hover:border-marine/50 disabled:cursor-not-allowed disabled:opacity-60"
-            type="button"
-            onClick={onRun}
-            disabled={isLoading}
-          >
-            <Sparkles className={`h-4 w-4 ${isLoading ? "animate-pulse" : ""}`} aria-hidden />
-            {isLoading ? "Loading…" : hasRun ? "Reload cached" : "Load cached AI"}
-          </button>
-          {onForceRun ? (
-            <button
-              className="inline-flex min-h-10 items-center gap-2 rounded-md border border-ink/15 bg-white px-3 py-2 text-sm font-semibold text-ink/75 hover:border-ink/30 disabled:cursor-not-allowed disabled:opacity-60"
-              type="button"
-              onClick={onForceRun}
-              disabled={isLoading}
-            >
-              Refresh AI
-            </button>
-          ) : null}
-        </div>
+        <button
+          className="inline-flex min-h-10 items-center gap-2 rounded-md border border-marine/25 bg-white px-3 py-2 text-sm font-semibold text-marine hover:border-marine/50 disabled:cursor-not-allowed disabled:opacity-60"
+          type="button"
+          onClick={onRun}
+          disabled={isLoading}
+        >
+          <Sparkles className={`h-4 w-4 ${isLoading ? "animate-pulse" : ""}`} aria-hidden />
+          {isLoading ? "Loading…" : hasRun ? "Reload cached" : "Load cached AI"}
+        </button>
       )}
     >
       <div className="space-y-4 p-3 sm:p-4">
         <p className="text-xs text-ink/55">
-          Daily AI runs automatically at market close (1 Gemini call per profile). Load cached results here, or Refresh AI for a manual call.
+          Daily AI runs automatically at market close (1 Gemini call per profile). Manual refresh is disabled to protect API limits.
         </p>
 
         {error ? (
@@ -82,14 +69,18 @@ export function ReportAiSummary({ summaries, isLoading, error, hasRun, onRun, on
           </div>
         ) : null}
 
-        {!hasRun && !isLoading ? (
-          <p className="text-sm text-ink/60">Run the analysis to get an AI market-close read on your holdings.</p>
+        {!hasRun && !isLoading && !summaries.length ? (
+          <p className="text-sm text-ink/60">Cached daily analysis loads automatically when available.</p>
         ) : null}
 
         {isLoading && !summaries.length ? (
           <div className="space-y-2">
             {[0, 1].map((item) => <div className="h-24 animate-pulse rounded-md bg-white" key={item} />)}
           </div>
+        ) : null}
+
+        {!summaries.length && hasRun && !isLoading && !error ? (
+          <p className="text-sm text-ink/60">No daily AI cache yet for today. Check back after the automatic market-close run.</p>
         ) : null}
 
         {summaries.map((entry) => (

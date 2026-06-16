@@ -112,7 +112,7 @@ export function ReportPageContent() {
     }
   }, [selectedProfileId, supabase]);
 
-  const loadAiSummary = useCallback(async (force = false) => {
+  const loadAiSummary = useCallback(async () => {
     if (!supabase) {
       setAiError("Supabase is not configured.");
       return;
@@ -125,17 +125,13 @@ export function ReportPageContent() {
       const token = data.session?.access_token;
       if (!token) throw new Error("Sign in again to run AI analysis.");
       const response = await fetch("/api/portfolio-report/ai-summary", {
-        method: force ? "POST" : "GET",
+        method: "GET",
         headers: { Authorization: `Bearer ${token}` },
         cache: "no-store"
       });
       const payload = await response.json() as AiSummaryResponse;
       if (!response.ok) throw new Error(payload.error || "AI analysis failed.");
-      const quotaWarning = payload.warnings?.find((warning) => warning.includes("Gemini daily quota") || warning.includes("429"));
-      setAiSummaries((payload.summaries || []).map((summary) => ({
-        ...summary,
-        warning: summary.warning || (summary.fallback ? quotaWarning : undefined)
-      })));
+      setAiSummaries(payload.summaries || []);
     } catch (loadError) {
       setAiError(loadError instanceof Error ? loadError.message : "AI analysis failed.");
     } finally {
@@ -148,7 +144,7 @@ export function ReportPageContent() {
   }, [loadReport]);
 
   useEffect(() => {
-    void loadAiSummary(false);
+    void loadAiSummary();
   }, [loadAiSummary]);
 
   useEffect(() => {
@@ -204,8 +200,7 @@ export function ReportPageContent() {
           isLoading={isLoadingAi}
           error={aiError}
           hasRun={hasRunAi}
-          onRun={() => void loadAiSummary(false)}
-          onForceRun={() => void loadAiSummary(true)}
+          onRun={() => void loadAiSummary()}
         />
       </div>
       {hasViewedCharts ? (

@@ -7,6 +7,6 @@ export function GET() {
     configured: isGeminiConfigured(),
     model,
     requestGapMs: geminiAnalyzeRequestGapMs(model),
-    usageHint: "Designed for 1 grounded Gemini call per profile per market day. Manual Refresh AI uses an extra call."
+    usageHint: "One grounded Gemini call per profile per market day at market close. Manual refresh is disabled."
   });
 }

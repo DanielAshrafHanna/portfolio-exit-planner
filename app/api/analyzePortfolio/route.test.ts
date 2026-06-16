@@ -10,8 +10,7 @@ vi.mock("@/lib/geminiClient", async () => {
 });
 
 import { POST } from "./route";
-
-const originalGeminiKey = process.env.GEMINI_API_KEY;
+import { marketDateString } from "@/lib/marketSession";
 
 function jsonRequest(body: unknown) {
   return new Request("http://localhost/api/analyzePortfolio", {
@@ -44,34 +43,8 @@ function validPayload() {
   };
 }
 
-function analysisFor(symbol: string) {
-  return {
-    symbol,
-    assetType: "Stock",
-    action: "Keep",
-    confidence: "Medium",
-    riskLevel: "Medium",
-    newsSentiment: "Neutral",
-    trendStatus: "Bullish",
-    upcomingCatalysts: [],
-    summary: `Hold ${symbol}.`,
-    reasonsToHold: ["Above moving average."],
-    reasonsToSell: ["Watch momentum."],
-    riskFlags: ["No verified upcoming catalyst found."],
-    suggestedActionPlan: {
-      primaryAction: "Keep",
-      explanation: "Use a defined stop.",
-      suggestedStopLoss: 110,
-      suggestedTakeProfit: 140,
-      reviewAfterCatalyst: false
-    },
-    sourcesUsed: []
-  };
-}
-
 describe("/api/analyzePortfolio", () => {
   afterEach(() => {
-    process.env.GEMINI_API_KEY = originalGeminiKey;
     vi.clearAllMocks();
   });
 
@@ -80,53 +53,80 @@ describe("/api/analyzePortfolio", () => {
     expect(response.status).toBe(400);
   });
 
-  it("falls back per holding when GEMINI_API_KEY is missing", async () => {
-    delete process.env.GEMINI_API_KEY;
+  it("rejects manual refresh requests", async () => {
+    const response = await POST(jsonRequest({ ...validPayload(), force: true }));
+    const body = await readJson(response);
+
+    expect(response.status).toBe(403);
+    expect(String(body.error)).toContain("Manual AI refresh is disabled");
+    expect(mockGenerate).not.toHaveBeenCalled();
+  });
+
+  it("returns data-only fallback without calling Gemini when no cache exists", async () => {
     const response = await POST(jsonRequest(validPayload()));
     const body = await readJson(response);
-    const results = body.results as Array<Record<string, unknown>>;
+    const results = body.results as Array<{ analysis: { summary: string }; fallback: boolean }>;
 
     expect(response.status).toBe(200);
     expect(mockGenerate).not.toHaveBeenCalled();
     expect(results).toHaveLength(2);
-    expect(body.warning).toContain("GEMINI_API_KEY is missing");
-  });
-
-  it("maps a grounded batch response back to each holding by symbol", async () => {
-    process.env.GEMINI_API_KEY = "test-key";
-    mockGenerate.mockResolvedValue(JSON.stringify({ analyses: [analysisFor("AAPL"), analysisFor("MSFT")] }));
-
-    const response = await POST(jsonRequest(validPayload()));
-    const body = await readJson(response);
-    const results = body.results as Array<{ id: string; analysis: { symbol: string }; fallback: boolean }>;
-
-    expect(mockGenerate).toHaveBeenCalledTimes(1);
-    expect(results.map((item) => item.analysis.symbol)).toEqual(["AAPL", "MSFT"]);
-    expect(results.every((item) => item.fallback === false)).toBe(true);
-    expect(body.warning).toBeUndefined();
-  });
-
-  it("uses fallback for holdings the AI omitted and warns", async () => {
-    process.env.GEMINI_API_KEY = "test-key";
-    mockGenerate.mockResolvedValue(JSON.stringify({ analyses: [analysisFor("AAPL")] }));
-
-    const response = await POST(jsonRequest(validPayload()));
-    const body = await readJson(response);
-    const results = body.results as Array<{ id: string; fallback: boolean }>;
-
-    expect(results.find((item) => item.id === "2")?.fallback).toBe(true);
-    expect(String(body.warning)).toContain("fallback");
-  });
-
-  it("falls back entirely when the AI returns junk", async () => {
-    process.env.GEMINI_API_KEY = "test-key";
-    mockGenerate.mockResolvedValue("not json");
-
-    const response = await POST(jsonRequest(validPayload()));
-    const body = await readJson(response);
-    const results = body.results as Array<{ fallback: boolean }>;
-
     expect(results.every((item) => item.fallback)).toBe(true);
-    expect(String(body.warning)).toContain("malformed");
+    expect(String(body.warning)).toContain("No daily AI cache for today");
+  });
+
+  it("returns cached analyses from clientDailyAiCache without calling Gemini", async () => {
+    const marketDate = marketDateString("US", new Date());
+    const response = await POST(jsonRequest({
+      ...validPayload(),
+      profileId: "us-portfolio",
+      clientDailyAiCache: {
+        entries: {
+          "us-portfolio": {
+            profileId: "us-portfolio",
+            profileName: "US Portfolio",
+            marketDate,
+            generatedAt: "2099-01-01T20:00:00.000Z",
+            summary: {
+              overview: "Cached overview",
+              marketContext: "",
+              holdings: [{ symbol: "AAPL", action: "Keep", note: "Cached note." }],
+              watchItems: [],
+              sources: []
+            },
+            analysesBySymbol: {
+              AAPL: {
+                symbol: "AAPL",
+                assetType: "Stock",
+                action: "Keep",
+                confidence: "Low",
+                riskLevel: "Medium",
+                newsSentiment: "Unknown",
+                trendStatus: "Neutral",
+                upcomingCatalysts: [],
+                summary: "Cached AAPL.",
+                reasonsToHold: [],
+                reasonsToSell: [],
+                riskFlags: [],
+                suggestedActionPlan: {
+                  primaryAction: "Keep",
+                  explanation: "Hold.",
+                  suggestedStopLoss: 100,
+                  suggestedTakeProfit: 140,
+                  reviewAfterCatalyst: false
+                },
+                sourcesUsed: []
+              }
+            },
+            fallback: false,
+            runType: "automatic"
+          }
+        }
+      }
+    }));
+    const body = await readJson(response);
+
+    expect(response.status).toBe(200);
+    expect(body.cached).toBe(true);
+    expect(mockGenerate).not.toHaveBeenCalled();
   });
 });

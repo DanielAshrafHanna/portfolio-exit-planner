@@ -15,7 +15,7 @@ export async function runAndPersistDailyAiForUser(
   userId: string,
   row: CloudPortfolioRow,
   report: PortfolioReport,
-  options: { runType: "automatic" | "manual"; now?: Date; force?: boolean } = { runType: "automatic" }
+  options: { now?: Date } = {}
 ): Promise<{ summaries: DailyPortfolioSummaryResult[]; warnings: string[]; skipped?: boolean; skipReason?: string }> {
   const profiles = profilesFromCloudPortfolioRow(row);
   const existingCache = dailyAiCacheFromCloudRow(row);
@@ -24,31 +24,29 @@ export async function runAndPersistDailyAiForUser(
     return { summaries: [], warnings: [], skipped: true, skipReason: "no_quoted_holdings" };
   }
 
-  if (!options.force && options.runType === "automatic") {
-    const allFresh = quotedProfiles.every((profile) => {
-      const entry = existingCache.entries[profile.id];
-      return entry && isDailyAiCacheFresh(entry, profile.region, options.now);
-    });
-    if (allFresh) {
-      return {
-        summaries: quotedProfiles.map((profile) => {
-          const entry = existingCache.entries[profile.id];
-          return {
-            profileId: profile.id,
-            profileName: profile.name,
-            summary: entry.summary,
-            fallback: entry.fallback
-          };
-        }),
-        warnings: [],
-        skipped: true,
-        skipReason: "cache_fresh"
-      };
-    }
+  const allFresh = quotedProfiles.every((profile) => {
+    const entry = existingCache.entries[profile.id];
+    return entry && isDailyAiCacheFresh(entry, profile.region, options.now);
+  });
+  if (allFresh) {
+    return {
+      summaries: quotedProfiles.map((profile) => {
+        const entry = existingCache.entries[profile.id];
+        return {
+          profileId: profile.id,
+          profileName: profile.name,
+          summary: entry.summary,
+          fallback: entry.fallback
+        };
+      }),
+      warnings: [],
+      skipped: true,
+      skipReason: "cache_fresh"
+    };
   }
 
   const { results, cache, warnings } = await runUnifiedDailyAiForReport(report, profiles, {
-    runType: options.runType,
+    runType: "automatic",
     now: options.now
   });
   const mergedCache = {
