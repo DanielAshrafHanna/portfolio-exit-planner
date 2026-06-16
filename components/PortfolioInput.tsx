@@ -12,7 +12,8 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import type { HoldingInput, MarketRegion } from "@/lib/types";
-import { totalCostFor } from "@/lib/calculations";
+import { roundMoney, totalCostFor } from "@/lib/calculations";
+import { consolidateHoldingsBySymbol, reconcileHolding } from "@/lib/positionMath";
 import { isIncompleteNumericInput, parseNumericInput } from "@/lib/numericInput";
 import { filterUnsupportedHoldings, getUnsupportedTickerMessage } from "@/lib/unsupportedTickers";
 
@@ -194,6 +195,7 @@ function MobileHoldingCard({
 export function PortfolioInput({ holdings, region = "US", onChange, onAnalyze, isAnalyzing, isRefreshingMarket, onBlockedTicker }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [numericDrafts, setNumericDrafts] = useState<Record<string, string>>({});
+  const [importNotice, setImportNotice] = useState<string | null>(null);
   const holdingCount = holdings.filter((holding) => holding.symbol.trim()).length;
 
   const clearDraftsForHolding = (id: string) => {
@@ -218,8 +220,21 @@ export function PortfolioInput({ holdings, region = "US", onChange, onAnalyze, i
       const trimmed = value.trim();
       const parsed = key === "brokerCurrentValue" && trimmed === "" ? undefined : parseNumericInput(value);
       const next = { ...holding, [key]: parsed };
-      if (key === "shares" || key === "averageCost") next.totalCost = totalCostFor(next.shares, next.averageCost);
-      return next;
+
+      if (key === "totalCost") {
+        const totalCost = roundMoney(Math.max(0, typeof parsed === "number" ? parsed : 0));
+        const shares = Math.max(0, next.shares);
+        next.totalCost = totalCost;
+        next.averageCost = shares > 0 ? roundMoney(totalCost / shares) : 0;
+      } else if (key === "shares" || key === "averageCost") {
+        next.shares = Math.max(0, key === "shares" ? (parsed as number) : next.shares);
+        next.averageCost = Math.max(0, key === "averageCost" ? (parsed as number) : next.averageCost);
+        next.totalCost = totalCostFor(next.shares, next.averageCost);
+      } else if (key === "brokerCurrentValue" && typeof parsed === "number") {
+        next.brokerCurrentValue = Math.max(0, parsed);
+      }
+
+      return reconcileHolding(next);
     }));
   };
 
@@ -270,25 +285,32 @@ export function PortfolioInput({ holdings, region = "US", onChange, onAnalyze, i
       header: true,
       complete: (result) => {
         const rows = result.data.filter((row) => row.Symbol || row.symbol).map((row) => {
-          const shares = Number(row.Shares || row.shares || 0);
-          const averageCost = Number(row["Average cost"] || row.averageCost || row.avgCost || 0);
-          return {
+          const shares = Math.max(0, Number(row.Shares || row.shares || 0));
+          const averageCost = Math.max(0, Number(row["Average cost"] || row.averageCost || row.avgCost || 0));
+          return reconcileHolding({
             id: crypto.randomUUID(),
             symbol: String(row.Symbol || row.symbol || "").toUpperCase(),
             name: String(row.Name || row.name || ""),
             shares,
             averageCost,
             totalCost: Number(row["Total cost"] || row.totalCost || totalCostFor(shares, averageCost)),
-            brokerCurrentValue: row["Broker current value"] ? Number(row["Broker current value"]) : undefined,
+            brokerCurrentValue: row["Broker current value"] ? Math.max(0, Number(row["Broker current value"])) : undefined,
             notes: String(row.Notes || row.notes || "")
-          };
+          });
         });
         const blocked = rows.filter((row) => getUnsupportedTickerMessage(row.symbol, region));
         blocked.forEach((row) => {
           const message = getUnsupportedTickerMessage(row.symbol, region);
           if (message) onBlockedTicker?.(message);
         });
-        onChange(filterUnsupportedHoldings(rows, region));
+        const allowed = filterUnsupportedHoldings(rows, region);
+        const consolidated = consolidateHoldingsBySymbol(allowed);
+        if (consolidated.length < allowed.length) {
+          setImportNotice(`Merged ${allowed.length - consolidated.length} duplicate symbol row(s) from the CSV import.`);
+        } else {
+          setImportNotice(null);
+        }
+        onChange(consolidated);
         setExpanded(true);
       }
     });
@@ -338,6 +360,11 @@ export function PortfolioInput({ holdings, region = "US", onChange, onAnalyze, i
 
   return (
     <>
+      {importNotice ? (
+        <p className="mb-3 rounded-md border border-amber/40 bg-amber/15 px-3 py-2 text-sm text-ink/80" role="status">
+          {importNotice}
+        </p>
+      ) : null}
       <section className="overflow-hidden rounded-xl border border-ink/10 bg-white shadow-soft md:hidden">
         <button
           className="flex w-full items-center gap-3 px-4 py-3.5 text-left"

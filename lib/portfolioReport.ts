@@ -1,4 +1,5 @@
 import { calculateDailyProfitLoss, calculateProfitLoss, calculateStopLosses, defaultSellTargets, roundMoney } from "./calculations";
+import { consolidateHoldingsBySymbol } from "./positionMath";
 import { getQuote } from "./marketData";
 import { displayMarketSymbol, formatMoney } from "./profileUtils";
 import type { CurrencyCode, EnrichedHolding, MarketQuote, MarketRegion, PortfolioProfile } from "./types";
@@ -125,7 +126,8 @@ async function buildProfileReport(
   profile: PortfolioProfile,
   fetchQuote: PortfolioReportQuoteFetcher
 ): Promise<PortfolioReportProfile> {
-  const rows = await Promise.all(profile.holdings.map((holding) => buildHoldingReport(profile, holding, fetchQuote)));
+  const consolidatedHoldings = consolidateHoldingsBySymbol(profile.holdings);
+  const rows = await Promise.all(consolidatedHoldings.map((holding) => buildHoldingReport(profile, holding, fetchQuote)));
   const warnings = unique(rows.map((row) => row.warning).filter((warning): warning is string => Boolean(warning)));
   const totals = calculateTotals(profile.currency, rows);
   const quotedRows = rows.filter((row) => row.currentPrice !== undefined);

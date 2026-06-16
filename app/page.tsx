@@ -23,6 +23,11 @@ import { DailyReportEmailSettings } from "@/components/DailyReportEmailSettings"
 import { SharedHoldingsViewer } from "@/components/SharedHoldingsViewer";
 import { defaultSellTargets } from "@/lib/calculations";
 import {
+  applySaleToHolding,
+  mergeBuyIntoHolding,
+  reconcileHolding
+} from "@/lib/positionMath";
+import {
   analysisCoverage,
   buildAnalysisSession,
   clearAnalysisSession,
@@ -123,7 +128,17 @@ function mergeExtractedRows(existingRows: EnrichedHolding[], extractedRows: Hold
     if (!symbol || isUnsupportedTicker(symbol, region)) return;
     const existing = bySymbol.get(symbol);
     if (existing) {
-      const next = { ...existing, ...row, id: existing.id, symbol };
+      const mergedPosition = mergeBuyIntoHolding(existing, row.shares, row.averageCost);
+      const next = reconcileHolding({
+        ...existing,
+        ...row,
+        id: existing.id,
+        symbol,
+        shares: mergedPosition.shares,
+        averageCost: mergedPosition.averageCost,
+        totalCost: mergedPosition.totalCost,
+        name: existing.name || row.name
+      });
       const index = merged.findIndex((holding) => holding.id === existing.id);
       merged[index] = {
         ...enrichHolding(next),
@@ -766,6 +781,26 @@ export default function Home() {
   const updateHolding = (next: EnrichedHolding) => {
     touchHoldingsEdit();
     setHoldings((items) => items.map((item) => item.id === next.id ? next : item));
+  };
+
+  const handleApplySale = (holding: EnrichedHolding) => {
+    if (!holding.quote) return null;
+    touchHoldingsEdit();
+    const sellPrice = holding.selectedTargetPrice || holding.quote.currentPrice;
+    const result = applySaleToHolding(holding, sellPrice, holding.sellPercent, settings);
+    if (result.closed) {
+      setHoldings((items) => items.filter((item) => item.id !== holding.id));
+    } else if (result.holding) {
+      updateHolding({
+        ...holding,
+        shares: result.holding.shares,
+        averageCost: result.holding.averageCost,
+        totalCost: result.holding.totalCost,
+        sellPercent: 100,
+        analysis: undefined
+      });
+    }
+    return result;
   };
 
   const syncLiveQuotesFromRows = (
@@ -1742,7 +1777,23 @@ export default function Home() {
       return;
     }
     touchHoldingsEdit();
-    setInputRows([...inputRows, holding]);
+    const normalized = reconcileHolding(holding);
+    const symbol = normalized.symbol.trim().toUpperCase();
+    const existingIndex = inputRows.findIndex((row) => row.symbol.trim().toUpperCase() === symbol);
+    if (existingIndex >= 0) {
+      const existing = inputRows[existingIndex];
+      const merged = mergeBuyIntoHolding(existing, normalized.shares, normalized.averageCost);
+      const next = [...inputRows];
+      next[existingIndex] = {
+        ...existing,
+        ...merged,
+        name: existing.name || normalized.name,
+        notes: existing.notes || normalized.notes
+      };
+      setInputRows(next);
+    } else {
+      setInputRows([...inputRows, normalized]);
+    }
     setQuickAddFocusToken((token) => token + 1);
   };
 
@@ -1762,6 +1813,7 @@ export default function Home() {
       settings={displayedSettings}
       currency={displayedCurrency}
       onChange={viewingSharedPortfolio ? undefined : updateHolding}
+      onApplySale={viewingSharedPortfolio ? undefined : handleApplySale}
       readOnly={viewingSharedPortfolio}
     />
   );

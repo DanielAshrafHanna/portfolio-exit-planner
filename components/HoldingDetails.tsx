@@ -1,9 +1,11 @@
 "use client";
 
 import { ExternalLink } from "lucide-react";
+import { useEffect, useState } from "react";
 import type { CurrencyCode, EnrichedHolding, FeeSettings } from "@/lib/types";
 import { calculatePartialSale, calculateProfitLoss, calculateStopLosses, defaultSellTargets, roundMoney } from "@/lib/calculations";
 import { formatMoney } from "@/lib/profileUtils";
+import type { ApplySaleResult } from "@/lib/positionMath";
 import { ProfitLossChart } from "./ProfitLossChart";
 import { StopLossSelector } from "./StopLossSelector";
 
@@ -12,9 +14,18 @@ type Props = {
   settings: FeeSettings;
   currency: CurrencyCode;
   onChange: (holding: EnrichedHolding) => void;
+  onApplySale?: (holding: EnrichedHolding) => ApplySaleResult | null;
 };
 
-export function HoldingDetails({ holding, settings, currency, onChange }: Props) {
+export function HoldingDetails({ holding, settings, currency, onChange, onApplySale }: Props) {
+  const [saleNotice, setSaleNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!saleNotice) return;
+    const timer = window.setTimeout(() => setSaleNotice(null), 6000);
+    return () => window.clearTimeout(timer);
+  }, [saleNotice]);
+
   if (!holding.quote) return <div className="p-4 text-sm text-ink/65">Run analysis to load quote, news, and decision data.</div>;
   const stops = calculateStopLosses(holding, holding.quote);
   const targetPrice = holding.selectedTargetPrice || defaultSellTargets(holding.quote.currentPrice, holding.analysis?.suggestedActionPlan.suggestedTakeProfit)[1].price;
@@ -22,6 +33,17 @@ export function HoldingDetails({ holding, settings, currency, onChange }: Props)
   const partial = calculatePartialSale(holding, targetPrice, holding.sellPercent, settings);
   const minPrice = Math.max(0.01, holding.quote.currentPrice * 0.5);
   const maxPrice = holding.quote.currentPrice * 1.75;
+  const canApplySale = Boolean(onApplySale) && holding.sellPercent > 0 && partial.soldShares > 0;
+
+  const handleApplySale = () => {
+    if (!onApplySale || !canApplySale) return;
+    const result = onApplySale(holding);
+    if (!result) return;
+    const action = result.closed ? "closed" : "updated";
+    setSaleNotice(
+      `Applied sale for ${holding.symbol}: ${formatMoney(result.realizedProfitLoss, currency)} realized P/L (${result.soldShares} shares sold). Position ${action}.`
+    );
+  };
 
   return (
     <div className="grid min-w-0 gap-4 bg-paper p-3 sm:p-4 lg:grid-cols-[minmax(0,1fr)_420px] lg:gap-5">
@@ -98,6 +120,21 @@ export function HoldingDetails({ holding, settings, currency, onChange }: Props)
             <span className="text-ink/55">Remaining value</span><strong>{formatMoney(partial.remainingValue, currency)}</strong>
             <span className="text-ink/55">Target P/L</span><strong>{formatMoney(targetPl.profitLoss, currency)} ({targetPl.profitLossPercent}%)</strong>
           </div>
+          {onApplySale ? (
+            <button
+              className="btn-secondary mt-3 w-full min-h-10 disabled:cursor-not-allowed disabled:opacity-50"
+              type="button"
+              disabled={!canApplySale}
+              onClick={handleApplySale}
+            >
+              Apply sale to portfolio
+            </button>
+          ) : null}
+          {saleNotice ? (
+            <p className="mt-2 rounded-md border border-mint bg-mint/20 px-3 py-2 text-xs text-marine" role="status">
+              {saleNotice}
+            </p>
+          ) : null}
         </div>
         <ProfitLossChart holding={holding} targetPrice={targetPrice} settings={settings} currency={currency} />
       </aside>

@@ -1,4 +1,4 @@
-import { roundMoney } from "./calculations";
+import { calculateDailyProfitLoss, roundMoney } from "./calculations";
 import type { HoldingSnapshotEntry } from "./holdingSnapshots";
 import type { PortfolioReport, PortfolioReportHolding, PortfolioReportProfile } from "./portfolioReport";
 import type { CurrencyCode } from "./types";
@@ -40,13 +40,34 @@ export function profileDailyFromCostBasisDelta(
 }
 
 export function holdingDailyFromCostBasisDelta(
-  current: { profitLoss: number; currentValue: number } & SessionDailyPl,
-  prior?: Pick<HoldingSnapshotEntry, "profit_loss" | "current_value" | "cost_basis_tracked">
+  current: {
+    profitLoss: number;
+    currentValue: number;
+    shares: number;
+    currentPrice?: number;
+    previousClose?: number;
+  } & SessionDailyPl,
+  prior?: Pick<HoldingSnapshotEntry, "profit_loss" | "current_value" | "cost_basis_tracked" | "shares">
 ): DailyPlValues {
   if (!prior || prior.cost_basis_tracked === false) {
     return {
       dailyProfitLoss: current.dailyProfitLoss,
       dailyProfitLossPercent: current.dailyProfitLossPercent
+    };
+  }
+
+  const priorShares = prior.shares;
+  const sharesChanged = priorShares !== undefined && priorShares !== current.shares;
+  if (
+    sharesChanged
+    && current.currentPrice !== undefined
+    && current.previousClose !== undefined
+    && current.previousClose > 0
+  ) {
+    const quoteDaily = calculateDailyProfitLoss(current.shares, current.currentPrice, current.previousClose);
+    return {
+      dailyProfitLoss: quoteDaily.profitLoss,
+      dailyProfitLossPercent: quoteDaily.profitLossPercent
     };
   }
 
@@ -57,6 +78,14 @@ export function holdingDailyFromCostBasisDelta(
     : current.dailyProfitLossPercent;
 
   return { dailyProfitLoss, dailyProfitLossPercent };
+}
+
+function holdingSharesChanged(
+  holding: PortfolioReportHolding,
+  prior?: HoldingSnapshotEntry
+) {
+  if (!prior || prior.shares === undefined) return false;
+  return prior.shares !== holding.shares;
 }
 
 function recalculateProfileTotals(profile: PortfolioReportProfile): PortfolioReportProfile["totals"] {
@@ -138,7 +167,18 @@ function applyDailyToHolding(
   holding: PortfolioReportHolding,
   prior?: HoldingSnapshotEntry
 ): PortfolioReportHolding {
-  const daily = holdingDailyFromCostBasisDelta(holding, prior);
+  const daily = holdingDailyFromCostBasisDelta(
+    {
+      profitLoss: holding.profitLoss,
+      currentValue: holding.currentValue,
+      shares: holding.shares,
+      currentPrice: holding.currentPrice,
+      previousClose: holding.previousClose,
+      dailyProfitLoss: holding.dailyProfitLoss,
+      dailyProfitLossPercent: holding.dailyProfitLossPercent
+    },
+    prior
+  );
   return {
     ...holding,
     dailyProfitLoss: daily.dailyProfitLoss,
@@ -154,15 +194,21 @@ function applyDailyToProfile(
     applyDailyToHolding(holding, prior?.holdingsBySymbol.get(holding.symbol))
   ));
   const totals = recalculateProfileTotals({ ...profile, holdings });
+  const anyShareChange = holdings.some((holding) => (
+    holdingSharesChanged(holding, prior?.holdingsBySymbol.get(holding.symbol))
+  ));
+
+  if (!prior || anyShareChange) {
+    return { ...profile, holdings, totals };
+  }
+
   const profileDaily = profileDailyFromCostBasisDelta(
     {
       profitLoss: totals.profitLoss,
       dailyProfitLoss: totals.dailyProfitLoss,
       dailyProfitLossPercent: totals.dailyProfitLossPercent
     },
-    prior
-      ? { totalProfitLoss: prior.totalProfitLoss, portfolioValue: prior.portfolioValue }
-      : undefined
+    { totalProfitLoss: prior.totalProfitLoss, portfolioValue: prior.portfolioValue }
   );
 
   return {

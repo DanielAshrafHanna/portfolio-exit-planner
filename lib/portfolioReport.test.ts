@@ -114,4 +114,23 @@ describe("buildPortfolioReport", () => {
     expect(report.totalsByCurrency[0].quotedHoldingsCount).toBe(0);
     expect(report.warnings[0]).toContain("No live quote was found for AAPL.");
   });
+
+  it("consolidates duplicate symbols before quoting so totals are not double-counted", async () => {
+    let quoteCalls = 0;
+    const fetchQuote: PortfolioReportQuoteFetcher = async () => {
+      quoteCalls += 1;
+      return { data: quote("AAPL", 120, 118) };
+    };
+    const duplicateRows = [
+      { ...profitableHolding, id: "aapl-1", shares: 10, averageCost: 100, totalCost: 1000 },
+      { ...profitableHolding, id: "aapl-2", shares: 5, averageCost: 130, totalCost: 650 }
+    ];
+    const report = await buildPortfolioReport([profile(duplicateRows)], { now: reportDate, fetchQuote });
+
+    expect(quoteCalls).toBe(1);
+    expect(report.profiles[0].holdings).toHaveLength(1);
+    expect(report.profiles[0].holdings[0].shares).toBe(15);
+    expect(report.profiles[0].totals.currentValue).toBe(1800);
+    expect(report.profiles[0].totals.totalCost).toBe(1650);
+  });
 });

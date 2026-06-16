@@ -25,10 +25,34 @@ describe("profileDailyFromCostBasisDelta", () => {
 });
 
 describe("holdingDailyFromCostBasisDelta", () => {
-  it("reflects average-cost P/L changes after a mid-day buy", () => {
+  it("uses quote-based daily P/L when shares changed to avoid phantom moves on trades", () => {
     const daily = holdingDailyFromCostBasisDelta(
-      { profitLoss: 62, currentValue: 1134, dailyProfitLoss: 14, dailyProfitLossPercent: 2 },
-      { profit_loss: 50, current_value: 800 }
+      {
+        profitLoss: 100,
+        currentValue: 600,
+        shares: 5,
+        currentPrice: 120,
+        previousClose: 118,
+        dailyProfitLoss: 14,
+        dailyProfitLossPercent: 2
+      },
+      { profit_loss: 200, current_value: 1200, shares: 10, cost_basis_tracked: true }
+    );
+    expect(daily).toEqual({ dailyProfitLoss: 10, dailyProfitLossPercent: 1.69 });
+  });
+
+  it("keeps cost-basis delta when shares are unchanged", () => {
+    const daily = holdingDailyFromCostBasisDelta(
+      {
+        profitLoss: 62,
+        currentValue: 1134,
+        shares: 7,
+        currentPrice: 162,
+        previousClose: 160,
+        dailyProfitLoss: 14,
+        dailyProfitLossPercent: 2
+      },
+      { profit_loss: 50, current_value: 800, shares: 7, cost_basis_tracked: true }
     );
     expect(daily).toEqual({ dailyProfitLoss: 12, dailyProfitLossPercent: 1.5 });
   });
@@ -160,7 +184,7 @@ describe("applyCostBasisDailyPlToReport", () => {
       }]
     ]));
 
-    expect(adjusted.profiles[0].totals.dailyProfitLoss).toBe(12);
-    expect(adjusted.profiles[0].holdings[0].dailyProfitLoss).toBe(12);
+    expect(adjusted.profiles[0].totals.dailyProfitLoss).toBe(14);
+    expect(adjusted.profiles[0].holdings[0].dailyProfitLoss).toBe(14);
   });
 });

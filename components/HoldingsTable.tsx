@@ -16,6 +16,7 @@ import {
   HoldingsSortControl,
   HoldingsSortHeader
 } from "./HoldingsSortControl";
+import type { ApplySaleResult } from "@/lib/positionMath";
 import { HoldingDetails } from "./HoldingDetails";
 import { HoldingsFitText } from "./HoldingsFitText";
 import { TargetPlanner } from "./TargetPlanner";
@@ -27,6 +28,7 @@ type Props = {
   settings: FeeSettings;
   currency: CurrencyCode;
   onChange?: (holding: EnrichedHolding) => void;
+  onApplySale?: (holding: EnrichedHolding) => ApplySaleResult | null;
   readOnly?: boolean;
 };
 
@@ -272,7 +274,7 @@ function HoldingsSearchBar({
   );
 }
 
-export function HoldingsTable({ holdings, settings, currency, onChange, readOnly = false }: Props) {
+export function HoldingsTable({ holdings, settings, currency, onChange, onApplySale, readOnly = false }: Props) {
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [searchQuery, setSearchQuery] = useState("");
   const [sortKey, setSortKey] = useState<HoldingSortKey>("symbol");
@@ -306,7 +308,7 @@ export function HoldingsTable({ holdings, settings, currency, onChange, readOnly
         <td colSpan={colSpan} className="p-0">
           <div className="expand-panel-enter">
             <TargetPlanner holding={holding} settings={settings} currency={currency} onChange={onChange} />
-            <HoldingDetails holding={holding} settings={settings} currency={currency} onChange={onChange} />
+            <HoldingDetails holding={holding} settings={settings} currency={currency} onChange={onChange} onApplySale={onApplySale} />
           </div>
         </td>
       </tr>
@@ -367,7 +369,7 @@ export function HoldingsTable({ holdings, settings, currency, onChange, readOnly
         <td colSpan={MOBILE_COLUMN_COUNT} className="p-0">
           <div className="expand-panel-enter">
             <TargetPlanner holding={holding} settings={settings} currency={currency} onChange={onChange} />
-            <HoldingDetails holding={holding} settings={settings} currency={currency} onChange={onChange} />
+            <HoldingDetails holding={holding} settings={settings} currency={currency} onChange={onChange} onApplySale={onApplySale} />
           </div>
         </td>
       </tr>
