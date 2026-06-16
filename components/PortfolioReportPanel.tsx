@@ -7,6 +7,7 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { getDailyPlSessionInfo, regionFromCurrency } from "@/lib/marketSession";
 import { formatMoney } from "@/lib/profileUtils";
 import type { CurrencyCode } from "@/lib/types";
+import { isEmailNoiseWarning } from "@/lib/reportEmailWarnings";
 import type { PortfolioReport, PortfolioReportHolding, PortfolioReportTotals } from "@/lib/portfolioReport";
 
 type Props = {
@@ -59,6 +60,10 @@ export function PortfolioReportPanel({
   }, [selectedProfile]);
   const generatedLabel = report ? formatDateTime(report.generatedAt) : "Not loaded";
   const cloudLabel = cloudUpdatedAt ? formatDateTime(cloudUpdatedAt) : undefined;
+  const visibleWarnings = useMemo(
+    () => [...new Set([...warnings, ...(report?.warnings || [])].filter((warning) => !isEmailNoiseWarning(warning)))],
+    [report?.warnings, warnings]
+  );
 
   return (
     <SectionCard
@@ -162,14 +167,14 @@ export function PortfolioReportPanel({
               </table>
             </div>
 
-            {report.warnings.length || warnings.length ? (
+            {visibleWarnings.length ? (
               <div className="rounded-md border border-amber/35 bg-amber/10 p-3 text-sm text-ink/75">
                 <div className="mb-1 flex items-center gap-2 font-semibold text-ink">
                   <AlertTriangle className="h-4 w-4 text-amber" aria-hidden />
                   Warnings
                 </div>
                 <ul className="space-y-1">
-                  {[...new Set([...warnings, ...report.warnings])].map((warning) => <li key={warning}>{warning}</li>)}
+                  {visibleWarnings.map((warning) => <li key={warning}>{warning}</li>)}
                 </ul>
               </div>
             ) : null}

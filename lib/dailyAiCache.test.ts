@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   applyDailyAiCacheToHoldings,
+  batchItemsFromHoldings,
   buildDailyAiUsageSummary,
   isDailyAiCacheFresh,
   parseDailyAiCache,
+  rehydrateFallbackCacheEntry,
   upsertDailyAiCacheEntry
 } from "./dailyAiCache";
 
@@ -115,5 +117,35 @@ describe("dailyAiCache", () => {
     expect(summary.manualRunsToday).toBe(1);
     expect(summary.geminiCallsToday).toBe(1);
     expect(isDailyAiCacheFresh(updated.entries["us-portfolio"], "US", new Date("2026-06-16T20:00:00.000Z"))).toBe(true);
+  });
+
+  it("rehydrates stale fallback cache text from live quotes", () => {
+    const holding = {
+      id: "1", symbol: "AAPL", name: "Apple", shares: 5, averageCost: 100, totalCost: 500,
+      news: [], selectedStopStyle: "balanced" as const, sellPercent: 100,
+      quote: {
+        symbol: "AAPL", currentPrice: 90, previousClose: 95, dailyChangePercent: -2,
+        ma20: 100, ma50: 105, provider: "test"
+      }
+    };
+    const entry = {
+      profileId: "us-portfolio",
+      profileName: "US Portfolio",
+      marketDate: "2026-06-16",
+      generatedAt: "2026-06-16T20:00:00.000Z",
+      summary: {
+        overview: "old",
+        marketContext: "",
+        holdings: [{ symbol: "AAPL", action: "Keep" as const, note: "No recent news found. This fallback analysis uses only market data and portfolio cost basis." }],
+        watchItems: [],
+        sources: []
+      },
+      analysesBySymbol: {},
+      fallback: true,
+      runType: "automatic" as const
+    };
+    const hydrated = rehydrateFallbackCacheEntry(entry, batchItemsFromHoldings([holding]));
+    expect(hydrated.summary.holdings[0]?.note).toContain("Data-only fallback");
+    expect(hydrated.summary.holdings[0]?.note).not.toContain("No recent news found");
   });
 });

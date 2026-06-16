@@ -276,7 +276,7 @@ function rankByPercent(rows: PortfolioReportHolding[], direction: "asc" | "desc"
 }
 
 function createDefaultFetchQuote(fresh: boolean): PortfolioReportQuoteFetcher {
-  return (symbol, region) => getQuote(symbol, region, { fresh });
+  return (symbol, region) => getQuote(symbol, region, { fresh, preferPublicQuote: true });
 }
 
 export function reportTone(value: number): ReportTone {

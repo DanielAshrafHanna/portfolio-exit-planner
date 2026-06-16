@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { profilesFromCloudPortfolioRow, type CloudPortfolioRow } from "@/lib/cloudPortfolio";
 import { dailyAiCacheFromCloudRow } from "@/lib/dailyAiPersistence";
 import { runAndPersistDailyAiForUser } from "@/lib/dailyAiJobs";
+import { batchItemsFromHoldings, rehydrateFallbackCacheEntry } from "@/lib/dailyAiCache";
 import { buildPortfolioReport } from "@/lib/portfolioReport";
 import { defaultProfiles } from "@/lib/profileUtils";
 import { bearerTokenFromRequest, createSupabaseUserClient } from "@/lib/supabaseServer";
@@ -36,22 +37,25 @@ export async function GET(request: Request) {
     const row = data as CloudPortfolioRow | null;
     const profiles = row ? profilesFromCloudPortfolioRow(row) : defaultProfiles();
     const cache = row ? dailyAiCacheFromCloudRow(row) : { entries: {}, usageByMarketDate: {} };
-    const report = await buildPortfolioReport(profiles, { freshQuotes: false });
-    const summaries = report.profiles.flatMap((profile) => {
+    const summaries = profiles.flatMap((profile) => {
       const entry = cache.entries[profile.id];
       if (!entry) return [];
+      const hydrated = rehydrateFallbackCacheEntry(entry, batchItemsFromHoldings(profile.holdings));
       return [{
         profileId: profile.id,
         profileName: profile.name,
-        summary: entry.summary,
-        fallback: entry.fallback,
+        summary: hydrated.summary,
+        fallback: hydrated.fallback,
         cached: true,
-        generatedAt: entry.generatedAt
+        generatedAt: hydrated.generatedAt,
+        warning: hydrated.fallback
+          ? "AI commentary unavailable — showing data-only analysis from your saved quotes."
+          : undefined
       }];
     });
 
     return NextResponse.json({
-      generatedAt: report.generatedAt,
+      generatedAt: new Date().toISOString(),
       summaries,
       fromCache: summaries.length > 0
     });
@@ -93,10 +97,30 @@ export async function POST(request: Request) {
       runType: "manual",
       force: true
     });
+    const quotaWarning = aiRun.warnings.find((warning) => warning.includes("Gemini daily quota") || warning.includes("429"));
+    const summaries = aiRun.summaries.map((summary) => {
+      const profile = profiles.find((item) => item.id === summary.profileId);
+      if (!profile || !summary.fallback) return summary;
+      const hydrated = rehydrateFallbackCacheEntry({
+        profileId: profile.id,
+        profileName: profile.name,
+        marketDate: new Date().toISOString().slice(0, 10),
+        generatedAt: report.generatedAt,
+        summary: summary.summary,
+        analysesBySymbol: {},
+        fallback: true,
+        runType: "manual"
+      }, batchItemsFromHoldings(profile.holdings));
+      return {
+        ...summary,
+        summary: hydrated.summary,
+        warning: summary.warning || quotaWarning
+      };
+    });
 
     return NextResponse.json({
       generatedAt: report.generatedAt,
-      summaries: aiRun.summaries,
+      summaries,
       fromCache: false,
       warnings: aiRun.warnings
     });

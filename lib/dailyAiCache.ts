@@ -1,6 +1,8 @@
+import { fallbackAnalysis } from "./aiFallback";
 import { marketDateString } from "./marketSession";
+import type { BatchAnalysisInput } from "./validation";
 import type { DailyPortfolioSummary } from "./validation";
-import type { AiAnalysis, EnrichedHolding, MarketRegion, PortfolioProfile } from "./types";
+import type { AiAnalysis, EnrichedHolding, HoldingInput, MarketRegion, PortfolioProfile } from "./types";
 
 export type DailyAiProfileCacheEntry = {
   profileId: string;
@@ -119,9 +121,10 @@ export function applyDailyAiCacheToProfiles(
   return profiles.map((profile) => {
     const entry = cache.entries[profile.id];
     if (!entry || !isDailyAiCacheFresh(entry, profile.region)) return profile;
+    const hydrated = rehydrateFallbackCacheEntry(entry, batchItemsFromHoldings(profile.holdings));
     return {
       ...profile,
-      holdings: applyDailyAiCacheToHoldings(profile.holdings, entry)
+      holdings: applyDailyAiCacheToHoldings(profile.holdings, hydrated)
     };
   });
 }
@@ -193,6 +196,64 @@ export function dailyAiCacheEntryFromUnifiedResult(
 
 export function dailyAiCacheIsEmpty(cache: DailyAiCacheState | undefined) {
   return !cache || (!Object.keys(cache.entries).length && !Object.keys(cache.usageByMarketDate).length);
+}
+
+const STALE_FALLBACK_PHRASE = "No recent news found";
+
+export function isStaleFallbackCacheEntry(entry: DailyAiProfileCacheEntry) {
+  if (!entry.fallback) return false;
+  if (entry.summary.holdings.some((holding) => holding.note.includes(STALE_FALLBACK_PHRASE))) return true;
+  return Object.values(entry.analysesBySymbol).some((analysis) => analysis.summary.includes(STALE_FALLBACK_PHRASE));
+}
+
+export function batchItemsFromHoldings(holdings: EnrichedHolding[]): BatchAnalysisInput[] {
+  return holdings.flatMap((holding) => {
+    if (!holding.quote || holding.quote.currentPrice <= 0) return [];
+    const input: HoldingInput = {
+      id: holding.id,
+      symbol: holding.symbol,
+      name: holding.name,
+      shares: holding.shares,
+      averageCost: holding.averageCost,
+      totalCost: holding.totalCost,
+      notes: holding.notes
+    };
+    return [{ holding: input, quote: holding.quote, news: [] }];
+  });
+}
+
+/** Recompute data-only fallback rows from live quotes so stale cached text is not shown. */
+export function rehydrateFallbackCacheEntry(
+  entry: DailyAiProfileCacheEntry,
+  items: BatchAnalysisInput[]
+): DailyAiProfileCacheEntry {
+  if (!entry.fallback || !items.length) return entry;
+
+  const results = items.map((item) => ({
+    id: item.holding.id,
+    analysis: fallbackAnalysis(item.holding, item.quote, item.news),
+    fallback: true as const
+  }));
+  const analysesBySymbol: Record<string, AiAnalysis> = {};
+  for (const result of results) {
+    analysesBySymbol[result.analysis.symbol.trim().toUpperCase()] = result.analysis;
+  }
+
+  return {
+    ...entry,
+    summary: {
+      overview: `${entry.profileName} AI commentary is unavailable. Rows below use data-only analysis from live quotes — trend, moving averages, and cost basis.`,
+      marketContext: entry.summary.marketContext || "",
+      holdings: results.map((result) => ({
+        symbol: result.analysis.symbol,
+        action: result.analysis.action,
+        note: result.analysis.summary
+      })),
+      watchItems: entry.summary.watchItems,
+      sources: entry.summary.sources
+    },
+    analysesBySymbol
+  };
 }
 
 export { EMPTY_CACHE };

@@ -31,6 +31,7 @@ type HistoryResponse = {
 type AiSummaryResponse = {
   generatedAt?: string;
   summaries?: AiSummaryEntry[];
+  warnings?: string[];
   error?: string;
 };
 
@@ -130,7 +131,11 @@ export function ReportPageContent() {
       });
       const payload = await response.json() as AiSummaryResponse;
       if (!response.ok) throw new Error(payload.error || "AI analysis failed.");
-      setAiSummaries(payload.summaries || []);
+      const quotaWarning = payload.warnings?.find((warning) => warning.includes("Gemini daily quota") || warning.includes("429"));
+      setAiSummaries((payload.summaries || []).map((summary) => ({
+        ...summary,
+        warning: summary.warning || (summary.fallback ? quotaWarning : undefined)
+      })));
     } catch (loadError) {
       setAiError(loadError instanceof Error ? loadError.message : "AI analysis failed.");
     } finally {
@@ -141,6 +146,10 @@ export function ReportPageContent() {
   useEffect(() => {
     void loadReport();
   }, [loadReport]);
+
+  useEffect(() => {
+    void loadAiSummary(false);
+  }, [loadAiSummary]);
 
   useEffect(() => {
     void loadHistory(selectedProfileId);

@@ -57,8 +57,10 @@ import {
 import { activeProfileIdFromCloudPortfolioRow, cloudSettingsFromRow, profilesFromCloudPortfolioRow, type CloudSettings } from "@/lib/cloudPortfolio";
 import {
   applyDailyAiCacheToHoldings,
+  batchItemsFromHoldings,
   buildDailyAiUsageSummary,
   parseDailyAiCache,
+  rehydrateFallbackCacheEntry,
   upsertDailyAiCacheEntry,
   type DailyAiCacheState
 } from "@/lib/dailyAiCache";
@@ -81,6 +83,7 @@ import {
   serializeUserPrefs,
   userPrefsStorageKey
 } from "@/lib/userPrefs";
+import { isEmailNoiseWarning } from "@/lib/reportEmailWarnings";
 import type { AiAnalysis, EnrichedHolding, FeeSettings, HoldingInput, MarketQuote, NewsItem, PortfolioProfile, SharedPortfolioProfile } from "@/lib/types";
 
 const EMPTY_HOLDINGS: EnrichedHolding[] = [];
@@ -96,7 +99,8 @@ function portfolioFieldsChanged(existing: EnrichedHolding | undefined, row: Hold
   return existing.shares !== row.shares || existing.averageCost !== row.averageCost || existing.totalCost !== row.totalCost;
 }
 
-function normalizeWarning(warning: string) {
+function normalizeWarning(warning: string): string | null {
+  if (isEmailNoiseWarning(warning)) return null;
   if (warning.includes("GEMINI_API_KEY")) {
     return "GEMINI_API_KEY is missing. AI/OCR features are using deterministic fallback analysis until the secret is added.";
   }
@@ -110,6 +114,7 @@ function normalizeWarning(warning: string) {
 }
 
 function warningForAudience(warning: string, isAdmin: boolean) {
+  if (isEmailNoiseWarning(warning)) return null;
   if (isAdmin) return warning;
   if (warning.includes("Supabase SQL") || warning.includes("schema cache") || warning.includes("display_name") || warning.includes("share_holdings")) {
     return null;
@@ -721,13 +726,14 @@ export default function Home() {
   const aiBrief = useMemo<AiBrief | null>(() => {
     const entry = aiUsageSummary.profileEntry;
     if (!entry) return null;
+    const hydrated = rehydrateFallbackCacheEntry(entry, batchItemsFromHoldings(holdingsWithLiveQuotes));
     return {
-      summary: entry.summary,
-      generatedAt: entry.generatedAt,
-      fallback: entry.fallback,
-      runType: entry.runType
+      summary: hydrated.summary,
+      generatedAt: hydrated.generatedAt,
+      fallback: hydrated.fallback,
+      runType: hydrated.runType
     };
-  }, [aiUsageSummary.profileEntry]);
+  }, [aiUsageSummary.profileEntry, holdingsWithLiveQuotes]);
   const portfolioAnalysisCoverage = useMemo(() => analysisCoverage(holdingsWithLiveQuotes), [holdingsWithLiveQuotes]);
 
   useEffect(() => {
@@ -935,7 +941,7 @@ export default function Home() {
       if (options.showWarnings && isLatestRequest()) {
         setWarnings((existing) => [
           ...existing,
-          ...(marketData.rows || []).flatMap((row) => row.warnings || []).map(normalizeWarning)
+          ...(marketData.rows || []).flatMap((row) => row.warnings || []).map(normalizeWarning).filter((warning): warning is string => Boolean(warning))
         ]);
       }
       syncSharedLiveQuotesFromRows(marketData.rows || [], sharedRegion, isLatestRequest);
@@ -976,7 +982,7 @@ export default function Home() {
         return { ...holding, quote, news: row?.news || holding.news || [], selectedTargetPrice };
       });
       if (options.showWarnings && isLatestRequest()) {
-        setWarnings((existing) => [...existing, ...(marketData.rows || []).flatMap((row) => row.warnings || []).map(normalizeWarning)]);
+        setWarnings((existing) => [...existing, ...(marketData.rows || []).flatMap((row) => row.warnings || []).map(normalizeWarning).filter((warning): warning is string => Boolean(warning))]);
       }
       if (!isLatestRequest()) return undefined;
       setHoldings((currentItems) => currentItems.map((holding) => {
@@ -1108,7 +1114,8 @@ export default function Home() {
     const cachedEntry = cacheEntryForProfile(dailyAiCacheRef.current, profileIdAtStart, region);
 
     if (!options?.force && !options?.resume && cachedEntry) {
-      setHoldings((currentItems) => applyDailyAiCacheToHoldings(currentItems, cachedEntry));
+      const hydrated = rehydrateFallbackCacheEntry(cachedEntry, batchItemsFromHoldings(holdings));
+      setHoldings((currentItems) => applyDailyAiCacheToHoldings(currentItems, hydrated));
       setWarnings([
         `Applied today's cached AI analysis (${cachedEntry.runType} run at ${new Date(cachedEntry.generatedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}). Use Refresh AI for a new manual Gemini call.`
       ]);
@@ -1226,7 +1233,7 @@ export default function Home() {
       }
 
       if (!isLatestAnalysis()) return;
-      const normalizedWarnings = warningsToAdd.filter(Boolean).map(normalizeWarning);
+      const normalizedWarnings = warningsToAdd.filter(Boolean).map(normalizeWarning).filter((warning): warning is string => Boolean(warning));
       if (normalizedWarnings.length) setWarnings((existing) => [...existing, ...normalizedWarnings]);
       clearAnalysisSession(userId);
       setAnalysisSession(null);

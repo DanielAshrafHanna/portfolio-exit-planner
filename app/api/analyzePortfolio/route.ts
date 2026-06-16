@@ -8,6 +8,7 @@ import {
 } from "@/lib/dailyAiPersistence";
 import {
   dailyAiCacheEntryFromUnifiedResult,
+  rehydrateFallbackCacheEntry,
   upsertDailyAiCacheEntry
 } from "@/lib/dailyAiCache";
 import { formatGeminiError, isGeminiConfigured } from "@/lib/geminiClient";
@@ -56,8 +57,10 @@ export async function POST(request: Request) {
   const cacheEntry = profileId ? cacheEntryForProfile(cache, profileId, region) : undefined;
 
   if (!force && cacheEntry) {
+    const hydrated = rehydrateFallbackCacheEntry(cacheEntry, items);
     return NextResponse.json({
-      results: batchResultsFromCacheEntry(cacheEntry, items.map((item) => item.holding)),
+      results: batchResultsFromCacheEntry(hydrated, items.map((item) => item.holding)),
+      summary: hydrated.summary,
       cached: true,
       usage: {
         marketDate: cacheEntry.marketDate,
