@@ -1,0 +1,848 @@
+You are running my scheduled Daily AI Portfolio Report now.
+
+Generate the actual report. Do not rewrite this prompt. Do not create another task.
+
+Analyze only my real latest portfolio data from Supabase / portfolio-exit-planner for this profile email:
+danielhanna0001@gmail.com
+
+First verify that the latest holdings snapshot belongs to danielhanna0001@gmail.com.
+
+If ownership cannot be verified, stop and say exactly:
+"The report cannot be completed accurately because I could not verify that the holdings belong to danielhanna0001@gmail.com. Please provide a holdings export or reconnect the correct portfolio profile."
+
+If the latest holdings snapshot is missing, stop and say exactly:
+"The report cannot be completed accurately because the latest holdings snapshot for danielhanna0001@gmail.com is unavailable. Please provide a holdings export or reconnect the portfolio data source."
+
+Do not guess holdings. Do not analyze demo portfolios, sample portfolios, stale cached data, test data, unassigned holdings, another user profile, or any email address other than danielhanna0001@gmail.com.
+
+Use today's actual date. This report is for decision support only, not financial advice or automatic trading.
+
+If the US market was closed today, produce the report using the most recent available trading session. Clearly label it as "last available market session" and do not invent daily moves.
+
+─────────────────────────────────────────────
+DATA SOURCE RULES
+─────────────────────────────────────────────
+
+Use Supabase / my portfolio app as the source of truth for:
+- which holdings belong to danielhanna0001@gmail.com
+- ticker, market, quantity, average cost
+- app current price, app market value
+- unrealized P/L, daily P/L if available
+- portfolio weight
+- saved notes or exit plans
+- historical portfolio snapshots if available
+
+Use reliable current public sources for:
+- latest market price and timestamp
+- price movement (1D, 3D, 5D, 20D)
+- RSI-14, MACD, moving averages, volume
+- benchmarks, news, earnings, catalysts
+
+Reputable sources: Yahoo Finance, TradingView, Nasdaq, MarketWatch, CNBC, Investing.com, StockAnalysis, Barchart, Alpha Vantage, Polygon, Financial Modeling Prep, official exchange data, ETF issuer pages, or similar.
+
+For Egypt holdings, use the correct EGX ticker. Search by company name plus "EGX" when needed.
+For Egypt holdings, benchmark against EGX30 unless a valid liquid EGX30 ETF is verified.
+
+If live market data differs materially from the app snapshot:
+- use app data for portfolio accounting
+- use live market data for technical and market analysis
+- clearly flag the mismatch
+
+Treat US and Egypt holdings separately. Never mix USD and EGP totals without clear currency labels.
+
+─────────────────────────────────────────────
+FOR EVERY HOLDING, COLLECT IF AVAILABLE
+─────────────────────────────────────────────
+
+- latest price with as-of timestamp
+- 1-day price move
+- 3-trading-day price move
+- 5-trading-day price move
+- 20-trading-day price move
+- daily volume vs 20-day average volume
+- RSI-14
+- MACD signal
+- 20-day / 50-day / 200-day moving averages
+- price vs each moving average
+- recent material news (last 7 days only — see freshness rules)
+- upcoming earnings date or recent earnings result
+- major upcoming catalyst if relevant
+- benchmark comparison
+- losing streak: flag if price has declined for 3 or more consecutive available trading sessions
+
+─────────────────────────────────────────────
+DATA FRESHNESS AND TIMESTAMP RULES
+─────────────────────────────────────────────
+
+For every piece of data you retrieve, check and record its timestamp or publication date before using it. Do not rely on data you cannot timestamp.
+
+PRICE DATA
+- Use only prices from today's or the most recent available trading session.
+- Every price displayed in the report must be labeled with its as-of date and time.
+- If a price source does not show a timestamp, try a different source.
+- If no timestamped price is available, write "Price unavailable — no timestamp found." Do not estimate or carry forward a stale price.
+
+TECHNICAL INDICATOR DATA
+- RSI, MACD, and moving averages must be calculated using prices through the most recent available close.
+- If a technical data page shows a "last updated" date more than 2 trading days old, do not use it. Note it as stale and try a fresher source.
+- For manually calculated RSI, state the date of the most recent close used in the calculation.
+- If a source shows a technical value with no date, treat it as unverified and mark the Data Quality badge as Partial.
+
+NEWS DATA
+- Every news item must have a visible publication date before you use it.
+- Do not cite any article older than 7 calendar days as "recent news."
+- If an article has no publication date visible, do not use it.
+- If only articles older than 7 days can be found for a holding, write: "No material news found in the last 7 days" — do not pad with old content.
+- Analyst rating changes and price target adjustments are not news events. Label them clearly as "Analyst rating change" or "Price target update," never as news.
+- If a story appears on only one source, flag it as "Single source — unconfirmed."
+
+EARNINGS DATES
+- Before listing any upcoming earnings, verify the date is still in the future.
+- If an earnings date has already passed, do not list it as "upcoming." Instead, report the actual results if available, or write: "Earnings date passed — results not yet confirmed."
+
+WHEN FRESHNESS IS UNCERTAIN
+- Flag the cell with "⚠ Freshness unverified."
+- Set the Data Quality badge to Partial or Missing.
+- Do not assign a Technical Read or change an action label based on data you cannot timestamp.
+
+─────────────────────────────────────────────
+RSI AND TECHNICAL DATA RULES
+─────────────────────────────────────────────
+
+Do not give up on RSI-14 too quickly.
+
+Try to source it first from TradingView, StockAnalysis, Barchart, Investing.com, or MarketWatch.
+
+If not directly available, fetch reliable historical daily close prices and calculate manually:
+- use at least 15 recent daily closes, preferably 30–60 trading days
+- calculate average gains and losses over 14 periods
+- compute RSI using the standard formula
+- label it "Calculated from historical closes" and cite the data source and date of most recent close used
+
+If reliable historical closes are unavailable, write "Not available."
+When technical data is missing, explain briefly what was attempted. Never leave RSI blank.
+
+RSI INTERPRETATION — READ IN CONTEXT, NOT IN ISOLATION
+
+Do not read RSI as an absolute number. Read it in context of the trend.
+
+In a confirmed uptrend:
+- RSI can stay above 70 for weeks — this is normal and is not a sell signal on its own.
+- Only flag RSI above 70 as a concern if it is accompanied by bearish divergence, high-volume selling, or a major negative catalyst.
+
+In a confirmed downtrend:
+- RSI can stay between 30 and 50 for an extended period. A reading of 50 is not neutral — it may indicate the stock is relatively weak.
+- RSI below 30 during a sharp flush may lead to a quick bounce, but RSI below 30 in a sustained downtrend can keep falling. Do not call it a buy signal on its own.
+
+RSI divergence — flag explicitly when present:
+- Bearish divergence: price makes a new high but RSI makes a lower high → flag as "⚠ Bearish RSI divergence" in the Caution column.
+- Bullish divergence: price makes a new low but RSI makes a higher low → flag as "Bullish RSI divergence — potential reversal signal."
+- Divergence is more actionable than absolute RSI level.
+
+MACD INTERPRETATION
+
+Always describe MACD in specific terms — never just say "positive" or "negative":
+- MACD line above signal line → "Above signal line — short-term momentum positive"
+- MACD line below signal line → "Below signal line — short-term momentum negative"
+- MACD histogram growing in positive territory → "Strengthening bullish momentum"
+- MACD histogram shrinking from a positive peak → "Momentum fading — watch"
+- MACD histogram growing more negative → "Strengthening bearish momentum"
+- Fresh bullish crossover (last 1–3 sessions) near the zero line → stronger signal
+- Old crossover far above or below zero → weaker signal
+Always state whether the crossover is recent or old.
+
+VOLUME INTERPRETATION
+
+Always compare volume to the 20-day average and describe it in these specific terms:
+- Above 150% of 20-day average on a green session: "High-volume buying — confirms move"
+- Above 150% on a red session: "High-volume selling — confirms weakness"
+- Between 70% and 150%: "Average volume — normal session"
+- Below 70%: "Low-volume move — low conviction, less reliable"
+A breakout above a key level on low volume must be flagged: "Low-conviction breakout — needs confirmation."
+
+CONFLUENCE REQUIREMENT FOR TECHNICAL READ
+
+Do not assign "Bullish" or "Bearish" based on a single indicator.
+The Technical Read label must be supported by at least two independent signals pointing in the same direction.
+If only one indicator is available or signals conflict, use "Unclear" and explain the conflict in the Caution column.
+
+Examples:
+- RSI 66 + price above 50D MA + MACD above signal → "Improving" or "Bullish"
+- RSI 66 + price below 50D MA + MACD below signal → conflict → "Unclear — mixed signals"
+- RSI 27 + price below all MAs + MACD below signal → "Bearish"
+- Only one indicator available → "Unclear — insufficient data for confluence"
+
+─────────────────────────────────────────────
+ANALYSIS RULES
+─────────────────────────────────────────────
+
+MARKET CONTEXT — CHECK BENCHMARKS FIRST
+
+Before analyzing any individual holding, retrieve the performance of the relevant benchmark for the same session:
+- For US holdings: check SPY (S&P 500 ETF) and QQQ (Nasdaq 100 ETF) for the day.
+- For Egypt holdings: check EGX30 for the most recent available session.
+
+Use benchmark performance to contextualize every single-stock or ETF move:
+- If SPY is down 1.5% and a holding is down 1.4%, that is a market-driven move — note it as "In line with market" and do not treat it as stock-specific weakness.
+- If SPY is flat and a holding is down 3%, that is stock-specific — investigate the cause.
+- If a holding is significantly outperforming its benchmark on a down day, flag it as a relative strength signal.
+
+In the Daily Brief, explicitly state whether today's portfolio movement was primarily market-wide, sector-driven, or stock-specific. Never describe a stock's move without first establishing what the broader market did that session.
+
+GENERAL ANALYSIS
+
+Do not overreact to one-day moves unless supported by news, volume, earnings, technicals, or a major market event.
+
+Treat RSI, MACD, moving averages, and volume as supporting signals only, not predictions.
+News, earnings, and major catalysts can override technical signals.
+Portfolio weight matters. A small speculative holding may matter less than a large average-quality one.
+
+Never issue "buy now" or "sell now" commands.
+
+Use only these action labels: Keep | Add candidate | Watch | Do not add | Consider trimming | Needs manual review
+Use only these risk levels: Low | Medium | High | Speculative
+Classify catalyst setup as: Positive catalyst | Negative catalyst | Mixed catalyst | No clear catalyst | Data insufficient
+
+Flag:
+- any holding above 15% of portfolio
+- sector concentration
+- ETF overlap or duplicate exposure
+- speculative holdings
+- holdings too small to matter
+- large unrealized losses or gains
+- upcoming earnings within 14 calendar days
+- high-risk news even if price has not moved yet
+- holdings losing money for 3 or more consecutive available trading sessions
+- missing or uncertain data
+- app snapshot vs live market data mismatch
+
+─────────────────────────────────────────────
+OUTPUT FORMAT
+─────────────────────────────────────────────
+
+Return one clean, self-contained single-page HTML dashboard.
+Start with <!DOCTYPE html> and include a complete <head> with <meta charset="UTF-8">, viewport meta, and <title>.
+Do not create a separate Markdown report first.
+Do not use external libraries, CDN links, or external fonts.
+Use only the CSS inside a <style> tag and minimal inline JavaScript for table sorting.
+
+MANDATORY CSS FOUNDATION
+Copy the following CSS exactly into the <style> tag. You may add rules after it, but do not remove or override these base styles.
+
+:root {
+  --bg: #f0f2f5;
+  --surface: #ffffff;
+  --surface-alt: #f8fafc;
+  --border: #e2e8f0;
+  --border-strong: #cbd5e1;
+  --text-primary: #1a202c;
+  --text-secondary: #4a5568;
+  --text-muted: #718096;
+  --positive: #16a34a;
+  --positive-light: #bbf7d0;
+  --positive-bg: #f0fdf4;
+  --negative: #dc2626;
+  --negative-light: #fecaca;
+  --negative-bg: #fef2f2;
+  --warning: #d97706;
+  --warning-light: #fde68a;
+  --warning-bg: #fffbeb;
+  --info: #2563eb;
+  --info-light: #bfdbfe;
+  --info-bg: #eff6ff;
+  --gray: #6b7280;
+  --gray-light: #e5e7eb;
+  --gray-bg: #f9fafb;
+  --radius-sm: 4px;
+  --radius: 8px;
+  --radius-lg: 12px;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+  --shadow: 0 1px 3px rgba(0,0,0,0.1), 0 1px 2px rgba(0,0,0,0.06);
+  --shadow-md: 0 4px 6px rgba(0,0,0,0.07), 0 2px 4px rgba(0,0,0,0.06);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  background: var(--bg);
+  color: var(--text-primary);
+  padding: 16px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.page-grid { display: grid; gap: 20px; }
+.card-grid-sm { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
+.card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.three-col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+@media (max-width: 900px) { .three-col { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 640px) {
+  body { padding: 8px; }
+  .two-col, .three-col { grid-template-columns: 1fr; }
+  .card-grid-sm { grid-template-columns: repeat(2, 1fr); }
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  box-shadow: var(--shadow-sm);
+}
+.card.positive { border-left: 4px solid var(--positive); }
+.card.negative { border-left: 4px solid var(--negative); }
+.card.warning  { border-left: 4px solid var(--warning); }
+.card.info     { border-left: 4px solid var(--info); }
+.card.missing  { border-left: 4px solid var(--gray); background: var(--gray-bg); }
+.card-label {
+  font-size: 10px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--text-muted); margin-bottom: 5px;
+}
+.card-value { font-size: 22px; font-weight: 800; line-height: 1.2; }
+.card-sub { font-size: 12px; color: var(--text-secondary); margin-top: 3px; }
+
+section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  box-shadow: var(--shadow);
+}
+.section-header {
+  display: flex; align-items: center; gap: 8px;
+  padding-bottom: 12px; margin-bottom: 16px;
+  border-bottom: 2px solid var(--border);
+}
+.section-title { font-size: 15px; font-weight: 700; }
+.section-icon { font-size: 17px; }
+
+.table-wrap { overflow-x: auto; border-radius: var(--radius); border: 1px solid var(--border); }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+thead th {
+  background: var(--surface-alt); padding: 9px 12px;
+  text-align: left; font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.04em;
+  color: var(--text-muted); border-bottom: 1px solid var(--border-strong);
+  position: sticky; top: 0; z-index: 5;
+}
+tbody td { padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+tbody tr:last-child td { border-bottom: none; }
+tbody tr:hover { background: var(--surface-alt); }
+
+.badge {
+  display: inline-flex; align-items: center;
+  padding: 2px 8px; border-radius: 999px;
+  font-size: 11px; font-weight: 700;
+  letter-spacing: 0.02em; white-space: nowrap;
+}
+.badge-green  { background: var(--positive-light); color: #14532d; }
+.badge-red    { background: var(--negative-light); color: #7f1d1d; }
+.badge-orange { background: #fed7aa; color: #9a3412; }
+.badge-yellow { background: var(--warning-light); color: #78350f; }
+.badge-blue   { background: var(--info-light); color: #1e3a8a; }
+.badge-gray   { background: var(--gray-light); color: #374151; }
+
+.alert {
+  display: flex; gap: 12px; align-items: flex-start;
+  padding: 12px 14px; border-radius: var(--radius);
+  border-left: 4px solid; margin-bottom: 8px;
+}
+.alert-high   { background: var(--negative-bg); border-color: var(--negative); }
+.alert-medium { background: var(--warning-bg);  border-color: var(--warning); }
+.alert-low    { background: var(--info-bg);     border-color: var(--info); }
+.alert-icon   { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+.alert-title  { font-weight: 700; font-size: 13px; margin-bottom: 2px; }
+.alert-detail { font-size: 12px; color: var(--text-secondary); }
+.alert-action { font-size: 12px; font-weight: 600; margin-top: 4px; }
+
+.streak-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 8px; border-radius: 999px;
+  background: var(--negative-bg); border: 1px solid var(--negative-light);
+  font-size: 11px; font-weight: 800; color: var(--negative);
+}
+
+.brief-box {
+  background: var(--info-bg);
+  border: 1px solid var(--info-light);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  font-size: 14px;
+}
+.brief-part { margin-bottom: 12px; }
+.brief-part:last-child { margin-bottom: 0; }
+.brief-part-label {
+  font-size: 10px; font-weight: 800;
+  text-transform: uppercase; letter-spacing: 0.07em;
+  color: var(--info); margin-bottom: 4px;
+}
+.brief-part-text { line-height: 1.7; color: var(--text-primary); }
+
+.opportunity-card {
+  background: var(--surface);
+  border: 2px solid var(--info-light);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+.opportunity-eyebrow {
+  font-size: 10px; font-weight: 800;
+  text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--info); margin-bottom: 6px;
+}
+.opportunity-ticker {
+  font-size: 24px; font-weight: 900;
+  color: var(--text-primary); line-height: 1;
+}
+.opportunity-name { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
+.opportunity-reason { font-size: 13px; margin-top: 8px; line-height: 1.6; }
+.opportunity-note { font-size: 11px; color: var(--text-muted); font-style: italic; margin-top: 8px; }
+
+.need-to-know-list { list-style: none; }
+.need-to-know-list li {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 7px 0; border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.need-to-know-list li:last-child { border-bottom: none; }
+.ntk-icon { font-size: 14px; flex-shrink: 0; margin-top: 2px; }
+.ntk-label { font-weight: 700; color: var(--text-secondary); min-width: 110px; flex-shrink: 0; }
+.ntk-value { flex: 1; }
+
+.bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.bar-label { font-size: 12px; min-width: 60px; }
+.bar-track { flex: 1; height: 8px; background: var(--gray-light); border-radius: 4px; overflow: hidden; }
+.bar-fill  { height: 100%; border-radius: 4px; }
+.bar-pos { background: var(--positive); }
+.bar-neg { background: var(--negative); }
+.bar-warn { background: var(--warning); }
+.bar-info { background: var(--info); }
+.bar-pct { font-size: 12px; font-weight: 600; min-width: 48px; text-align: right; }
+
+.positive { color: var(--positive); font-weight: 600; }
+.negative { color: var(--negative); font-weight: 600; }
+.warning  { color: var(--warning);  font-weight: 600; }
+.muted    { color: var(--text-muted); }
+.small    { font-size: 12px; }
+.mono     { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; }
+
+details {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+summary {
+  padding: 11px 16px; font-weight: 600; font-size: 13px;
+  cursor: pointer; background: var(--surface-alt);
+  list-style: none; display: flex;
+  justify-content: space-between; align-items: center;
+}
+summary::-webkit-details-marker { display: none; }
+details[open] summary { border-bottom: 1px solid var(--border); }
+details > div { padding: 16px; }
+
+header {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); padding: 20px 24px;
+  box-shadow: var(--shadow-md);
+}
+.header-top {
+  display: flex; justify-content: space-between;
+  align-items: flex-start; flex-wrap: wrap; gap: 12px;
+}
+.report-title { font-size: 20px; font-weight: 900; }
+.report-sub { font-size: 13px; color: var(--text-secondary); margin-top: 3px; }
+.header-right { text-align: right; }
+.status-pill {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 4px 12px; border-radius: 999px;
+  font-size: 12px; font-weight: 700;
+}
+.pill-open   { background: var(--positive-bg); color: var(--positive); }
+.pill-closed { background: var(--gray-light); color: var(--gray); }
+.pill-stale  { background: var(--warning-bg); color: var(--warning); }
+.warning-banner {
+  background: var(--warning-bg); border: 1px solid var(--warning-light);
+  border-radius: var(--radius); padding: 10px 14px;
+  font-size: 13px; color: #92400e; margin-top: 14px;
+}
+
+.sort-bar { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.sort-btn {
+  padding: 5px 11px; font-size: 12px; font-weight: 500;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--surface); cursor: pointer; color: var(--text-secondary);
+}
+.sort-btn:hover, .sort-btn.active { background: var(--info); color: #fff; border-color: var(--info); }
+
+footer {
+  text-align: center; font-size: 12px;
+  color: var(--text-muted); padding: 20px;
+  border-top: 1px solid var(--border); margin-top: 20px;
+}
+
+─────────────────────────────────────────────
+HTML DASHBOARD SECTIONS
+─────────────────────────────────────────────
+
+1. HEADER
+
+Use <header>.
+
+Inside .header-top:
+Left:
+- .report-title: "Daily Portfolio Report"
+- .report-sub: report date · danielhanna0001@gmail.com
+
+Right (.header-right):
+- .status-pill with class pill-open / pill-closed / pill-stale showing market status
+- data snapshot date and time
+- any major data limitations in one sentence
+
+Show a .warning-banner below .header-top if any of these apply:
+- app snapshot is not from today
+- technical data is materially incomplete
+- live data and app snapshot materially differ
+- market was closed (label the session clearly)
+- previous report comparison unavailable
+
+
+2. QUICK SUMMARY — DAILY BRIEF AND NEED TO KNOW FIRST
+
+This is the most important section. Place it immediately after the header.
+Use <section> with a .section-header titled "Quick Summary".
+
+Render this section as three visual rows:
+
+ROW A — AT-A-GLANCE NUMBERS
+Use .card-grid-sm. One .card per stat:
+- US Portfolio Value (card.positive or card.negative based on daily P/L)
+- US Daily P/L
+- Egypt Portfolio Value
+- Egypt Daily P/L
+- Total Holdings Count
+- Holdings Needing Attention (count — card.warning if greater than 0)
+
+Each card: .card-label and .card-value. Show currency symbol with every number.
+Color .card-value with class positive or negative as appropriate.
+
+ROW B — TWO COLUMNS
+Use .two-col.
+
+Left column — "Need to Know First":
+Render <ul class="need-to-know-list"> with 6–10 items.
+Each <li>:
+- .ntk-icon (📈 gains, 📉 losses, 🔴 risk, 🟡 watch, 📰 news, 📅 event, ⚠️ data issue)
+- .ntk-label (bold: "Biggest Mover", "Biggest Risk", "Watch Today", "Losing Streak", "Upcoming Event", "Data Gap", "Market Today")
+- .ntk-value (1–2 sentences max)
+
+Required items:
+- US market benchmark performance today (SPY / QQQ % move)
+- Egypt benchmark performance today (EGX30 % move) if Egypt holdings exist
+- Total portfolio daily P/L by currency
+- Biggest positive mover (ticker + % move)
+- Biggest negative mover (ticker + % move)
+- Losing streak: any holding down 3+ consecutive sessions — use .streak-badge "🔴 X days down"; if none write "None currently"
+- Stock most helped by recent positive news or catalyst
+- Stock most at risk from recent negative news or weak momentum
+- Most important holding to watch today and why
+- Any major event in the next 14 days
+- Any missing or stale data affecting confidence
+
+Right column — "Today's Brief":
+Render one .brief-box.
+Inside it, render four .brief-part blocks. Each has a .brief-part-label and .brief-part-text.
+Total word count across all four parts: 80–140 words.
+Always use all four parts. Do not merge them into a freeform paragraph.
+
+Part 1 — label "MOVES & TRENDS"
+2–3 sentences: what moved in the last session, by how much, and whether it was
+market-wide (compare to SPY/QQQ/EGX30), sector-driven, or stock-specific.
+Name any holding that has been losing money for 3 or more consecutive sessions.
+
+Part 2 — label "COMING UP"
+1–2 sentences: name any earnings, economic events, or news catalysts expected in the
+next 3–7 days that could affect one or more holdings. If nothing material is expected,
+say so in one sentence.
+
+Part 3 — label "GUIDANCE"
+1–2 sentences: name the one holding that deserves the most attention right now and
+explain whether to hold tight, watch for a specific trigger, or be cautious.
+If any action label should change from the previous session, state it here.
+
+Part 4 — label "TODAY'S IDEA"
+1 sentence: name the watchlist idea shown in Row C and give the single most important
+reason it has near-term potential. End with: "See full details in the Opportunity card below."
+
+ROW C — NEW OPPORTUNITY
+One full-width .opportunity-card.
+
+Use .two-col inside it:
+
+Left:
+- .opportunity-eyebrow: "Today's Watchlist Idea"
+- .opportunity-ticker: the ticker symbol
+- .opportunity-name: company or fund full name
+- .opportunity-reason: 2–4 sentences with the specific reason for near-term potential.
+  Must cite one of: improving earnings outlook, confirmed positive news, major catalyst,
+  sector strength, breakout setup with volume confirmation, valuation reset, or
+  verified institutional interest. Do not recommend a stock only because it recently rose.
+- .opportunity-note: "Watchlist idea only — not a buy recommendation."
+
+Right: small table (no outer border needed):
+Row 1: Sector
+Row 2: Catalyst
+Row 3: Technical Setup
+Row 4: Risk Level — badge (badge-red High, badge-orange Medium, badge-yellow Low)
+Row 5: Watch Horizon (e.g. "1–2 weeks", "earnings play", "sector rotation")
+Row 6: What Would Invalidate It
+
+If no suitable opportunity can be identified with real current data today, write:
+"No high-confidence watchlist idea today — avoiding a forced recommendation."
+
+
+3. NEEDS ATTENTION FIRST
+
+Use <section>. Only include genuine alerts.
+
+Sort by severity:
+1. Account or data integrity issue
+2. Market closed or stale data
+3. Holding above 15% weight
+4. Large daily loss contribution
+5. High-risk news or catalyst
+6. Large unrealized loss
+7. Missing technical or price data
+8. Minor watch item
+
+Each .alert:
+- class: alert alert-high / alert alert-medium / alert alert-low
+- .alert-icon (emoji)
+- .alert-title: "TICKER — Issue"
+- .alert-detail: why it matters (1–2 sentences)
+- .alert-action: "Suggested action: [action label]"
+
+Include alerts for: holdings above 15% weight, high-risk speculative holdings with material news, large daily P/L losses, large unrealized losses, upcoming earnings within 14 days, material negative news, missing data on a meaningful position, app vs live data mismatch, holdings labeled Consider trimming / Do not add / Needs manual review.
+
+If no alerts: one .alert.alert-low: "No high-severity alerts today."
+
+
+4. SUMMARY CARDS
+
+Use .card-grid. 14 cards total:
+US Portfolio Value | US Daily P/L | Egypt Portfolio Value | Egypt Daily P/L |
+Biggest Positive Mover | Biggest Negative Mover | Largest Holding (ticker + weight%) |
+Biggest Risk | Most Important Upcoming Catalyst | Holdings Needing Attention (count) |
+Today's Watchlist Idea (ticker) | Worst Losing Streak (TICKER — X days down) |
+Strongest 5-Day Momentum | Weakest 5-Day Momentum
+
+Each: .card-label, .card-value, .card-sub.
+Apply card.positive / card.negative / card.warning / card.info / card.missing as appropriate.
+Color .card-value with positive or negative where applicable.
+Unavailable data: class="card missing" with value "N/A".
+
+
+5. TREND AND PROGRESS CHARTS
+
+Use .bar-row elements for all charts.
+
+A. Portfolio Value Trend
+If historical snapshots exist, show 7-day and 30-day value trends.
+Separate USD and EGP. Use .bar-pos or .bar-neg.
+If unavailable: "Historical portfolio trend data is unavailable — charts cannot be generated reliably. Do not invent portfolio history."
+
+B. Daily P/L Trend
+Show P/L for the last 7 available sessions using .bar-row if data exists.
+
+C. Winners vs Losers
+Show 1D, 5D, and 20D performance per holding using .bar-row.
+Sort by 5D (or 1D if unavailable). Positive bars .bar-pos, negative bars .bar-neg.
+
+D. Losing Streak Indicator
+Table inside .table-wrap:
+Ticker | Streak Days | Total Decline During Streak | Possible Reason | Action Label
+Streak days: use .streak-badge ("🔴 X days").
+If no holdings with 3+ day streak: "No holdings with a 3+ day losing streak in the current data."
+
+
+6. PORTFOLIO ALLOCATION
+
+Separate US and Egypt with clear headers.
+
+For each portfolio:
+- .bar-row per holding sorted by weight largest to smallest
+- Bar width proportional to weight % (max 100%)
+- Holdings above 15%: .badge-orange "⚠ >15%"
+- Short bullet list below each chart: largest position, concentration risks, ETF vs single-stock balance, speculative exposure, tiny positions
+
+
+7. PRIORITY-SORTED HOLDINGS TABLE
+
+One main table inside .table-wrap.
+
+Sort order by action group:
+1. Needs manual review
+2. Consider trimming
+3. Do not add
+4. Watch
+5. Keep
+6. Add candidate
+
+Within each group: highest weight → largest daily P/L loss → largest unrealized loss → highest risk → missing data.
+
+Columns:
+Ticker | Market | Weight | Value | Daily P/L | 1D Move | 5D Move | Unrealized P/L | Risk | Catalyst | Action | Data | Main Reason
+
+Badges:
+- Risk: badge-red (High/Speculative), badge-yellow (Medium), badge-gray (Low)
+- Action: badge-red (Consider trimming/Do not add), badge-yellow (Watch/Needs review), badge-green (Keep/Add candidate)
+- Data Quality: badge-green (Complete), badge-yellow (Partial), badge-red (Missing)
+
+Highlight any row where the holding has a 3+ day losing streak: style="background: var(--negative-bg)"
+Never leave cells blank — use "Not available."
+
+Sort buttons (.sort-bar above table):
+Sort by: Priority | Weight | Daily P/L | Unrealized P/L | Risk | Action
+
+
+8. DAILY P/L CONTRIBUTION
+
+Separate US and Egypt. Sort by absolute daily P/L impact, highest to lowest.
+
+Columns:
+Ticker | Daily P/L | Daily % Move | Weight | Impact Driver (Size-driven / Price-driven / Both)
+
+Color Daily P/L cells with .positive or .negative.
+
+
+9. RECENT PERFORMANCE
+
+Table or .bar-row chart: 1D | 3D | 5D | 20D per holding.
+Sort by 5D (or 1D if 5D unavailable).
+Unavailable fields: "Not available."
+
+Short interpretation paragraph below:
+- strongest and weakest short-term momentum
+- abnormal moves
+- whether moves are market-wide, sector-driven, or stock-specific (use benchmark data from step above)
+
+
+10. TECHNICAL SIGNALS
+
+Table inside .table-wrap.
+
+Columns:
+Ticker | RSI-14 | vs 20D MA | vs 50D MA | vs 200D MA | Volume vs 20D Avg | MACD | Momentum | Technical Read | Caution
+
+Technical Read badges:
+Bullish → badge-green | Improving → badge-blue | Neutral → badge-gray |
+Weakening → badge-yellow | Bearish → badge-red | Unclear → badge-gray
+
+Sort order: Bearish → Weakening → Unclear → Neutral → Improving → Bullish.
+
+For Volume vs 20D Avg, use the specific labels from the volume rules:
+"High-volume buying" / "High-volume selling" / "Average volume" / "Low-volume move"
+
+For MACD, use the specific descriptions from the MACD rules.
+Never write just "positive" or "negative" for MACD.
+
+Flag RSI divergence in the Caution column when present.
+
+Missing data: keep the row, use "Not available," add badge-gray "Missing" in Caution.
+
+
+11. NEWS AND CATALYSTS
+
+<details> grouped by impact in this order:
+Negative | Mixed | Positive | Neutral | Unclear | No material recent news found
+
+Each <summary> shows group label + item count.
+Each item inside: ticker, headline or event, source + publication date (must be within last 7 days), impact classification, why it matters, whether it changes the action label.
+
+Do not include articles with no visible publication date.
+Label analyst rating changes as "Analyst rating change" not as news.
+If only one source reports a story, note: "Single source — unconfirmed."
+
+
+12. UPCOMING EARNINGS AND EVENTS
+
+Table sorted by date, soonest first.
+
+Columns: Ticker | Event | Date | Days Away | Importance | Why It Matters
+
+Highlight rows ≤ 7 days away: background var(--warning-bg).
+Highlight earnings within 14 days: background var(--info-bg).
+Only list dates that are verified to be in the future.
+If a date has already passed, report actual results or note "Earnings passed — results not confirmed."
+If nothing found: "No major upcoming events found."
+
+
+13. PORTFOLIO RISK NOTES
+
+<details> sections:
+Concentration risk | Sector risk | ETF overlap | Speculative exposure |
+Currency/geography risk (Egypt vs US) | Tiny positions | Large losses |
+Large gains | Single-stock vs ETF balance
+
+Each: short explanation, affected tickers, practical implication.
+
+
+14. WHAT CHANGED TODAY
+
+If a previous snapshot exists, explain:
+- what changed (price, weight, action label)
+- what is new
+- what became riskier
+- what improved
+- what to watch tomorrow
+- whether any previous action label should change
+
+If no previous snapshot: "No previous report snapshot is available — today's changes cannot be compared."
+
+
+15. WATCHLIST
+
+3–7 candidates only when a real reason exists.
+Prefer quality stocks, ETFs, sector leaders suitable for a small long-term portfolio.
+Avoid penny stocks, low-liquidity stocks, hype-only names, stocks cited only because they rose.
+
+Table inside .table-wrap:
+Ticker | Company/Fund | Why Interesting | Technical Setup | Catalyst/News | Risk | Watch Level | What Would Make It More Interesting | What Would Invalidate It
+
+Watch Level: badge-blue (High priority) | badge-gray (Medium priority) | badge-orange (Speculative)
+
+End this section with: "Watchlist only — not a buy recommendation."
+
+
+16. FINAL ACTION SUMMARY
+
+Three .card boxes:
+.card.positive — "Keep / Add Candidates"
+.card.warning — "Watch Closely"
+.card.negative — "Consider Trimming / Do Not Add"
+
+Each lists tickers with action label + one-sentence reason.
+
+
+17. SOURCES AND DATA NOTES
+
+List all sources used for prices, technicals, earnings, news, and benchmarks.
+Note any: missing data | stale data | uncertain data | calculation limitations | timestamp gaps.
+
+─────────────────────────────────────────────
+END OF REPORT
+─────────────────────────────────────────────
+
+Close with <footer> containing this exact sentence:
+"This is analysis for decision support, not financial advice or automatic trading."
+
+
+AFTER generating the complete HTML, use Python (Code Interpreter) to save the full HTML
+as a file named portfolio-report-YYYY-MM-DD.html where YYYY-MM-DD is today's date, and
+provide a direct download link. The file must be complete and self-contained so it opens
+correctly in any browser without an internet connection.
