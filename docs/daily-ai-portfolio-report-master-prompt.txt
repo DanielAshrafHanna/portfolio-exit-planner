@@ -3,16 +3,48 @@ You are running my scheduled Daily AI Portfolio Report now.
 Generate the actual report. Do not rewrite this prompt. Do not create another task.
 
 ─────────────────────────────────────────────
+STEP 0 — US MARKET OPEN CHECK (DO THIS FIRST)
+─────────────────────────────────────────────
+
+Before doing anything else, determine today's date and whether the US stock market
+is OPEN today (a weekday that is NOT a US market holiday).
+
+If the US market is CLOSED (weekend or holiday):
+- STOP immediately.
+- Do NOT run pre-flight, generate a report, send email, or git push.
+- Output exactly one line: "US market closed today — skipped."
+
+Known US market holidays include New Year's Day, MLK Day, Presidents' Day, Good Friday,
+Memorial Day, Juneteenth, Independence Day, Labor Day, Thanksgiving, and Christmas
+(when observed by NYSE).
+
+If the US market is OPEN, continue below.
+
+On open days, after generating the report:
+(a) email the HTML to danielhanna0001@gmail.com, and
+(b) git add / commit / push the portfolio-report-YYYY-MM-DD.html file to branch
+    cursor/daily-ai-portfolio-report-fbca.
+
+─────────────────────────────────────────────
 PRE-FLIGHT — REFRESH POST-CLOSE SNAPSHOTS FIRST
 ─────────────────────────────────────────────
 
-This automation runs around 20:20 UTC (10:20 PM Egypt, UTC+2) — after the US cash
-session closes at 20:00 UTC / 4:00 PM EDT. You MUST refresh Supabase snapshots with
-post-close quotes BEFORE reading portfolio data or generating the report.
+Skip this entire section if Step 0 already stopped (US market closed).
+
+This automation is scheduled at 20:20 UTC (10:20 PM Egypt, UTC+2) on US trading days.
+US cash session closes at 4:00 PM Eastern Time:
+- EDT (Mar–Nov): 20:00 UTC
+- EST (Nov–Mar): 21:00 UTC
+
+If the automation runs before US cash close (e.g. 20:20 UTC during EST), STOP and output:
+"The report cannot be completed accurately because the automation ran before US market close. Reschedule to at least 30 minutes after cash close (recommended cron: 30 21 * * 1-5 UTC)."
+
+You MUST refresh Supabase snapshots with post-close quotes BEFORE reading portfolio
+data or generating the report.
 
 STEP 1 — Trigger a fresh snapshot (required on US market open days):
   node scripts/refresh-daily-snapshot.mjs
-  (Requires CRON_SECRET and optionally PORTFOLIO_APP_URL in the automation environment.)
+  (Requires CRON_SECRET and optionally PORTFOLIO_APP_URL in the Cursor Cloud Agents secrets.)
 
   Or equivalent curl:
   curl -sf -H "Authorization: Bearer $CRON_SECRET" \
@@ -23,14 +55,18 @@ STEP 1 — Trigger a fresh snapshot (required on US market open days):
 
 STEP 2 — Verify snapshot freshness in Supabase for danielhanna0001@gmail.com:
   Query portfolio_daily_snapshots for today's US session_date (us-portfolio row).
-  The updated_at timestamp MUST be after 20:00 UTC on the report trading day
-  (US cash close). created_at may still show an earlier midday write — use updated_at.
+  The updated_at timestamp MUST be after US cash close on the report trading day
+  (after 20:00 UTC in EDT, or after 21:00 UTC in EST).
+  created_at may still show an earlier midday write — always use updated_at.
 
-  If updated_at is still before 20:00 UTC on a day the US market was open, STOP and output:
+  If updated_at is still before US cash close on a day the US market was open, STOP and output:
   "The report cannot be completed accurately because the latest holdings snapshot for danielhanna0001@gmail.com is unavailable. Please provide a holdings export or reconnect the portfolio data source."
 
-Only after steps 1–2 succeed, proceed with ownership verification and report generation below.
+Only after Steps 0 and pre-flight Steps 1–2 succeed, proceed with ownership verification
+and report generation below.
 
+─────────────────────────────────────────────
+PORTFOLIO DATA — OWNERSHIP AND SOURCE
 ─────────────────────────────────────────────
 
 Analyze only my real latest portfolio data from Supabase / portfolio-exit-planner for this profile email:
@@ -48,7 +84,7 @@ Do not guess holdings. Do not analyze demo portfolios, sample portfolios, stale 
 
 Use today's actual date. This report is for decision support only, not financial advice or automatic trading.
 
-If the US market was closed today, produce the report using the most recent available trading session. Clearly label it as "last available market session" and do not invent daily moves.
+The report covers today's US trading session (post-close snapshot from pre-flight). Label the session date clearly in the header.
 
 ─────────────────────────────────────────────
 DATA SOURCE RULES
@@ -532,14 +568,13 @@ Left:
 
 Right (.header-right):
 - .status-pill with class pill-open / pill-closed / pill-stale showing market status
-- data snapshot date and time
+- data snapshot date and time (use updated_at from pre-flight)
 - any major data limitations in one sentence
 
 Show a .warning-banner below .header-top if any of these apply:
-- app snapshot is not from today
+- app snapshot updated_at is not after US cash close today
 - technical data is materially incomplete
 - live data and app snapshot materially differ
-- market was closed (label the session clearly)
 - previous report comparison unavailable
 
 
@@ -643,7 +678,7 @@ Use <section>. Only include genuine alerts.
 
 Sort by severity:
 1. Account or data integrity issue
-2. Market closed or stale data
+2. Stale snapshot or data freshness failure
 3. Holding above 15% weight
 4. Large daily loss contribution
 5. High-risk news or catalyst
@@ -866,14 +901,18 @@ List all sources used for prices, technicals, earnings, news, and benchmarks.
 Note any: missing data | stale data | uncertain data | calculation limitations | timestamp gaps.
 
 ─────────────────────────────────────────────
+DELIVERY
+─────────────────────────────────────────────
+
+AFTER generating the complete HTML:
+1. Save the full HTML as portfolio-report-YYYY-MM-DD.html (YYYY-MM-DD = report session date).
+   The file must be complete and self-contained so it opens correctly in any browser offline.
+2. Email the HTML file to danielhanna0001@gmail.com (from reports@stocks.danyhanna.uk via Resend if available).
+3. Git add, commit, and push portfolio-report-YYYY-MM-DD.html to branch cursor/daily-ai-portfolio-report-fbca.
+
+─────────────────────────────────────────────
 END OF REPORT
 ─────────────────────────────────────────────
 
 Close with <footer> containing this exact sentence:
 "This is analysis for decision support, not financial advice or automatic trading."
-
-
-AFTER generating the complete HTML, use Python (Code Interpreter) to save the full HTML
-as a file named portfolio-report-YYYY-MM-DD.html where YYYY-MM-DD is today's date, and
-provide a direct download link. The file must be complete and self-contained so it opens
-correctly in any browser without an internet connection.
