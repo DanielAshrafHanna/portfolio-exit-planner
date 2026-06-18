@@ -17,7 +17,9 @@ export async function GET(request: Request) {
   }
 
   try {
-    const freshQuotes = new URL(request.url).searchParams.get("fresh") === "1";
+    const params = new URL(request.url).searchParams;
+    const freshQuotes = params.get("fresh") === "1";
+    const snapshotsOnly = params.get("snapshotsOnly") === "1";
     const now = new Date();
     const supabase = createSupabaseAdminClient();
 
@@ -29,7 +31,8 @@ export async function GET(request: Request) {
       now
     });
 
-    const emails = freshQuotes
+    const shouldSendEmails = freshQuotes && !snapshotsOnly;
+    const emails = shouldSendEmails
       ? await sendOptedInDailyReportEmails(supabase, summary.results, summary.portfolioRows, {
         now,
         requireSuccessfulSnapshot: true
@@ -41,7 +44,9 @@ export async function GET(request: Request) {
         failed: 0,
         skipped: 0,
         results: [],
-        warning: "Daily emails are sent after the US market-close cron run (fresh=1)."
+        warning: snapshotsOnly
+          ? "Snapshot-only run — emails skipped (snapshotsOnly=1)."
+          : "Daily emails are sent after the US market-close cron run (fresh=1)."
       };
 
     return NextResponse.json({

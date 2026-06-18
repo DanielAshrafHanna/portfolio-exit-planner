@@ -9,10 +9,11 @@ The daily portfolio report is generated server-side from Supabase cloud portfoli
 - `/api/portfolio-report/history`: an authenticated rolling history endpoint (`days=7` by default) for weekly chart data.
 - `/api/cron/daily-portfolio-summary`: a Vercel Cron endpoint that saves daily snapshots for **every** cloud portfolio user and emails **opted-in** users (see below).
 - `portfolio_daily_snapshots` in Supabase: one row per user/profile/day with daily P/L, portfolio value, and cost-basis P/L.
-- `vercel.json`: schedules three crons:
+- `vercel.json`: schedules four crons:
   - `0 5 * * *` — morning refresh (~8:00 AM Cairo), good for EGX open and pre-US.
   - `30 13 * * *` — after EGX close (~3:30 PM Cairo).
-  - `0 22 * * *` — after US close with `?fresh=1` for end-of-day quotes.
+  - `10 20 * * 1-5` — post-US close snapshot refresh (`?fresh=1&snapshotsOnly=1`), ~10 min after 4:00 PM EDT.
+  - `0 22 * * 1-5` — post-US close with `?fresh=1` for end-of-day quotes and opted-in daily emails.
 
 ## Charts Tab
 
@@ -93,10 +94,12 @@ Each signed-in cloud user can enable a daily market-close email in **Settings**:
 - `settings.dailyReportEmail` — recipient address (any valid inbox)
 - `settings.dailyReportEmailEnabled` — toggle
 
-After the US-close cron (`0 22 * * *` UTC with `?fresh=1`), the server:
+After the US-close cron (`0 22 * * 1-5` UTC with `fresh=1`), the server:
 
 1. Snapshots every cloud portfolio with fresh post-close quotes
 2. Sends opted-in emails only after those snapshots complete, using the just-written rows for charts
+
+**Cursor daily AI HTML report:** schedule the automation at `20 20 * * 1-5` UTC (10:20 PM Egypt, UTC+2) or later. Before generating the report, run `node scripts/refresh-daily-snapshot.mjs` (needs `CRON_SECRET`) so Supabase holds post-close quotes. Verify `portfolio_daily_snapshots.updated_at` is after 20:00 UTC — not `created_at`, which may still reflect the midday cron.
 
 **Test delivery:** Settings → **Send test email** (calls `POST /api/daily-report-email/test`).
 

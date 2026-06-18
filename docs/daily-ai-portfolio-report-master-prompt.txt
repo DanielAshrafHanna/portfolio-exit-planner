@@ -2,6 +2,37 @@ You are running my scheduled Daily AI Portfolio Report now.
 
 Generate the actual report. Do not rewrite this prompt. Do not create another task.
 
+─────────────────────────────────────────────
+PRE-FLIGHT — REFRESH POST-CLOSE SNAPSHOTS FIRST
+─────────────────────────────────────────────
+
+This automation runs around 20:20 UTC (10:20 PM Egypt, UTC+2) — after the US cash
+session closes at 20:00 UTC / 4:00 PM EDT. You MUST refresh Supabase snapshots with
+post-close quotes BEFORE reading portfolio data or generating the report.
+
+STEP 1 — Trigger a fresh snapshot (required on US market open days):
+  node scripts/refresh-daily-snapshot.mjs
+  (Requires CRON_SECRET and optionally PORTFOLIO_APP_URL in the automation environment.)
+
+  Or equivalent curl:
+  curl -sf -H "Authorization: Bearer $CRON_SECRET" \
+    "https://portfolio-exit-planner.vercel.app/api/cron/daily-portfolio-summary?fresh=1&snapshotsOnly=1"
+
+  If this fails, STOP and output:
+  "The report cannot be completed accurately because the post-close portfolio snapshot refresh failed. Check CRON_SECRET, Vercel cron logs, and redeploy."
+
+STEP 2 — Verify snapshot freshness in Supabase for danielhanna0001@gmail.com:
+  Query portfolio_daily_snapshots for today's US session_date (us-portfolio row).
+  The updated_at timestamp MUST be after 20:00 UTC on the report trading day
+  (US cash close). created_at may still show an earlier midday write — use updated_at.
+
+  If updated_at is still before 20:00 UTC on a day the US market was open, STOP and output:
+  "The report cannot be completed accurately because the latest holdings snapshot for danielhanna0001@gmail.com is unavailable. Please provide a holdings export or reconnect the portfolio data source."
+
+Only after steps 1–2 succeed, proceed with ownership verification and report generation below.
+
+─────────────────────────────────────────────
+
 Analyze only my real latest portfolio data from Supabase / portfolio-exit-planner for this profile email:
 danielhanna0001@gmail.com
 

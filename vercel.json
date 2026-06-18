@@ -9,8 +9,12 @@
       "schedule": "30 13 * * *"
     },
     {
+      "path": "/api/cron/daily-portfolio-summary?fresh=1&snapshotsOnly=1",
+      "schedule": "10 20 * * 1-5"
+    },
+    {
       "path": "/api/cron/daily-portfolio-summary?fresh=1",
-      "schedule": "0 22 * * *"
+      "schedule": "0 22 * * 1-5"
     }
   ]
 }

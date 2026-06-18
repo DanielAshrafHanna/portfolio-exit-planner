@@ -20,6 +20,7 @@ export type PortfolioDailySnapshotRow = {
   total_profit_loss: number;
   holdings_count: number;
   holdings_snapshot: ReturnType<typeof holdingsSnapshotFromReportRows>;
+  updated_at: string;
 };
 
 const REGION_TIMEZONES: Record<MarketRegion, string> = {
@@ -81,6 +82,7 @@ export async function prepareReportForSnapshot(
 }
 
 export function snapshotsFromReport(userId: string, report: PortfolioReport, now = new Date(report.generatedAt)): PortfolioDailySnapshotRow[] {
+  const updatedAt = now.toISOString();
   return report.profiles.map((profile) => {
     const session = getDailyPlSessionInfo(profile.region, now);
     const tradingToday = isTradingWeekday(profile.region, now);
@@ -96,7 +98,8 @@ export function snapshotsFromReport(userId: string, report: PortfolioReport, now
       portfolio_value: profile.totals.currentValue,
       total_profit_loss: profile.totals.profitLoss,
       holdings_count: profile.totals.quotedHoldingsCount,
-      holdings_snapshot: holdingsSnapshotFromReportRows(profile.holdings)
+      holdings_snapshot: holdingsSnapshotFromReportRows(profile.holdings),
+      updated_at: updatedAt
     };
   });
 }
