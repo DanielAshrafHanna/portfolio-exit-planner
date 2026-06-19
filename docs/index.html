@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Portfolio Exit Planner Reports</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f4f7fb;
+      --surface: #ffffff;
+      --border: #d8e1ec;
+      --text: #172033;
+      --muted: #5e6b7d;
+      --accent: #1d6fd8;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+
+    main {
+      width: min(760px, 100%);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 28px;
+      box-shadow: 0 12px 40px rgba(23, 32, 51, 0.08);
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: clamp(28px, 5vw, 42px);
+      line-height: 1.05;
+    }
+
+    p {
+      margin: 0 0 20px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    a {
+      display: inline-flex;
+      align-items: center;
+      min-height: 44px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 14px;
+      color: var(--accent);
+      font-weight: 700;
+      text-decoration: none;
+      background: #fff;
+    }
+
+    a:hover { border-color: var(--accent); }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Portfolio Reports</h1>
+    <p>Static daily AI portfolio reports published from this repository.</p>
+    <nav aria-label="Portfolio report links">
+      <a href="reports/latest.html">Open Latest Report</a>
+      <a href="reports/">Browse Report Archive</a>
+    </nav>
+  </main>
+</body>
+</html>

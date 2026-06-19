@@ -873,7 +873,22 @@ Close with <footer> containing this exact sentence:
 "This is analysis for decision support, not financial advice or automatic trading."
 
 
-AFTER generating the complete HTML, use Python (Code Interpreter) to save the full HTML
-as a file named portfolio-report-YYYY-MM-DD.html where YYYY-MM-DD is today's date, and
-provide a direct download link. The file must be complete and self-contained so it opens
-correctly in any browser without an internet connection.
+AFTER generating the complete HTML:
+
+1. Use Python (Code Interpreter) to save the full HTML in this repository at:
+   docs/reports/portfolio-report-YYYY-MM-DD.html
+   where YYYY-MM-DD is today's date.
+
+2. Do not save dated report files in the repository root.
+
+3. Update docs/reports/latest.html so it redirects to the new dated report file.
+
+4. Update docs/reports/index.html so the new report appears as the first item in the
+   archive list. Preserve links to older reports.
+
+5. Provide the GitHub Pages URLs:
+   - Latest: https://danielashrafhanna.github.io/portfolio-exit-planner/reports/latest.html
+   - Dated: https://danielashrafhanna.github.io/portfolio-exit-planner/reports/portfolio-report-YYYY-MM-DD.html
+
+The report file must be complete and self-contained so it opens correctly in any browser
+without an internet connection.
