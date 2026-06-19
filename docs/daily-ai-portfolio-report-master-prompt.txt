@@ -21,9 +21,12 @@ Memorial Day, Juneteenth, Independence Day, Labor Day, Thanksgiving, and Christm
 If the US market is OPEN, continue below.
 
 On open days, after generating the report:
-(a) email the HTML to danielhanna0001@gmail.com, and
-(b) git add / commit / push the portfolio-report-YYYY-MM-DD.html file to branch
-    cursor/daily-ai-portfolio-report-fbca.
+(a) email the HTML to danielhanna0001@gmail.com, and include the GitHub Pages
+    report archive/index URL and latest-report URL in the email body, and
+(b) git add / commit / push these report files to branch cursor/daily-ai-portfolio-report-fbca:
+    docs/reports/portfolio-report-YYYY-MM-DD.html
+    docs/reports/latest.html
+    docs/reports/index.html
 
 ─────────────────────────────────────────────
 PRE-FLIGHT — REFRESH POST-CLOSE SNAPSHOTS FIRST
@@ -905,10 +908,33 @@ DELIVERY
 ─────────────────────────────────────────────
 
 AFTER generating the complete HTML:
-1. Save the full HTML as portfolio-report-YYYY-MM-DD.html (YYYY-MM-DD = report session date).
+1. Save the full HTML in this repository at:
+   docs/reports/portfolio-report-YYYY-MM-DD.html
+   where YYYY-MM-DD is the report session date.
+   Do not save dated report files in the repository root.
    The file must be complete and self-contained so it opens correctly in any browser offline.
-2. Email the HTML file to danielhanna0001@gmail.com (from reports@stocks.danyhanna.uk via Resend if available).
-3. Git add, commit, and push portfolio-report-YYYY-MM-DD.html to branch cursor/daily-ai-portfolio-report-fbca.
+
+2. Update docs/reports/latest.html so it redirects to the new dated report file.
+
+3. Update docs/reports/index.html so the new report appears as the first item in the
+   archive list. Preserve links to older reports.
+
+4. Email the HTML file to danielhanna0001@gmail.com (from reports@stocks.danyhanna.uk via Resend if available).
+   In the email body, include both of these GitHub Pages URLs:
+   - Report archive/index: https://danielashrafhanna.github.io/portfolio-exit-planner/reports/
+   - Latest report: https://danielashrafhanna.github.io/portfolio-exit-planner/reports/latest.html
+   Also include today's dated report URL when space allows:
+   - Today's dated report: https://danielashrafhanna.github.io/portfolio-exit-planner/reports/portfolio-report-YYYY-MM-DD.html
+
+5. Provide these same GitHub Pages URLs in the final automation output:
+   - Report archive/index: https://danielashrafhanna.github.io/portfolio-exit-planner/reports/
+   - Latest report: https://danielashrafhanna.github.io/portfolio-exit-planner/reports/latest.html
+   - Today's dated report: https://danielashrafhanna.github.io/portfolio-exit-planner/reports/portfolio-report-YYYY-MM-DD.html
+
+6. Git add, commit, and push these files to branch cursor/daily-ai-portfolio-report-fbca:
+   docs/reports/portfolio-report-YYYY-MM-DD.html
+   docs/reports/latest.html
+   docs/reports/index.html
 
 ─────────────────────────────────────────────
 END OF REPORT
