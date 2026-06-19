@@ -9,6 +9,10 @@ dist
 coverage
 *.tsbuildinfo
 
+# Daily AI reports: publish encrypted JSON only, never raw portfolio HTML.
+docs/reports/portfolio-report-*.html
+docs/reports/.raw/
+
 # Serwist
 public/sw.js
 public/sw.js.map

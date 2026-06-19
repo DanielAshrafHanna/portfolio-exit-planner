@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "encrypt-report": "node scripts/encrypt-report.mjs",
     "start": "next start",
     "test": "vitest run",
     "lint": "eslint ."

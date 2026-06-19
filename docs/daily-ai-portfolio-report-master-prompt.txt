@@ -21,12 +21,20 @@ Memorial Day, Juneteenth, Independence Day, Labor Day, Thanksgiving, and Christm
 If the US market is OPEN, continue below.
 
 On open days, after generating the report:
-(a) email the HTML to danielhanna0001@gmail.com, and include the GitHub Pages
-    report archive/index URL and latest-report URL in the email body, and
-(b) git add / commit / push these report files to branch cursor/daily-ai-portfolio-report-fbca:
-    docs/reports/portfolio-report-YYYY-MM-DD.html
+(a) email the HTML to danielhanna0001@gmail.com, and include the encrypted
+    GitHub Pages report archive/index URL, latest-report URL, and today's
+    dated viewer URL in the email body, and
+(b) encrypt the raw HTML with scripts/encrypt-report.mjs using the
+    REPORT_ENCRYPTION_PASSWORD Cursor secret, and
+(c) git add / commit / push only the encrypted/public report files to branch
+    cursor/daily-ai-portfolio-report-fbca:
+    docs/reports/portfolio-report-YYYY-MM-DD.enc.json
+    docs/reports/latest.enc.json
     docs/reports/latest.html
     docs/reports/index.html
+
+Do NOT commit raw report HTML. Do NOT put REPORT_ENCRYPTION_PASSWORD in git,
+the report, the email, console output, or any generated file.
 
 ─────────────────────────────────────────────
 PRE-FLIGHT — REFRESH POST-CLOSE SNAPSHOTS FIRST
@@ -908,33 +916,55 @@ DELIVERY
 ─────────────────────────────────────────────
 
 AFTER generating the complete HTML:
-1. Save the full HTML in this repository at:
-   docs/reports/portfolio-report-YYYY-MM-DD.html
+1. Save the full HTML temporarily in this repository at:
+   docs/reports/.raw/portfolio-report-YYYY-MM-DD.html
    where YYYY-MM-DD is the report session date.
    Do not save dated report files in the repository root.
+   docs/reports/.raw/ is gitignored and is only an encryption input.
    The file must be complete and self-contained so it opens correctly in any browser offline.
 
-2. Update docs/reports/latest.html so it redirects to the new dated report file.
-
-3. Update docs/reports/index.html so the new report appears as the first item in the
-   archive list. Preserve links to older reports.
-
-4. Email the HTML file to danielhanna0001@gmail.com (from reports@stocks.danyhanna.uk via Resend if available).
-   In the email body, include both of these GitHub Pages URLs:
+2. Email the HTML file to danielhanna0001@gmail.com (from reports@stocks.danyhanna.uk via Resend if available).
+   In the email body, include these GitHub Pages URLs:
    - Report archive/index: https://danielashrafhanna.github.io/portfolio-exit-planner/reports/
-   - Latest report: https://danielashrafhanna.github.io/portfolio-exit-planner/reports/latest.html
-   Also include today's dated report URL when space allows:
-   - Today's dated report: https://danielashrafhanna.github.io/portfolio-exit-planner/reports/portfolio-report-YYYY-MM-DD.html
+   - Latest encrypted report: https://danielashrafhanna.github.io/portfolio-exit-planner/reports/latest.html
+   - Today's encrypted dated report: https://danielashrafhanna.github.io/portfolio-exit-planner/reports/viewer.html?report=portfolio-report-YYYY-MM-DD.enc.json
+   Mention that the Pages links require the report password.
+   Never include REPORT_ENCRYPTION_PASSWORD or any password hint in the email.
 
-5. Provide these same GitHub Pages URLs in the final automation output:
+3. Before any git add, confirm the Cursor Cloud Agents secrets include:
+   REPORT_ENCRYPTION_PASSWORD
+   It must be a strong passphrase of at least 16 characters.
+   If it is missing, STOP and output:
+   "The report was generated but cannot be published because REPORT_ENCRYPTION_PASSWORD is missing."
+
+4. Encrypt the temporary raw HTML and update the Pages archive by running:
+   node scripts/encrypt-report.mjs docs/reports/.raw/portfolio-report-YYYY-MM-DD.html --date YYYY-MM-DD --delete-input
+
+   This command must create/update:
+   - docs/reports/portfolio-report-YYYY-MM-DD.enc.json
+   - docs/reports/latest.enc.json
+   - docs/reports/latest.html
+   - docs/reports/index.html
+
+   It must also delete the temporary raw HTML input.
+
+5. Confirm no raw report HTML will be committed:
+   - git status --short must NOT show docs/reports/portfolio-report-YYYY-MM-DD.html
+   - git status --short must NOT show docs/reports/.raw/
+
+6. Provide these same GitHub Pages URLs in the final automation output:
    - Report archive/index: https://danielashrafhanna.github.io/portfolio-exit-planner/reports/
-   - Latest report: https://danielashrafhanna.github.io/portfolio-exit-planner/reports/latest.html
-   - Today's dated report: https://danielashrafhanna.github.io/portfolio-exit-planner/reports/portfolio-report-YYYY-MM-DD.html
+   - Latest encrypted report: https://danielashrafhanna.github.io/portfolio-exit-planner/reports/latest.html
+   - Today's encrypted dated report: https://danielashrafhanna.github.io/portfolio-exit-planner/reports/viewer.html?report=portfolio-report-YYYY-MM-DD.enc.json
 
-6. Git add, commit, and push these files to branch cursor/daily-ai-portfolio-report-fbca:
-   docs/reports/portfolio-report-YYYY-MM-DD.html
+7. Git add, commit, and push these files to branch cursor/daily-ai-portfolio-report-fbca:
+   docs/reports/portfolio-report-YYYY-MM-DD.enc.json
+   docs/reports/latest.enc.json
    docs/reports/latest.html
    docs/reports/index.html
+
+   Include docs/reports/viewer.html only if it changed.
+   Do not git add docs/reports/.raw/ or any raw portfolio-report-YYYY-MM-DD.html file.
 
 ─────────────────────────────────────────────
 END OF REPORT

@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Encrypted Portfolio Report Viewer</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f4f7fb;
+      --surface: #ffffff;
+      --border: #d8e1ec;
+      --text: #172033;
+      --muted: #5e6b7d;
+      --accent: #1d6fd8;
+      --danger: #b42318;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    .shell {
+      min-height: 100vh;
+      display: grid;
+      grid-template-rows: auto 1fr;
+    }
+
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 16px 20px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+    }
+
+    h1 {
+      margin: 0 0 4px;
+      font-size: clamp(22px, 4vw, 32px);
+      line-height: 1.1;
+    }
+
+    p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    a {
+      color: var(--accent);
+      font-weight: 700;
+      text-decoration: none;
+    }
+
+    a:hover { text-decoration: underline; }
+
+    form {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+
+    label {
+      font-weight: 700;
+    }
+
+    input {
+      min-width: min(280px, 100%);
+      min-height: 42px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      font: inherit;
+      color: var(--text);
+      background: #fff;
+    }
+
+    button {
+      min-height: 42px;
+      border: 1px solid var(--accent);
+      border-radius: 8px;
+      padding: 10px 16px;
+      font: inherit;
+      font-weight: 800;
+      color: #fff;
+      background: var(--accent);
+      cursor: pointer;
+    }
+
+    button:disabled {
+      opacity: 0.65;
+      cursor: wait;
+    }
+
+    .status {
+      min-height: 24px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .status.error { color: var(--danger); }
+
+    .viewer {
+      display: grid;
+      min-height: 0;
+    }
+
+    iframe {
+      width: 100%;
+      height: 100%;
+      min-height: calc(100vh - 122px);
+      border: 0;
+      background: #fff;
+    }
+
+    .empty-state {
+      width: min(760px, calc(100% - 32px));
+      margin: 28px auto;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: 0 12px 40px rgba(23, 32, 51, 0.08);
+    }
+
+    @media (max-width: 720px) {
+      header { display: grid; }
+      form { display: grid; }
+      input, button { width: 100%; }
+      iframe { min-height: calc(100vh - 260px); }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header>
+      <div>
+        <h1 id="title">Encrypted Portfolio Report</h1>
+        <p id="meta">Loading report metadata...</p>
+      </div>
+      <form id="decrypt-form">
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" required>
+        <button id="decrypt-button" type="submit">Open</button>
+        <a href="./">Archive</a>
+      </form>
+      <div id="status" class="status" role="status" aria-live="polite"></div>
+    </header>
+    <main class="viewer">
+      <div id="empty-state" class="empty-state">
+        <p>Enter the report password to open this encrypted file.</p>
+      </div>
+      <iframe id="report-frame" title="Decrypted portfolio report" hidden sandbox="allow-scripts"></iframe>
+    </main>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const reportPath = params.get("report") || "latest.enc.json";
+    const titleEl = document.getElementById("title");
+    const metaEl = document.getElementById("meta");
+    const statusEl = document.getElementById("status");
+    const form = document.getElementById("decrypt-form");
+    const passwordInput = document.getElementById("password");
+    const button = document.getElementById("decrypt-button");
+    const frame = document.getElementById("report-frame");
+    const emptyState = document.getElementById("empty-state");
+    let encryptedReport;
+    let currentObjectUrl;
+
+    function setStatus(message, isError) {
+      statusEl.textContent = message || "";
+      statusEl.classList.toggle("error", Boolean(isError));
+    }
+
+    function base64ToBytes(value) {
+      const binary = atob(value);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i += 1) {
+        bytes[i] = binary.charCodeAt(i);
+      }
+      return bytes;
+    }
+
+    async function deriveKey(password, salt, iterations) {
+      const passwordBytes = new TextEncoder().encode(password);
+      const baseKey = await crypto.subtle.importKey(
+        "raw",
+        passwordBytes,
+        "PBKDF2",
+        false,
+        ["deriveKey"]
+      );
+
+      return crypto.subtle.deriveKey(
+        { name: "PBKDF2", salt, iterations, hash: "SHA-256" },
+        baseKey,
+        { name: "AES-GCM", length: 256 },
+        false,
+        ["decrypt"]
+      );
+    }
+
+    async function decryptReport(password) {
+      const salt = base64ToBytes(encryptedReport.salt);
+      const iv = base64ToBytes(encryptedReport.iv);
+      const ciphertext = base64ToBytes(encryptedReport.ciphertext);
+      const key = await deriveKey(password, salt, encryptedReport.iterations);
+      const plainBuffer = await crypto.subtle.decrypt(
+        { name: "AES-GCM", iv },
+        key,
+        ciphertext
+      );
+      return new TextDecoder().decode(plainBuffer);
+    }
+
+    async function loadReport() {
+      try {
+        const response = await fetch(reportPath, { cache: "no-store" });
+        if (!response.ok) throw new Error(`Report file not found: ${reportPath}`);
+        encryptedReport = await response.json();
+        titleEl.textContent = encryptedReport.title || "Encrypted Portfolio Report";
+        metaEl.textContent = encryptedReport.reportDate
+          ? `Report date: ${encryptedReport.reportDate}`
+          : `Report file: ${reportPath}`;
+        setStatus("");
+        passwordInput.focus();
+      } catch (error) {
+        titleEl.textContent = "Report unavailable";
+        metaEl.textContent = reportPath;
+        setStatus(error instanceof Error ? error.message : "Could not load report.", true);
+        button.disabled = true;
+        passwordInput.disabled = true;
+      }
+    }
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (!encryptedReport) return;
+
+      button.disabled = true;
+      setStatus("Opening encrypted report...");
+
+      try {
+        const html = await decryptReport(passwordInput.value);
+        if (currentObjectUrl) URL.revokeObjectURL(currentObjectUrl);
+        currentObjectUrl = URL.createObjectURL(new Blob([html], { type: encryptedReport.contentType || "text/html" }));
+        frame.src = currentObjectUrl;
+        frame.hidden = false;
+        emptyState.hidden = true;
+        setStatus("");
+      } catch {
+        setStatus("Could not decrypt this report. Check the password and try again.", true);
+      } finally {
+        button.disabled = false;
+      }
+    });
+
+    window.addEventListener("beforeunload", () => {
+      if (currentObjectUrl) URL.revokeObjectURL(currentObjectUrl);
+    });
+
+    loadReport();
+  </script>
+</body>
+</html>
