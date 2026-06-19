@@ -890,5 +890,10 @@ AFTER generating the complete HTML:
    - Latest: https://danielashrafhanna.github.io/portfolio-exit-planner/reports/latest.html
    - Dated: https://danielashrafhanna.github.io/portfolio-exit-planner/reports/portfolio-report-YYYY-MM-DD.html
 
+6. If the automation sends an email, notification, or final message, include the
+   GitHub Pages URL for today's dated HTML report in that message. Also include the
+   stable latest-report URL when space allows. Do not only attach, download, or mention
+   the local HTML file.
+
 The report file must be complete and self-contained so it opens correctly in any browser
 without an internet connection.
