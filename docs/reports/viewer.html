@@ -158,7 +158,7 @@
     </header>
     <main class="viewer">
       <div id="empty-state" class="empty-state">
-        <p>Enter the report password to open this encrypted file.</p>
+        <p>Enter the report password to open this encrypted file. Use the exact value from Cursor Cloud Agents secret <code>REPORT_ENCRYPTION_PASSWORD</code> (not your app login). Copy/paste carefully — extra spaces will fail.</p>
       </div>
       <iframe id="report-frame" title="Decrypted portfolio report" hidden sandbox="allow-scripts"></iframe>
     </main>
@@ -252,7 +252,7 @@
       setStatus("Opening encrypted report...");
 
       try {
-        const html = await decryptReport(passwordInput.value);
+        const html = await decryptReport(passwordInput.value.trim());
         if (currentObjectUrl) URL.revokeObjectURL(currentObjectUrl);
         currentObjectUrl = URL.createObjectURL(new Blob([html], { type: encryptedReport.contentType || "text/html" }));
         frame.src = currentObjectUrl;
@@ -260,7 +260,7 @@
         emptyState.hidden = true;
         setStatus("");
       } catch {
-        setStatus("Could not decrypt this report. Check the password and try again.", true);
+        setStatus("Could not decrypt this report. Use the exact REPORT_ENCRYPTION_PASSWORD from Cursor Cloud Agents secrets (16+ characters). If you recently changed that secret, older reports need to be re-encrypted.", true);
       } finally {
         button.disabled = false;
       }
