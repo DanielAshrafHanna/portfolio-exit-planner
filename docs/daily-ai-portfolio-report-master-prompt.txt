@@ -886,13 +886,14 @@ AFTER generating the complete HTML:
 4. Update docs/reports/index.html so the new report appears as the first item in the
    archive list. Preserve links to older reports.
 
-5. Provide the GitHub Pages URLs:
-   - Latest: https://danielashrafhanna.github.io/portfolio-exit-planner/reports/latest.html
-   - Dated: https://danielashrafhanna.github.io/portfolio-exit-planner/reports/portfolio-report-YYYY-MM-DD.html
+5. Provide these GitHub Pages URLs:
+   - Report archive/index: https://danielashrafhanna.github.io/portfolio-exit-planner/reports/
+   - Latest report: https://danielashrafhanna.github.io/portfolio-exit-planner/reports/latest.html
+   - Today's dated report: https://danielashrafhanna.github.io/portfolio-exit-planner/reports/portfolio-report-YYYY-MM-DD.html
 
 6. If the automation sends an email, notification, or final message, include the
-   GitHub Pages URL for today's dated HTML report in that message. Also include the
-   stable latest-report URL when space allows. Do not only attach, download, or mention
+   Report archive/index URL and the Latest report URL in that message. Also include
+   today's dated report URL when space allows. Do not only attach, download, or mention
    the local HTML file.
 
 The report file must be complete and self-contained so it opens correctly in any browser
