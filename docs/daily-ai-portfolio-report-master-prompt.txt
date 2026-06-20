@@ -50,8 +50,11 @@ US cash session closes at 4:00 PM Eastern Time:
 If the automation runs before US cash close (e.g. 20:20 UTC during EST), STOP and output:
 "The report cannot be completed accurately because the automation ran before US market close. Reschedule to at least 30 minutes after cash close (recommended cron: 30 21 * * 1-5 UTC)."
 
-You MUST refresh Supabase snapshots with post-close quotes BEFORE reading portfolio
-data or generating the report.
+You MUST refresh post-close snapshots and load portfolio data through the app API
+BEFORE generating the report. Do NOT query Supabase MCP for holdings or snapshots.
+
+Required Cursor automation secrets for pre-flight:
+- CRON_SECRET (Bearer token for all /api/cron/* calls — same value as Vercel CRON_SECRET)
 
 STEP 1 — Trigger a fresh snapshot (required on US market open days):
   node scripts/refresh-daily-snapshot.mjs
@@ -64,34 +67,55 @@ STEP 1 — Trigger a fresh snapshot (required on US market open days):
   If this fails, STOP and output:
   "The report cannot be completed accurately because the post-close portfolio snapshot refresh failed. Check CRON_SECRET, Vercel cron logs, and redeploy."
 
-STEP 2 — Verify snapshot freshness in Supabase for danielhanna0001@gmail.com:
-  Query portfolio_daily_snapshots for today's US session_date (us-portfolio row).
-  The updated_at timestamp MUST be after US cash close on the report trading day
-  (after 20:00 UTC in EDT, or after 21:00 UTC in EST).
-  created_at may still show an earlier midday write — always use updated_at.
+STEP 2 — Fetch verified portfolio data via the app API (do NOT use Supabase MCP):
+  curl -sf -H "Authorization: Bearer $CRON_SECRET" \
+    "https://portfolio-exit-planner.vercel.app/api/cron/daily-ai-report-data?email=danielhanna0001@gmail.com&profileId=all&historyDays=30&report=1"
 
-  If updated_at is still before US cash close on a day the US market was open, STOP and output:
+  Full API reference: docs/daily-ai-report-api.md
+
+  Validate the JSON response before continuing:
+  - ownershipVerified must be true for danielhanna0001@gmail.com
+  - ok must be true
+  - For each profile returned in profiles[] (both us-portfolio and eg-portfolio when profileId=all):
+    - snapshot.missing must be false
+    - snapshot.freshAfterClose must be true for the session being reported
+    - Use snapshot.updatedAt (not createdAt) as the data snapshot timestamp in the report header
+
+  If the API returns 401 or 403, STOP and output:
+  "The report cannot be completed accurately because the portfolio data API rejected the request. Check CRON_SECRET in Cursor secrets and Vercel env vars."
+
+  If ownershipVerified is false, STOP and output exactly:
+  "The report cannot be completed accurately because I could not verify that the holdings belong to danielhanna0001@gmail.com. Please provide a holdings export or reconnect the correct portfolio profile."
+
+  If any profile has snapshot.missing true, or snapshot.freshAfterClose false on a US open trading day, STOP and output:
   "The report cannot be completed accurately because the latest holdings snapshot for danielhanna0001@gmail.com is unavailable. Please provide a holdings export or reconnect the portfolio data source."
 
-Only after Steps 0 and pre-flight Steps 1–2 succeed, proceed with ownership verification
-and report generation below.
+Only after Steps 0 and pre-flight Steps 1–2 succeed, proceed with report generation below.
+Use the Step 2 API JSON as the portfolio accounting source of truth.
 
 ─────────────────────────────────────────────
 PORTFOLIO DATA — OWNERSHIP AND SOURCE
 ─────────────────────────────────────────────
 
-Analyze only my real latest portfolio data from Supabase / portfolio-exit-planner for this profile email:
-danielhanna0001@gmail.com
+Analyze only my real latest portfolio data returned by Step 2 from:
+  GET /api/cron/daily-ai-report-data?email=danielhanna0001@gmail.com&profileId=all&historyDays=30&report=1
 
-First verify that the latest holdings snapshot belongs to danielhanna0001@gmail.com.
+Ownership, freshness, and holdings are already verified server-side in Step 2.
+Do NOT re-query Supabase MCP. Do NOT guess holdings.
 
-If ownership cannot be verified, stop and say exactly:
-"The report cannot be completed accurately because I could not verify that the holdings belong to danielhanna0001@gmail.com. Please provide a holdings export or reconnect the correct portfolio profile."
+Use these API fields for portfolio accounting:
+- profiles[].id / name / region / currency / sessionDate / sessionLabel
+- profiles[].snapshot.portfolioValue, dailyProfitLoss, dailyProfitLossPercent, totalProfitLoss
+- profiles[].snapshot.holdings (symbol, shares, average_cost, current_value, profit_loss,
+  daily_profit_loss, daily_profit_loss_percent, weightPercent, notes, action, riskLevel)
+- profiles[].snapshot.updatedAt for the header data-as-of timestamp
+- profiles[].dailyAi for saved AI action/risk labels and summary
+- profiles[].report when report=1 (stop/target prices, live quote rows, warnings)
+- history for 7/30-day portfolio value and daily P/L chart sections
+- warnings for data-quality banners
 
-If the latest holdings snapshot is missing, stop and say exactly:
-"The report cannot be completed accurately because the latest holdings snapshot for danielhanna0001@gmail.com is unavailable. Please provide a holdings export or reconnect the portfolio data source."
-
-Do not guess holdings. Do not analyze demo portfolios, sample portfolios, stale cached data, test data, unassigned holdings, another user profile, or any email address other than danielhanna0001@gmail.com.
+Do not analyze demo portfolios, sample portfolios, stale cached data, test data, unassigned holdings,
+another user profile, or any email address other than danielhanna0001@gmail.com.
 
 Use today's actual date. This report is for decision support only, not financial advice or automatic trading.
 
@@ -101,14 +125,14 @@ The report covers today's US trading session (post-close snapshot from pre-fligh
 DATA SOURCE RULES
 ─────────────────────────────────────────────
 
-Use Supabase / my portfolio app as the source of truth for:
+Use the Step 2 API response / portfolio-exit-planner app as the source of truth for:
 - which holdings belong to danielhanna0001@gmail.com
 - ticker, market, quantity, average cost
-- app current price, app market value
+- app current price, app market value (from snapshot holdings and report rows when report=1)
 - unrealized P/L, daily P/L if available
-- portfolio weight
+- portfolio weight (weightPercent)
 - saved notes or exit plans
-- historical portfolio snapshots if available
+- historical portfolio snapshots if available (history series)
 
 Use reliable current public sources for:
 - latest market price and timestamp
@@ -579,11 +603,11 @@ Left:
 
 Right (.header-right):
 - .status-pill with class pill-open / pill-closed / pill-stale showing market status
-- data snapshot date and time (use updated_at from pre-flight)
+- data snapshot date and time (use profiles[].snapshot.updatedAt from Step 2 API)
 - any major data limitations in one sentence
 
 Show a .warning-banner below .header-top if any of these apply:
-- app snapshot updated_at is not after US cash close today
+- any profile has snapshot.freshAfterClose false from Step 2 API
 - technical data is materially incomplete
 - live data and app snapshot materially differ
 - previous report comparison unavailable
@@ -871,7 +895,7 @@ Each: short explanation, affected tickers, practical implication.
 
 14. WHAT CHANGED TODAY
 
-If a previous snapshot exists, explain:
+Use the Step 2 API history series and prior-day points in profiles[].snapshot vs history to explain:
 - what changed (price, weight, action label)
 - what is new
 - what became riskier
@@ -879,7 +903,7 @@ If a previous snapshot exists, explain:
 - what to watch tomorrow
 - whether any previous action label should change
 
-If no previous snapshot: "No previous report snapshot is available — today's changes cannot be compared."
+If history has fewer than 2 days with hasData true: "No previous report snapshot is available — today's changes cannot be compared."
 
 
 15. WATCHLIST
