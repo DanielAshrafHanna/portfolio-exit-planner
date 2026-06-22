@@ -2,14 +2,16 @@
 
 import { AlertTriangle, TrendingDown, TrendingUp, WalletCards } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { DailyPlRangeBar } from "@/components/DailyPlRangeBar";
 import type { CurrencyCode, EnrichedHolding, FeeSettings } from "@/lib/types";
 import { calculateProfitLoss, calculateStopLosses, defaultSellTargets, roundMoney } from "@/lib/calculations";
+import { aggregateDailyPlRangeFromHoldings, type DailyPlRange } from "@/lib/dailyPlRange";
 import { computeHoldingRowMetrics } from "@/lib/holdingDisplay";
 import { formatMoney } from "@/lib/profileUtils";
 
 type Props = { holdings: EnrichedHolding[]; settings: FeeSettings; currency: CurrencyCode };
 
-type SummaryCard = { label: string; value: string; icon: LucideIcon; shortLabel: string };
+type SummaryCard = { label: string; value: string; icon: LucideIcon; shortLabel: string; dailyRange?: DailyPlRange };
 
 export function PortfolioSummary({ holdings, settings, currency }: Props) {
   const rows = holdings.filter((holding) => holding.quote);
@@ -45,11 +47,20 @@ export function PortfolioSummary({ holdings, settings, currency }: Props) {
   const dailyPlLabel = totalDailyPriorValue > 0
     ? `${formatMoney(totalDailyPl, currency)} (${totalDailyPlPercent}%)`
     : formatMoney(totalDailyPl, currency);
+  const dailyPlRange = aggregateDailyPlRangeFromHoldings(
+    rows.map((holding) => ({
+      shares: holding.shares,
+      previousClose: holding.quote!.previousClose,
+      dayLow: holding.quote!.dayLow,
+      dayHigh: holding.quote!.dayHigh,
+      currentPrice: holding.quote!.currentPrice
+    }))
+  );
 
   const cards: SummaryCard[] = [
     { label: "Total value", shortLabel: "Value", value: formatMoney(totalValue, currency), icon: WalletCards },
     { label: "Current P/L", shortLabel: "P/L", value: formatMoney(currentPl, currency), icon: totalValue >= totalCost ? TrendingUp : TrendingDown },
-    { label: "Daily P/L", shortLabel: "Today", value: dailyPlLabel, icon: totalDailyPl >= 0 ? TrendingUp : TrendingDown },
+    { label: "Daily P/L", shortLabel: "Today", value: dailyPlLabel, icon: totalDailyPl >= 0 ? TrendingUp : TrendingDown, dailyRange: dailyPlRange },
     { label: "Highest risk", shortLabel: "Risk", value: highestRisk?.symbol || "N/A", icon: AlertTriangle },
     { label: "P/L if stops hit", shortLabel: "Stop P/L", value: formatMoney(roundMoney(stopValue - totalCost), currency), icon: AlertTriangle },
     { label: "Best target P/L", shortLabel: "Target P/L", value: formatMoney(roundMoney(targetValue - totalCost), currency), icon: TrendingUp },
@@ -61,19 +72,23 @@ export function PortfolioSummary({ holdings, settings, currency }: Props) {
   return (
     <>
       <div className="grid grid-cols-2 gap-1.5 min-[420px]:grid-cols-4 md:hidden">
-        {mobilePrimary.map(({ shortLabel, value }) => (
+        {mobilePrimary.map(({ shortLabel, value, dailyRange: range }) => (
           <div className="min-w-0 rounded border border-mint/40 bg-surface-muted px-2 py-1.5" key={shortLabel}>
             <p className="text-[10px] uppercase text-ink/50">{shortLabel}</p>
             <p className="truncate text-xs font-semibold">{value}</p>
+            {range ? <DailyPlRangeBar range={range} currency={currency} mode="percent" compact /> : null}
           </div>
         ))}
       </div>
       <div className="hidden grid-cols-1 gap-3 min-[380px]:grid-cols-2 md:grid lg:grid-cols-4 xl:grid-cols-7">
-        {cards.map(({ label, value, icon: Icon }) => (
+        {cards.map(({ label, value, icon: Icon, dailyRange: range }) => (
           <div className="min-w-0 rounded-md border border-mint/50 bg-surface-muted p-3 sm:p-4" key={label}>
             <Icon className="mb-2 h-5 w-5 text-marine sm:mb-3" aria-hidden />
             <p className="text-xs uppercase text-ink/55">{label}</p>
             <p className="mt-1 break-words text-base font-semibold sm:text-lg">{value}</p>
+            {range && label === "Daily P/L" ? (
+              <DailyPlRangeBar range={range} currency={currency} mode="percent" compact />
+            ) : null}
           </div>
         ))}
       </div>

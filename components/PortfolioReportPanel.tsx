@@ -1,9 +1,11 @@
 "use client";
 
 import { AlertTriangle, BarChart3, RefreshCw, TrendingDown, TrendingUp } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
+import { DailyPlRangeBar } from "@/components/DailyPlRangeBar";
 import { reportProfileTabClass } from "@/components/reportTabs";
 import { SectionCard } from "@/components/ui/SectionCard";
+import { aggregateDailyPlRangeFromHoldings, computeDailyPlRange } from "@/lib/dailyPlRange";
 import { getDailyPlSessionInfo, regionFromCurrency } from "@/lib/marketSession";
 import { formatMoney } from "@/lib/profileUtils";
 import type { CurrencyCode } from "@/lib/types";
@@ -108,7 +110,23 @@ export function PortfolioReportPanel({
             </div>
 
             <div className="grid gap-3 md:grid-cols-2">
-              {totals.map((item) => <TotalsBlock totals={item} key={item.currency} />)}
+              {totals.map((item) => (
+                <TotalsBlock
+                  totals={item}
+                  dailyRange={aggregateDailyPlRangeFromHoldings(
+                    (selectedProfile ? selectedProfile.holdings : report.holdings)
+                      .filter((holding) => holding.currency === item.currency && holding.currentPrice)
+                      .map((holding) => ({
+                        shares: holding.shares,
+                        previousClose: holding.previousClose || 0,
+                        dayLow: holding.dayLow,
+                        dayHigh: holding.dayHigh,
+                        currentPrice: holding.currentPrice || 0
+                      }))
+                  )}
+                  key={item.currency}
+                />
+              ))}
             </div>
 
             <div className="rounded-md border border-ink/10 bg-mint/15 px-3 py-2 text-xs text-ink/65">
@@ -189,7 +207,13 @@ export function PortfolioReportPanel({
   );
 }
 
-function TotalsBlock({ totals }: { totals: PortfolioReportTotals }) {
+function TotalsBlock({
+  totals,
+  dailyRange
+}: {
+  totals: PortfolioReportTotals;
+  dailyRange?: ReturnType<typeof aggregateDailyPlRangeFromHoldings>;
+}) {
   const session = getDailyPlSessionInfo(regionFromCurrency(totals.currency));
 
   return (
@@ -218,6 +242,9 @@ function TotalsBlock({ totals }: { totals: PortfolioReportTotals }) {
           value={formatSignedMoney(totals.dailyProfitLoss, totals.currency)}
           subValue={formatPercent(totals.dailyProfitLossPercent)}
           tone={totals.dailyProfitLoss}
+          rangeBar={dailyRange ? (
+            <DailyPlRangeBar range={dailyRange} currency={totals.currency} mode="percent" />
+          ) : undefined}
         />
       </dl>
 
@@ -240,13 +267,15 @@ function MetricRow({
   hint,
   value,
   subValue,
-  tone
+  tone,
+  rangeBar
 }: {
   label: string;
   hint: string;
   value: string;
   subValue?: string;
   tone?: number;
+  rangeBar?: ReactNode;
 }) {
   return (
     <div className="flex items-start justify-between gap-3">
@@ -257,12 +286,23 @@ function MetricRow({
       <dd className={`shrink-0 text-right font-semibold ${tone !== undefined ? toneClass(tone) : "text-ink"}`}>
         <div>{value}</div>
         {subValue ? <div className="text-xs font-medium opacity-80">{subValue}</div> : null}
+        {rangeBar}
       </dd>
     </div>
   );
 }
 
 function HoldingRow({ holding }: { holding: PortfolioReportHolding }) {
+  const dailyRange = holding.currentPrice
+    ? computeDailyPlRange({
+      shares: holding.shares,
+      previousClose: holding.previousClose || 0,
+      dayLow: holding.dayLow,
+      dayHigh: holding.dayHigh,
+      currentPrice: holding.currentPrice
+    })
+    : undefined;
+
   return (
     <tr className="border-t border-ink/8">
       <td className="px-3 py-2">
@@ -277,6 +317,9 @@ function HoldingRow({ holding }: { holding: PortfolioReportHolding }) {
       <td className={`px-3 py-2 font-semibold ${toneClass(holding.dailyProfitLoss)}`}>
         {holding.currentPrice ? formatSignedMoney(holding.dailyProfitLoss, holding.currency) : "N/A"}
         <div className="text-xs font-normal">{holding.currentPrice ? formatPercent(holding.dailyProfitLossPercent) : ""}</div>
+        {dailyRange ? (
+          <DailyPlRangeBar range={dailyRange} currency={holding.currency} mode="percent" compact />
+        ) : null}
       </td>
       <td className="px-3 py-2 text-ink/70">{holding.stopPrice ? formatMoney(holding.stopPrice, holding.currency) : "-"}</td>
       <td className="px-3 py-2 text-ink/70">{holding.targetPrice ? formatMoney(holding.targetPrice, holding.currency) : "-"}</td>

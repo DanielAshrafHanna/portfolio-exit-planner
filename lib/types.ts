@@ -21,6 +21,8 @@ export type MarketQuote = {
   currentPrice: number;
   dailyChangePercent: number;
   previousClose: number;
+  dayHigh?: number;
+  dayLow?: number;
   companyName?: string;
   week52High?: number;
   week52Low?: number;

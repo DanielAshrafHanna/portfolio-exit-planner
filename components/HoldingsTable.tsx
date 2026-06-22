@@ -22,6 +22,7 @@ import { HoldingsFitText } from "./HoldingsFitText";
 import { TargetPlanner } from "./TargetPlanner";
 import { StaleQuoteMarker } from "./StaleQuoteMarker";
 import { PriceSessionBadge } from "./PriceSessionBadge";
+import { DailyPlRangeBar } from "./DailyPlRangeBar";
 
 type Props = {
   holdings: EnrichedHolding[];
@@ -349,17 +350,38 @@ export function HoldingsTable({ holdings, settings, currency, onChange, onApplyS
   const desktopPlCell = (
     profitLoss?: number,
     profitLossPercent?: number,
-    className = ""
+    className = "",
+    dailyRange?: ReturnType<typeof computeHoldingRowMetrics>["dailyRange"]
   ) => {
     if (profitLoss === undefined || profitLossPercent === undefined) {
       return fitText("N/A", className);
     }
+    const percentLabel = `${profitLossPercent > 0 ? "+" : ""}${profitLossPercent}%`;
+    const rangeBar = dailyRange ? (
+      <DailyPlRangeBar range={dailyRange} currency={currency} mode="percent" compact />
+    ) : null;
+
     if (currency === "EGP") {
-      return stackedPlCell(profitLoss, profitLossPercent, currency, fitSizes);
+      return (
+        <div className="min-w-0 max-w-full leading-tight">
+          {mobileStackedCell(
+            tableMoney(profitLoss, currency),
+            percentLabel,
+            fitSizes,
+            { primaryClass: `${className} ${valueClass(profitLoss)}`, secondaryClass: valueClass(profitLoss) }
+          )}
+          {rangeBar}
+        </div>
+      );
     }
-    return fitText(
-      `${tableMoney(profitLoss, currency)} (${profitLossPercent > 0 ? "+" : ""}${profitLossPercent}%)`,
-      className
+    return (
+      <div className="min-w-0 max-w-full">
+        {fitText(
+          `${tableMoney(profitLoss, currency)} (${percentLabel})`,
+          `${className} ${valueClass(profitLoss)}`
+        )}
+        {rangeBar}
+      </div>
     );
   };
 
@@ -523,7 +545,12 @@ export function HoldingsTable({ holdings, settings, currency, onChange, onApplyS
                     {desktopPlCell(metrics.current?.profitLoss, metrics.current?.profitLossPercent, "font-semibold")}
                   </td>
                   <td className={`px-1.5 py-2 lg:px-2 lg:py-3 ${valueClass(metrics.daily?.profitLoss)}`}>
-                    {desktopPlCell(metrics.daily?.profitLoss, metrics.daily?.profitLossPercent, "font-semibold")}
+                    {desktopPlCell(
+                      metrics.daily?.profitLoss,
+                      metrics.daily?.profitLossPercent,
+                      "font-semibold",
+                      metrics.dailyRange
+                    )}
                   </td>
                   <td className="border-l-2 border-ink/15 px-1.5 py-2 lg:px-2 lg:py-3">{badge(holding.analysis?.action)}</td>
                   <td className="px-1.5 py-2 lg:px-2 lg:py-3">{badge(holding.analysis?.confidence)}</td>

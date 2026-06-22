@@ -19,6 +19,8 @@ export type PortfolioReportHolding = {
   cost: number;
   currentPrice?: number;
   previousClose?: number;
+  dayHigh?: number;
+  dayLow?: number;
   currentValue: number;
   netValue: number;
   fees: number;
@@ -185,6 +187,8 @@ async function buildHoldingReport(
       ...base,
       currentPrice: quote.currentPrice,
       previousClose: quote.previousClose,
+      dayHigh: quote.dayHigh,
+      dayLow: quote.dayLow,
       currentValue: current.grossValue,
       netValue: current.netValue,
       fees: current.fees,

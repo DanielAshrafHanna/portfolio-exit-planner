@@ -30,6 +30,8 @@ export const marketQuoteSchema = z.object({
   currentPrice: finiteNumber.positive(),
   dailyChangePercent: finiteNumber,
   previousClose: finiteNumber.min(0),
+  dayHigh: finiteNumber.min(0).optional(),
+  dayLow: finiteNumber.min(0).optional(),
   companyName: cleanString(160).optional(),
   week52High: finiteNumber.min(0).optional(),
   week52Low: finiteNumber.min(0).optional(),

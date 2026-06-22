@@ -491,12 +491,18 @@ export function parseYahooChartQuote(
   const week52High = meta ? numberValue(meta.fiftyTwoWeekHigh) : undefined;
   const week52Low = meta ? numberValue(meta.fiftyTwoWeekLow) : undefined;
   const regularMarketVolume = meta ? numberValue(meta.regularMarketVolume) : undefined;
+  const regularMarketDayHigh = meta ? numberValue(meta.regularMarketDayHigh) : undefined;
+  const regularMarketDayLow = meta ? numberValue(meta.regularMarketDayLow) : undefined;
+  const sessionDayHigh = regularMarketDayHigh ?? rows[0]?.high;
+  const sessionDayLow = regularMarketDayLow ?? rows[0]?.low;
 
   return {
     symbol,
     currentPrice,
     dailyChangePercent,
     previousClose,
+    dayHigh: sessionDayHigh !== undefined ? Number(sessionDayHigh.toFixed(2)) : undefined,
+    dayLow: sessionDayLow !== undefined ? Number(sessionDayLow.toFixed(2)) : undefined,
     priceSession,
     companyName: quoteCompanyNameFromMeta(meta),
     week52High: week52High !== undefined ? Number(week52High.toFixed(2)) : Math.round(Math.max(...closes.slice(0, 252)) * 100) / 100,

@@ -57,6 +57,8 @@ describe("Yahoo chart quote parsing", () => {
           meta: {
             regularMarketPrice: 125.125,
             previousClose: 124,
+            regularMarketDayHigh: 126.5,
+            regularMarketDayLow: 123.25,
             regularMarketVolume: 1000,
             longName: "Apple Inc."
           },
@@ -76,6 +78,8 @@ describe("Yahoo chart quote parsing", () => {
       symbol: "AAPL",
       currentPrice: 125.13,
       previousClose: 124,
+      dayHigh: 126.5,
+      dayLow: 123.25,
       dailyChangePercent: 0.91,
       volume: 1000,
       companyName: "Apple Inc.",
