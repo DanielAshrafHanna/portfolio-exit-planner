@@ -7,8 +7,7 @@ import { formatMoney } from "@/lib/profileUtils";
 type Props = {
   range: DailyPlRange;
   currency?: CurrencyCode;
-  mode?: "percent" | "money";
-  compact?: boolean;
+  variant?: "default" | "table";
   label?: string;
 };
 
@@ -21,45 +20,67 @@ function formatSignedPercent(value: number) {
   return `${value > 0 ? "+" : ""}${value.toLocaleString(undefined, { maximumFractionDigits: 2 })}%`;
 }
 
-function formatEndpoint(value: number, mode: "percent" | "money", currency?: CurrencyCode) {
-  if (mode === "percent") return formatSignedPercent(value);
-  if (!currency) return String(value);
-  return formatSignedMoney(value, currency);
+function RangeEndpoint({
+  amount,
+  percent,
+  currency,
+  align
+}: {
+  amount: number;
+  percent: number;
+  currency?: CurrencyCode;
+  align: "left" | "right";
+}) {
+  return (
+    <div className={`flex min-w-0 flex-col ${align === "left" ? "items-start text-left" : "items-end text-right"}`}>
+      {currency ? (
+        <span className="truncate font-semibold tabular-nums text-ink">
+          {formatSignedMoney(amount, currency)}
+        </span>
+      ) : null}
+      <span className="truncate tabular-nums text-ink/60">
+        {formatSignedPercent(percent)}
+      </span>
+    </div>
+  );
 }
 
 export function DailyPlRangeBar({
   range,
   currency,
-  mode = "percent",
-  compact = false,
+  variant = "default",
   label = "Daily range"
 }: Props) {
-  const lowValue = mode === "percent" ? range.lowPercent : range.low;
-  const highValue = mode === "percent" ? range.highPercent : range.high;
+  const isTable = variant === "table";
   const markerPercent = `${(range.position * 100).toFixed(1)}%`;
+  const lowMoneyLabel = currency ? formatSignedMoney(range.low, currency) : formatSignedPercent(range.lowPercent);
+  const highMoneyLabel = currency ? formatSignedMoney(range.high, currency) : formatSignedPercent(range.highPercent);
 
   return (
-    <div className={`w-full ${compact ? "mt-1 max-w-[9rem]" : "mt-1.5"}`}>
-      <div className={`grid grid-cols-[1fr_auto_1fr] items-end gap-1 ${compact ? "text-[9px]" : "text-[10px]"} text-ink/55`}>
-        <span className="truncate text-left font-medium tabular-nums text-ink/70">
-          {formatEndpoint(lowValue, mode, currency)}
+    <div className={`w-full ${isTable ? "mt-1.5 min-w-[8.5rem]" : "mt-2"}`}>
+      <div className={`grid grid-cols-[1fr_auto_1fr] items-end gap-2 ${isTable ? "text-[11px]" : "text-xs"} text-ink/55`}>
+        <RangeEndpoint amount={range.low} percent={range.lowPercent} currency={currency} align="left" />
+        <span className={`px-1 text-center font-medium uppercase tracking-wide text-ink/45 ${isTable ? "text-[10px]" : "text-[11px]"}`}>
+          {label}
         </span>
-        <span className="px-1 text-center text-ink/45">{label}</span>
-        <span className="truncate text-right font-medium tabular-nums text-ink/70">
-          {formatEndpoint(highValue, mode, currency)}
-        </span>
+        <RangeEndpoint amount={range.high} percent={range.highPercent} currency={currency} align="right" />
       </div>
       <div
-        className={`relative ${compact ? "mt-0.5 h-1" : "mt-1 h-1.5"} rounded-full bg-ink/15`}
+        className={`relative ${isTable ? "mt-1.5 h-2" : "mt-2 h-2.5"} rounded-full bg-ink/20`}
         role="img"
-        aria-label={`Daily P/L range from ${formatEndpoint(lowValue, mode, currency)} to ${formatEndpoint(highValue, mode, currency)}`}
+        aria-label={`Daily P/L range from ${lowMoneyLabel} to ${highMoneyLabel}`}
       >
         <span
-          className={`absolute top-1/2 ${compact ? "h-2 w-2" : "h-2.5 w-2.5"} -translate-x-1/2 -translate-y-1/2 rounded-full border border-ink/20 bg-white shadow-sm`}
+          className={`absolute top-1/2 ${isTable ? "h-3.5 w-3.5" : "h-4 w-4"} -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-marine/35 bg-white shadow-md ring-2 ring-white`}
           style={{ left: markerPercent }}
           aria-hidden
         />
       </div>
+      {currency && !isTable ? (
+        <div className="mt-1 text-center text-xs font-semibold tabular-nums text-ink">
+          Now {formatSignedMoney(range.current, currency)} ({formatSignedPercent(range.currentPercent)})
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -243,7 +243,7 @@ function TotalsBlock({
           subValue={formatPercent(totals.dailyProfitLossPercent)}
           tone={totals.dailyProfitLoss}
           rangeBar={dailyRange ? (
-            <DailyPlRangeBar range={dailyRange} currency={totals.currency} mode="percent" />
+            <DailyPlRangeBar range={dailyRange} currency={totals.currency} />
           ) : undefined}
         />
       </dl>
@@ -318,7 +318,7 @@ function HoldingRow({ holding }: { holding: PortfolioReportHolding }) {
         {holding.currentPrice ? formatSignedMoney(holding.dailyProfitLoss, holding.currency) : "N/A"}
         <div className="text-xs font-normal">{holding.currentPrice ? formatPercent(holding.dailyProfitLossPercent) : ""}</div>
         {dailyRange ? (
-          <DailyPlRangeBar range={dailyRange} currency={holding.currency} mode="percent" compact />
+          <DailyPlRangeBar range={dailyRange} currency={holding.currency} variant="table" />
         ) : null}
       </td>
       <td className="px-3 py-2 text-ink/70">{holding.stopPrice ? formatMoney(holding.stopPrice, holding.currency) : "-"}</td>

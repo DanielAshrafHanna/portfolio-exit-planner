@@ -358,7 +358,7 @@ export function HoldingsTable({ holdings, settings, currency, onChange, onApplyS
     }
     const percentLabel = `${profitLossPercent > 0 ? "+" : ""}${profitLossPercent}%`;
     const rangeBar = dailyRange ? (
-      <DailyPlRangeBar range={dailyRange} currency={currency} mode="percent" compact />
+      <DailyPlRangeBar range={dailyRange} currency={currency} variant="table" />
     ) : null;
 
     if (currency === "EGP") {
