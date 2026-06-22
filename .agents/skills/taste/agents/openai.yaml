@@ -1,0 +1,4 @@
+interface:
+  display_name: "Taste"
+  short_description: "Aesthetic judgment and taste pass"
+  default_prompt: "Use $taste to critique this interface and improve its visual judgment."

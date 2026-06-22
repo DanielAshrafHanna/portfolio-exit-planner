@@ -76,7 +76,7 @@ export function PortfolioSummary({ holdings, settings, currency }: Props) {
           <div className="min-w-0 rounded border border-mint/40 bg-surface-muted px-2 py-1.5" key={shortLabel}>
             <p className="text-[10px] uppercase text-ink/50">{shortLabel}</p>
             <p className="truncate text-xs font-semibold">{value}</p>
-            {range && shortLabel === "Today" ? <DailyPlRangeBar range={range} currency={currency} variant="table" /> : null}
+            {range && shortLabel === "Today" ? <DailyPlRangeBar range={range} currency={currency} variant="compact" /> : null}
           </div>
         ))}
       </div>

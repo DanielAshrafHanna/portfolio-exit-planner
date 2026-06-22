@@ -1,0 +1,4 @@
+interface:
+  display_name: "Impeccable Design"
+  short_description: "Frontend polish and visual QA"
+  default_prompt: "Use $impeccable-design to refine this frontend into a polished, responsive experience."

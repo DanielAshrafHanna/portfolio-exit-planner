@@ -1,0 +1,4 @@
+interface:
+  display_name: "Email Kowalski Design"
+  short_description: "High-signal email report design"
+  default_prompt: "Use $email-kowalski-design to design a polished, readable portfolio report email."

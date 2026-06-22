@@ -1,0 +1,13 @@
+---
+globs: "app/**/*.tsx, components/**/*.tsx, app/globals.css"
+alwaysApply: false
+---
+
+# Frontend UI Rule
+
+- Match the existing dashboard style unless the user asks for a redesign.
+- Keep important financial decision fields easy to scan: current price, current P/L, stop-loss, target sell price, and P/L at target.
+- Keep mobile and desktop layouts usable. Check for clipped text, overlapping controls, and table readability.
+- Do not add marketing-style copy or decorative sections to the app dashboard.
+- Keep OCR upload explicit: the user chooses a file and intentionally starts extraction before anything is sent externally.
+- Use honest warnings for failed market data, stale data, mock data, OCR failures, and AI fallback states.

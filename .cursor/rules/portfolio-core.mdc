@@ -1,0 +1,13 @@
+---
+alwaysApply: true
+---
+
+# Portfolio Exit Planner Core Rule
+
+- Treat `AGENTS.md` as the primary project instruction file and follow it before making code changes.
+- Keep this app educational only. Do not add trading execution, broker connections, or language that guarantees outcomes.
+- Keep changes scoped and reviewable. Do not rewrite broad areas unless the user explicitly asks.
+- Before changing behavior, inspect the relevant existing files and match the repo's current patterns.
+- Preserve server-side boundaries for secrets, OpenAI/Gemini calls, market data, OCR, and Supabase service access.
+- Use TypeScript strictly. Prefer `unknown`, Zod validation, and typed helpers over `any`.
+- Run focused tests for changed logic. For production-ready handoff, run `npm test`, `npm run build`, and `npm run lint` when practical.

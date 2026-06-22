@@ -1,0 +1,14 @@
+---
+globs: "app/api/**/*.ts, lib/**/*.ts, supabase/**/*.sql"
+alwaysApply: false
+---
+
+# Server, Data, And Security Rule
+
+- Validate request bodies and external responses with Zod or explicit type guards before trusting them.
+- Keep all secret-bearing calls server-side through `app/api/*` or server-only helpers.
+- Never expose service-role keys, Gemini/OpenAI keys, market data keys, or private credentials to client components.
+- Do not weaken existing RLS policies or grants. Inspect current Supabase schema before applying database changes.
+- Treat market data, AI JSON, OCR output, CSV imports, localStorage, and Supabase JSON as untrusted.
+- Preserve async stale-request guards so older market/AI results cannot overwrite newer user edits.
+- Add or update focused tests when changing calculations, storage coercion, market parsing, validation, or merge behavior.
